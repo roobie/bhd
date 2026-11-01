@@ -1,5 +1,5 @@
 ---
-phase: execute
+phase: finalize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude
@@ -37,15 +37,16 @@ Implemented; `npm run ci` green. Awaiting merge / wave close.
 - Review fixes: Ancient takes only `leak` damage and cannot be healed; self-hit never applies even with ff (lead default, provisional); tests in test/combat/damage.test.ts. `npm run ci` green, golden regenerated.
 
 ## Harvest
-- [ ] decision: damage order = leak bypass; ff gate (same team, no `ff` tag -> 0 dealt, no event); Marked (+value, consumed); Clumped (+value on line/cone/splash tags, not consumed); armour = max(0, armour - Exposed) unless `pierce`; floor = 20% of the modified amount.
-- [ ] decision: statuses never stack across sources: readers use the max value; same (status, src) re-apply refreshes until=max, value=max, no new on event; apply is a no-op on dead targets and durations < 1 tick.
-- [ ] decision: Suppressed slows by its max value clamped to [0,1] in effectiveSpeed; rooted = 0; taunted no speed effect.
-- [ ] learning: provisional status semantics for B (wave report): Marked = next-hit +25% consumed by any hit (even `pierce`); Exposed = -5 armour for 3 s (flat); Clumped = +30% from line/cone/splash for 2 s, not consumed; Suppressed = -40% speed for 3 s. Numbers are placeholders in content/statuses.ts; appliers pass the value, combat reads the instance value, so the content table is only a default for appliers.
-- [ ] learning: sim-contracts stub tests pinned raw damage (8); any armoured target changes hero test expectations. Heroes test now expects armour applied.
-- [ ] backlog: Gunner overpen must tag `ff` + `overpen` + `line` to get both friendly fire and Clumped bonus (gunner slice).
-- [ ] backlog: `heal` event does not carry tags; add if the reporter needs heal attribution by ability.
+- [x] decision: damage order = leak bypass; ff gate (same team, no `ff` tag -> 0 dealt, no event); Marked (+value, consumed); Clumped (+value on line/cone/splash tags, not consumed); armour = max(0, armour - Exposed) unless `pierce`; floor = 20% of the modified amount.
+- [x] decision: statuses never stack across sources: readers use the max value; same (status, src) re-apply refreshes until=max, value=max, no new on event; apply is a no-op on dead targets and durations < 1 tick.
+- [x] decision: Suppressed slows by its max value clamped to [0,1] in effectiveSpeed; rooted = 0; taunted no speed effect.
+- [x] learning: provisional status semantics for B (wave report): Marked = next-hit +25% consumed by any hit (even `pierce`); Exposed = -5 armour for 3 s (flat); Clumped = +30% from line/cone/splash for 2 s, not consumed; Suppressed = -40% speed for 3 s. Numbers are placeholders in content/statuses.ts; appliers pass the value, combat reads the instance value, so the content table is only a default for appliers.
+- [x] learning: sim-contracts stub tests pinned raw damage (8); any armoured target changes hero test expectations. Heroes test now expects armour applied.
+- [x] backlog: Gunner overpen must tag `ff` + `overpen` + `line` to get both friendly fire and Clumped bonus (gunner slice).
+- [x] backlog: `heal` event does not carry tags; add if the reporter needs heal attribution by ability.
 
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 combat-core implemented
+- 2026-11-01 phase execute → finalize

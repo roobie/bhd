@@ -1,5 +1,5 @@
 ---
-phase: execute
+phase: finalize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude
@@ -38,10 +38,10 @@ Implemented; `npm run ci` green. Ready for merge (golden regenerated).
 - Golden regenerated (`npm run golden`): map, roster speeds, waves and enemy behaviour changed.
 
 ## Harvest
-- [ ] decision: a wave ends when all its units have spawned and are dead or leaked; ends are emitted in the waves phase of the next tick, and `wavesExhausted` (hence victory) also needs every wave ended.
-- [ ] decision: lane-born enemies are told apart from debug-spawned ones by `move.waypoint >= 1`; only lane-born chase and return to lane.
-- [ ] backlog: AGGRO_RANGE (6) and LEASH_RANGE (10) are constants in sim/enemies.ts because EnemyDef has no such fields; move to EnemyDef for per-enemy tuning (contracts change).
-- [ ] learning: existing tests hard-code the map (hero spawns 80,28; Ancient 90,30), so the new lane keeps those coordinates; touched test/sim/hash.test.ts (SpawnJob.wave) and test/content/default-game.test.ts (15 waves, sturdy Ancient) for it.
+- [x] decision: a wave ends when all its units have spawned and are dead or leaked; ends are emitted in the waves phase of the next tick, and `wavesExhausted` (hence victory) also needs every wave ended.
+- [x] decision: lane-born enemies are told apart from debug-spawned ones by `move.waypoint >= 1`; only lane-born chase and return to lane.
+- [x] backlog: AGGRO_RANGE (6) and LEASH_RANGE (10) are constants in sim/enemies.ts because EnemyDef has no such fields; move to EnemyDef for per-enemy tuning (contracts change).
+- [x] learning: existing tests hard-code the map (hero spawns 80,28; Ancient 90,30), so the new lane keeps those coordinates; touched test/sim/hash.test.ts (SpawnJob.wave) and test/content/default-game.test.ts (15 waves, sturdy Ancient) for it.
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
      - [ ] decision: …   → record decision
      - [ ] learning: …   → record learning
@@ -53,3 +53,4 @@ Implemented; `npm run ci` green. Ready for merge (golden regenerated).
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
 - Review fixes: leash anchored to lane distance (derived, no new field; test/lane/enemies.test.ts), taunt equal-until tie to lower src id, enemy at lane end leaks after target dies; pillar smoke test (seeds 1-3) in test/content. `npm run ci` green (314 node, 75 browser).
+- 2026-11-01 phase execute → finalize
