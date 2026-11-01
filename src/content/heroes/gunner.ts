@@ -99,7 +99,7 @@ export function gunnerDef(): GunnerDef {
       perShot: 0.015,
       decayPerSecond: 0.1,
       pierceAbove: 0.6,
-      overpenAbove: 0.85,
+      overpenAbove: 0.80,
       overheatSeconds: 4,
       lineHalfWidth: 0.4,
     },
