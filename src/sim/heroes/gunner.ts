@@ -22,21 +22,21 @@
 // - Brace (slot 0, toggle): rooted status + move stopped, +range, fixed arc centred on the facing
 //   at brace time (or the aimed x/y). Unbrace: rooted and NOT firing for brace.unbraceSeconds.
 //   While braced, ability cones always aim along the brace facing.
-// - Vent, Suppressing Fire and Furnace Heart are refused while locked out (overheat / forced vent); Brace always works.
+// - Vent, Pavise and Furnace Heart are refused while locked out (overheat / forced vent); Brace always works.
 //   Autocast is NOT honoured here (bots, wave 3, own that): the mask is only stored.
 // - Facing is kit state (entities have none): toward the current target, else toward the move target.
 // - Ability cooldowns and the unbrace/furnace timers count down at the END of the tick, so a
 //   cooldown of n ticks cast on tick T is ready on tick T + n.
 
 import type { GunnerDef } from '../../content/heroes/gunner.ts';
-import { findById } from '../../content/types.ts';
-import { angleDiff, atan2, PI } from '../../detmath/index.ts';
+import { angleDiff, atan2, cos, PI, sin } from '../../detmath/index.ts';
 import { dealDamage } from '../combat.ts';
 import type { HeroCommand } from '../commands.ts';
 import type { TickContext } from '../context.ts';
 import type { Entity, KitBase } from '../entities.ts';
 import type { StateHasher } from '../hash.ts';
-import { nearestHostile, unitsInRadius, unitsOnSegment } from '../query.ts';
+import { spawnProp } from '../props.ts';
+import { firstBarrier, nearestHostile, unitsInRadius, unitsOnSegment } from '../query.ts';
 import { applyStatus, removeStatus } from '../statuses.ts';
 import { ticks } from '../time.ts';
 
@@ -79,7 +79,7 @@ export interface GunnerState extends KitBase {
   /** Ticks of Furnace Heart left. */
   furnaceTicks: number;
   cdVent: number;
-  cdSuppress: number;
+  cdPavise: number;
   cdFurnace: number;
 }
 
@@ -88,6 +88,7 @@ export function initGunner(_def: GunnerDef, x = 0, y = 0): GunnerState {
     kind: 'gunner',
     hold: false,
     autocast: 0,
+    respawnAt: 0,
     spin: 0,
     heat: 0,
     heatBand: 0,
@@ -102,7 +103,7 @@ export function initGunner(_def: GunnerDef, x = 0, y = 0): GunnerState {
     lastY: y,
     furnaceTicks: 0,
     cdVent: 0,
-    cdSuppress: 0,
+    cdPavise: 0,
     cdFurnace: 0,
   };
 }
@@ -213,7 +214,12 @@ function fireLine(run: GunnerRun, target: Unit, tags: readonly string[]): void {
   // The line starts at the shooter's edge; hits behind that muzzle point (projection < 0) are skipped,
   // so allies overlapping her body are never hit.
   const from = { x: hero.x + ux * hero.radius, y: hero.y + uy * hero.radius };
-  const to = { x: hero.x + ux * range, y: hero.y + uy * range };
+  let to = { x: hero.x + ux * range, y: hero.y + uy * range };
+  // A prop barrier (Pavise) stops the line: nothing past it is hit.
+  const blocked = firstBarrier(ctx.entities, from, to);
+  if (blocked !== undefined) {
+    to = { x: from.x + (to.x - from.x) * blocked, y: from.y + (to.y - from.y) * blocked };
+  }
   kit.facing = angleTo(hero, target.x, target.y);
   for (const hit of unitsOnSegment(ctx.entities, from, to, def.heat.lineHalfWidth)) {
     if (hit.unit.id === hero.id || hit.unit.kind === 'ancient') {
@@ -307,7 +313,7 @@ function tickMain(run: GunnerRun): void {
 function tickTimers(run: GunnerRun): void {
   const { kit, def } = run;
   kit.cdVent = Math.max(0, kit.cdVent - 1);
-  kit.cdSuppress = Math.max(0, kit.cdSuppress - 1);
+  kit.cdPavise = Math.max(0, kit.cdPavise - 1);
   kit.cdFurnace = Math.max(0, kit.cdFurnace - 1);
   if (kit.stance === STANCE.unbracing) {
     kit.unbraceTicks -= 1;
@@ -410,29 +416,46 @@ function castVent(run: GunnerRun, cmd: AbilityCmd): void {
   syncBand(run);
 }
 
-function castSuppress(run: GunnerRun, cmd: AbilityCmd): void {
+/**
+ * Pavise (slot 2): places a barrier prop `min(range, distance to the aim)` away along the aim, its
+ * long axis across the aim. Refused while locked out or on cooldown. The Gunner's own overpen line
+ * stops at it (`fireLine`), and so do enemy melee hits across it (enemies.ts).
+ */
+function castPavise(run: GunnerRun, cmd: AbilityCmd): void {
   const { ctx, hero, kit, def } = run;
-  if (kit.lockTicks > 0 || kit.cdSuppress > 0) {
+  if (kit.lockTicks > 0 || kit.cdPavise > 0) {
     return;
   }
   const aim = aimAngle(run, cmd);
-  const status = findById(ctx.game.statuses, 'suppressed');
-  const hit = coneTargets(run, aim, def.suppress.range, def.suppress.coneDegrees);
-  ability(run, 2, cmd.target ?? 0, hit.length);
-  for (const e of hit) {
-    dealDamage(ctx, { src: hero.id, dst: e.id, amount: def.suppress.damage, tags: ['cone', 'ability:suppress'] });
-    if (status !== undefined) {
-      applyStatus(ctx, e.id, {
-        status: 'suppressed',
-        src: hero.id,
-        durationTicks: ticks(status.duration),
-        value: status.value,
-      });
+  const target = cmd.x !== undefined && cmd.y !== undefined ? { x: cmd.x, y: cmd.y } : undefined;
+  let dx = cos(aim);
+  let dy = sin(aim);
+  let reach = def.pavise.range;
+  if (target !== undefined) {
+    const tx = target.x - hero.x;
+    const ty = target.y - hero.y;
+    const d = Math.sqrt(tx * tx + ty * ty);
+    if (d > 0) {
+      dx = tx / d;
+      dy = ty / d;
+      reach = Math.min(reach, d);
     }
   }
-  kit.cdSuppress = ticks(def.suppress.cooldown);
-  addHeat(run, bp(def.suppress.heatCost));
-  syncBand(run);
+  const prop = spawnProp(ctx, {
+    def: 'pavise',
+    owner: hero.id,
+    x: hero.x + dx * reach,
+    y: hero.y + dy * reach,
+    ux: -dy,
+    uy: dx,
+    halfLength: def.pavise.halfLength,
+    durationTicks: Math.max(1, ticks(def.pavise.seconds)),
+  });
+  if (prop === undefined) {
+    return;
+  }
+  kit.cdPavise = ticks(def.pavise.cooldown);
+  ability(run, 2, prop.id, def.pavise.seconds);
 }
 
 function castFurnace(run: GunnerRun): void {
@@ -458,7 +481,7 @@ export function commandGunner(run: GunnerRun, cmd: HeroCommand): void {
       castVent(run, cmd);
       return;
     case 2:
-      castSuppress(run, cmd);
+      castPavise(run, cmd);
       return;
     case 3:
       castFurnace(run);
@@ -472,5 +495,5 @@ export function hashGunner(h: StateHasher, kit: GunnerState): void {
   h.f64(kit.spin).u32(kit.heat).u32(kit.heatBand).u32(kit.stance).f64(kit.braceFacing).f64(kit.facing);
   h.u32(kit.unbraceTicks).u32(kit.lockTicks).u32(kit.ventStep).u32(kit.furnaceTicks);
   h.u32(kit.shot).f64(kit.lastX).f64(kit.lastY);
-  h.u32(kit.cdVent).u32(kit.cdSuppress).u32(kit.cdFurnace);
+  h.u32(kit.cdVent).u32(kit.cdPavise).u32(kit.cdFurnace);
 }

@@ -3,6 +3,8 @@
 // in content/bots/*.ts). Authored in seconds and world units.
 
 import { gunnerWeights } from './bots/gunner.ts';
+import { penitentWeights } from './bots/penitent.ts';
+import { psykerWeights } from './bots/psyker.ts';
 import { standinWeights } from './bots/standins.ts';
 
 type UltimatePolicy = 'free' | 'spike' | 'combo';
@@ -71,6 +73,6 @@ export function defaultBotSetup(): BotSetup {
     thinkSeconds: 0.5,
     seats: [0, 1, 2, 3].map((slot) => ({ slot, doctrine: 'hold-the-line', reactionSeconds: 0.4 })),
     doctrines: [holdTheLine(), greedy()],
-    kitWeights: { ...gunnerWeights(), ...standinWeights() },
+    kitWeights: { ...gunnerWeights(), ...penitentWeights(), ...psykerWeights(), ...standinWeights() },
   };
 }

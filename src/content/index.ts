@@ -7,17 +7,23 @@ import { defaultMaster } from './director.ts';
 import { defaultEnemies } from './enemies.ts';
 import type { GunnerDef } from './heroes/gunner.ts';
 import { gunnerDef } from './heroes/gunner.ts';
+import type { PenitentDef } from './heroes/penitent.ts';
+import { penitentDef } from './heroes/penitent.ts';
+import type { PsykerDef } from './heroes/psyker.ts';
+import { psykerDef } from './heroes/psyker.ts';
 import type { StandinDef } from './heroes/standins.ts';
 import { standinDefs } from './heroes/standins.ts';
 import type { IntentsDef } from './intents.ts';
 import { defaultIntents } from './intents.ts';
 import { defaultMap } from './map.ts';
+import type { RulesDef } from './rules.ts';
+import { defaultRules } from './rules.ts';
 import { defaultStatuses } from './statuses.ts';
 import type { EnemyDef, MapDef, StatusDef, WaveSchedule } from './types.ts';
 import { defaultWaves } from './waves.ts';
 
 /** A hero definition; `kit` selects the sim's kit implementation. */
-export type HeroDef = GunnerDef | StandinDef;
+export type HeroDef = GunnerDef | PenitentDef | PsykerDef | StandinDef;
 
 export interface GameConfig {
   readonly map: MapDef;
@@ -28,12 +34,23 @@ export interface GameConfig {
   readonly heroes: readonly HeroDef[];
   /** Intents board limits. */
   readonly intents: IntentsDef;
+  /** Respawn, team wipe and leash knobs. */
+  readonly rules: RulesDef;
   /**
    * Set = wave master mode: the wave schedule supplies only the clock and the wave count; waves
    * are bought with `summon` commands and may start early with `send` (sim/master.ts). Unset =
    * schedule mode (the waves' own compositions spawn).
    */
   readonly master?: MasterDef;
+}
+
+/** The support stand-in without the pull (Gravitic Lash is the Psyker's now): the fourth seat of the w8 lineup. */
+function supportSeat(): StandinDef {
+  const support = standinDefs().find((d) => d.role === 'support');
+  if (support === undefined) {
+    throw new Error('no support stand-in');
+  }
+  return { ...support, abilities: support.abilities.filter((a) => a.effect !== 'pull') };
 }
 
 /** A fresh config each call, so callers can derive variants without sharing mutable state. */
@@ -43,8 +60,10 @@ export function defaultGame(): GameConfig {
     enemies: defaultEnemies(),
     statuses: defaultStatuses(),
     waves: defaultWaves(),
-    heroes: [gunnerDef(), ...standinDefs()],
+    // Gunner, Penitent, Psyker, and the support stand-in as the fourth seat (w8 solo lineup).
+    heroes: [gunnerDef(), penitentDef(), psykerDef(), supportSeat()],
     intents: defaultIntents(),
+    rules: defaultRules(),
   };
 }
 
@@ -86,6 +105,10 @@ export function validateGame(game: GameConfig): void {
     game.statuses.map((s) => s.id),
     'status',
   );
+  const { respawn } = game.rules;
+  if (!(respawn.base >= 0 && respawn.perWave >= 0 && respawn.max >= 0 && game.rules.leashRange > 0)) {
+    throw new Error('game config: rules.respawn values must be >= 0 and rules.leashRange > 0');
+  }
   const { master } = game;
   if (master !== undefined) {
     for (const c of master.costs) {

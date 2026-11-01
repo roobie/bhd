@@ -2,6 +2,8 @@
 // `defaultBrains` dispatches on the hero's kit. A brain slice edits only its own brain file.
 
 import { gunnerBrain } from './gunner.ts';
+import { penitentBrain } from './penitent.ts';
+import { psykerBrain } from './psyker.ts';
 import { standinBrain } from './standins.ts';
 import type { Bot, Brain, BrainTable, SeatInfo } from './types.ts';
 
@@ -13,6 +15,8 @@ export function createBot<M>(brain: Brain<M>, seat: SeatInfo): Bot {
 export function defaultBrains(): BrainTable {
   return {
     gunner: (seat) => createBot(gunnerBrain, seat),
+    penitent: (seat) => createBot(penitentBrain, seat),
+    psyker: (seat) => createBot(psykerBrain, seat),
     standin: (seat) => createBot(standinBrain, seat),
   };
 }

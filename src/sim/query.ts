@@ -1,7 +1,7 @@
 // Spatial queries. All results are in ascending entity-ID order; where "nearest" ties, the lower
 // ID wins. Distances compare squared lengths (exact IEEE arithmetic, no sqrt needed). A unit is
 // hit when its CENTRE is within `reach + unit.radius` of the query shape, i.e. bodies count.
-// Dead units (hp <= 0, not yet removed by the deaths system) are never returned.
+// Dead units (hp <= 0: removed by the deaths system, or a downed hero) and props are never returned.
 
 import type { Point } from '../content/types.ts';
 import type { Entity, EntityView, Team } from './entities.ts';
@@ -12,7 +12,7 @@ type Unit = Readonly<Entity>;
 export function unitsInRadius(entities: EntityView, center: Point, radius: number, team?: Team): Unit[] {
   const out: Unit[] = [];
   for (const e of entities.values()) {
-    if (e.hp <= 0 || (team !== undefined && e.team !== team)) {
+    if (e.hp <= 0 || e.kind === 'prop' || (team !== undefined && e.team !== team)) {
       continue;
     }
     const dx = e.x - center.x;
@@ -34,7 +34,7 @@ export function nearestHostile(
   let best: Unit | undefined;
   let bestD2 = 0;
   for (const e of entities.values()) {
-    if (e.hp <= 0 || e.team === from.team) {
+    if (e.hp <= 0 || e.kind === 'prop' || e.team === from.team) {
       continue;
     }
     const dx = e.x - from.x;
@@ -67,7 +67,7 @@ export function unitsOnSegment(entities: EntityView, from: Point, to: Point, hal
   const len2 = sx * sx + sy * sy;
   const out: SegmentHit[] = [];
   for (const e of entities.values()) {
-    if (e.hp <= 0) {
+    if (e.hp <= 0 || e.kind === 'prop') {
       continue;
     }
     const px = e.x - from.x;
@@ -82,4 +82,37 @@ export function unitsOnSegment(entities: EntityView, from: Point, to: Point, hal
   }
   // Entities arrive in ID order and Array.sort is stable, so equal t keeps ID order.
   return out.sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Where the segment `from`-`to` first crosses a prop barrier: the fraction t in [0, 1] (0 = `from`),
+ * or undefined when nothing blocks it. With `team` given, only props of the OTHER team block (the
+ * shooter's own barriers let its shots through: enemy attacks use this); without it every prop
+ * blocks (the Gunner's line stops at her own Pavise). Parallel and degenerate segments never
+ * cross. Plain + - * / only (no trig), so it is bit-identical everywhere.
+ */
+export function firstBarrier(entities: EntityView, from: Point, to: Point, team?: Team): number | undefined {
+  const rx = to.x - from.x;
+  const ry = to.y - from.y;
+  let best: number | undefined;
+  for (const e of entities.values()) {
+    const { prop } = e;
+    if (e.kind !== 'prop' || prop === undefined || (team !== undefined && e.team === team)) {
+      continue;
+    }
+    const sx = prop.ux * prop.halfLength * 2;
+    const sy = prop.uy * prop.halfLength * 2;
+    const denom = rx * sy - ry * sx;
+    if (denom === 0) {
+      continue;
+    }
+    const qx = e.x - prop.ux * prop.halfLength - from.x;
+    const qy = e.y - prop.uy * prop.halfLength - from.y;
+    const t = (qx * sy - qy * sx) / denom;
+    const u = (qx * ry - qy * rx) / denom;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && (best === undefined || t < best)) {
+      best = t;
+    }
+  }
+  return best;
 }

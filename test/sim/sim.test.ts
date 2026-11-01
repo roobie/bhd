@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGame } from '../../src/content/index.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { byPlayerThenSeq, Sim } from '../../src/sim/sim.ts';
 import { TICK_HZ } from '../../src/sim/time.ts';
+import { legacyGame } from '../legacy.ts';
 
 interface Scripted {
   readonly tick: number;
@@ -12,7 +12,7 @@ interface Scripted {
 }
 
 const HEX16 = /^[0-9a-f]{16}$/u;
-// defaultGame(): Ancient 1, gunner 2, tank 3, ranged 4, support 5. Debug spawns start at 6.
+// legacyGame(): Ancient 1, gunner 2, tank 3, ranged 4, support 5. Debug spawns start at 6.
 const GUNNER = 2;
 const TANK = 3;
 
@@ -27,8 +27,8 @@ const SCRIPT: readonly Scripted[] = [
 
 function newSim(seed: number, hashEvery?: number): Sim {
   return hashEvery === undefined
-    ? new Sim({ seed, game: defaultGame() })
-    : new Sim({ seed, game: defaultGame(), hashEvery });
+    ? new Sim({ seed, game: legacyGame() })
+    : new Sim({ seed, game: legacyGame(), hashEvery });
 }
 
 /** Submits the whole script up front (as lockstep would with input delay), then runs. */

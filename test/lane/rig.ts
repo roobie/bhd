@@ -2,18 +2,18 @@
 // three held stand-in heroes that tests move around by hand.
 
 import type { GameConfig } from '../../src/content/index.ts';
-import { defaultGame } from '../../src/content/index.ts';
 import type { WaveSchedule } from '../../src/content/types.ts';
 import type { Entity } from '../../src/sim/entities.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { Sim } from '../../src/sim/sim.ts';
+import { legacyGame } from '../legacy.ts';
 
 export const TANK = 2;
 export const RANGED = 3;
 export const SUPPORT = 4;
 
 function laneGame(waves: WaveSchedule, ancientHp = 20): GameConfig {
-  const base = defaultGame();
+  const base = legacyGame();
   const [, tank, ranged, support] = base.heroes;
   if (tank === undefined || ranged === undefined || support === undefined) {
     throw new Error('default lineup changed');

@@ -242,28 +242,22 @@ describe('Vent', () => {
   });
 });
 
-describe('Suppressing Fire', () => {
-  it('hits a wide cone for low damage, applies Suppressed, costs heat and has a cooldown', () => {
+describe('Pavise', () => {
+  it('plants a barrier prop along the aim, goes on cooldown and expires', () => {
     const r = gunnerRig();
-    r.sim.command(0, { kind: 'hold', hero: GUNNER, on: true });
-    const a = r.dummy(6, 3); // ~27 degrees
-    const b = r.dummy(6, -4); // ~34 degrees, inside the 100 degree cone
-    const out = r.dummy(-5, 0);
+    const def = gunnerDef();
     r.step(1);
-    r.cast(2, 10, 0);
-    const ev = r.step(1);
-    const hits = dmgFrom(ev);
-    expect(hits.map((h) => h.dst)).toEqual([a.id, b.id]);
-    expect(hits.every((h) => h.amount === 12 && h.tags.includes('cone'))).toBe(true);
-    for (const id of [a.id, b.id]) {
-      expect(r.sim.entities.get(id)?.statuses).toMatchObject([{ status: 'suppressed', src: GUNNER, value: 0.4 }]);
-    }
-    expect(r.sim.entities.get(out.id)?.statuses).toEqual([]);
-    expect(r.kit.heat).toBeLessThan(1000);
-    expect(r.kit.heat).toBeGreaterThanOrEqual(0);
-    r.cast(2, 10, 0);
-    expect(dmgFrom(r.step(1))).toEqual([]);
-    expect(r.kit.cdSuppress).toBe(ticks(10) - 2);
+    r.cast(2, 5, 0);
+    r.step(1);
+    const props = [...r.sim.entities.values()].filter((e) => e.kind === 'prop');
+    expect(props).toHaveLength(1);
+    expect(props[0]?.prop?.owner).toBe(GUNNER);
+    expect(r.kit.cdPavise).toBeGreaterThan(0);
+    r.cast(2, 5, 0);
+    r.step(1);
+    expect([...r.sim.entities.values()].filter((e) => e.kind === 'prop')).toHaveLength(1);
+    r.step(ticks(def.pavise.seconds) + 2);
+    expect([...r.sim.entities.values()].filter((e) => e.kind === 'prop')).toHaveLength(0);
   });
 });
 

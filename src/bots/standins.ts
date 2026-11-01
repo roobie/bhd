@@ -428,6 +428,8 @@ function roleDecisions(ctx: BotCtx, post: Point): Decision[] {
     case 'support':
       return [supportStand(ctx, post), ...supportHeal(ctx), ...supportPull(ctx)];
     case 'gunner':
+    case 'penitent':
+    case 'psyker':
       return [];
     default: {
       const unknown: never = ctx.me.role;

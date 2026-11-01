@@ -15,7 +15,7 @@ import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import { commandHero, spawnHero } from './heroes/index.ts';
 import { applySummon, sendWave } from './master.ts';
-import { startWave } from './waves.ts';
+import { callWave, startWave } from './waves.ts';
 
 const ABILITY_SLOTS = 4;
 
@@ -54,6 +54,14 @@ interface AutocastCommand {
   readonly hero: number;
   readonly slot: number;
   readonly on: boolean;
+}
+
+/**
+ * Solo play: starts the next wave now instead of waiting for the clock (a no-op when waves are
+ * exhausted, or in master mode with nothing pending). Seat-less: not addressed to a hero.
+ */
+interface CallWaveCommand {
+  readonly kind: 'callWave';
 }
 
 /** DEBUG (tests, scenarios): spawn a unit of content `def` at (x, y). Enemies spawn idle. Not a player action. */
@@ -105,7 +113,7 @@ interface SendCommand {
 /** The commands that address one hero. */
 export type HeroCommand = MoveCommand | StopCommand | HoldCommand | AbilityCommand | AutocastCommand;
 
-export type Command = HeroCommand | IntentCommand | SummonCommand | SendCommand | SpawnCommand;
+export type Command = HeroCommand | IntentCommand | SummonCommand | SendCommand | CallWaveCommand | SpawnCommand;
 
 function isId(n: unknown): boolean {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -185,6 +193,7 @@ export function isValidCommand(cmd: Command): boolean {
         cmd.count <= MAX_SUMMON
       );
     case 'send':
+    case 'callWave':
       return true;
     case 'spawn':
       return typeof cmd.def === 'string' && cmd.def.length > 0 && isCoord(cmd.x) && isCoord(cmd.y);
@@ -262,6 +271,8 @@ export function canonicalCommand(cmd: Command): Command {
       return { kind: 'summon', def: cmd.def, count: cmd.count + 0 };
     case 'send':
       return { kind: 'send' };
+    case 'callWave':
+      return { kind: 'callWave' };
     case 'spawn':
       return { kind: 'spawn', def: cmd.def, x: cmd.x + 0, y: cmd.y + 0 };
     default: {
@@ -302,6 +313,10 @@ export function applyCommand(ctx: TickContext, cmd: Command): void {
     if (wave !== undefined) {
       startWave(ctx, wave);
     }
+    return;
+  }
+  if (cmd.kind === 'callWave') {
+    callWave(ctx);
     return;
   }
   const hero = ctx.entities.get(cmd.hero);

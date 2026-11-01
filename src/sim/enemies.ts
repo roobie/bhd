@@ -2,11 +2,11 @@
 // Lane enemies (spawned by waves, `move.waypoint >= 1`) walk the lane. Each tick, in ID order:
 //  1. Target: the `src` of a live `taunted` status (several: the one lasting longest, ties to the
 //     lower id; a dead or missing taunter is ignored) wins, from any distance. Otherwise the
-//     current target is kept while it is alive and within LEASH_RANGE. Otherwise the nearest hero
+//     current target is kept while it is alive and within `rules.leashRange`. Otherwise the nearest hero
 //     within AGGRO_RANGE (ties to the lower id). A lane enemy only considers heroes it can reach
-//     inside the leash: distance to the lane <= LEASH_RANGE - (attack range + both radii); others
+//     inside the leash: distance to the lane <= `rules.leashRange` - (attack range + both radii); others
 //     are ignored (no stalling by loitering just beyond the leash). The leash is also anchored to the lane: a lane
-//     enemy more than LEASH_RANGE from the lane polyline (non-taunted) drops its target and
+//     enemy more than `rules.leashRange` from the lane polyline (non-taunted) drops its target and
 //     acquires none until it is back, so a hero cannot drag enemies away forever. (Derived from
 //     the position: the entity has no spare field to store the exact point it left the lane.)
 //     Only heroes are aggro targets: the Ancient is hit
@@ -20,20 +20,19 @@
 // only hit a target that is already in attack range.
 // Systems skip dead actors: an enemy at 0 hp (not yet removed by the deaths system) does nothing.
 // Taunt is pure status application: stand-in heroes never need to edit this file.
-// AGGRO_RANGE and LEASH_RANGE are code constants because the shared EnemyDef (contracts) has no
-// such fields.
+// AGGRO_RANGE is a code constant because the shared EnemyDef (contracts) has no such field; the leash
+// is a content value (`rules.leashRange`).
 
 import type { EnemyDef, Point } from '../content/types.ts';
 import { findById } from '../content/types.ts';
 import { dealDamage } from './combat.ts';
 import type { TickContext } from './context.ts';
 import type { Entity, MoveMode } from './entities.ts';
+import { firstBarrier } from './query.ts';
 import { perTick, ticks } from './time.ts';
 
 /** World units: a hero whose body is this close to a lane enemy draws it off the lane. */
 export const AGGRO_RANGE = 6;
-/** World units: an enemy gives up a (non-taunted) target farther than this and returns to the lane. */
-export const LEASH_RANGE = 10;
 
 /** Spawns an enemy at `at` and emits `spawn`. `lane` enemies head for waypoint 1 (they start on waypoint 0). */
 export function spawnEnemy(ctx: TickContext, def: EnemyDef, at: Point, mode: MoveMode): Entity {
@@ -127,7 +126,7 @@ function laneDistance(p: Readonly<Point>, lane: readonly Point[]): number {
 
 /**
  * Picks the target id (0 for none) for a lane enemy; see the file header. A lane enemy only
- * acquires or keeps a hero whose distance to the lane is at most LEASH_RANGE minus the reach it
+ * acquires or keeps a hero whose distance to the lane is at most `rules.leashRange` minus the reach it
  * needs (attack range plus both radii): it can then always get into attack range without leaving
  * the leash, so a hero loitering just beyond that cannot pin it in place without being hit.
  */
@@ -137,17 +136,19 @@ function chooseTarget(ctx: TickContext, e: Readonly<Entity>, def: EnemyDef, lane
     return taunted;
   }
   const { lane } = ctx.game.map;
-  if (laneEnemy && laneDistance(e, lane) > LEASH_RANGE) {
+  // World units: an enemy gives up a (non-taunted) target farther than this and returns to the lane.
+  const leash = ctx.game.rules.leashRange;
+  if (laneEnemy && laneDistance(e, lane) > leash) {
     return 0;
   }
   const reachable = (h: Readonly<Entity>): boolean =>
-    !laneEnemy || laneDistance(h, lane) <= LEASH_RANGE - (def.attack.range + e.radius + h.radius);
+    !laneEnemy || laneDistance(h, lane) <= leash - (def.attack.range + e.radius + h.radius);
   const current = ctx.entities.get(e.attack.target);
   if (
     current !== undefined &&
     current.hp > 0 &&
     current.kind === 'hero' &&
-    within(e, current, LEASH_RANGE) &&
+    within(e, current, leash) &&
     reachable(current)
   ) {
     return current.id;
@@ -179,7 +180,8 @@ function engage(ctx: TickContext, e: Entity, def: EnemyDef, laneEnemy: boolean):
   if (laneEnemy) {
     e.move.mode = 'idle';
   }
-  if (e.attack.cooldown === 0) {
+  // A hostile Pavise between the two blocks the hit (the enemy keeps trying).
+  if (e.attack.cooldown === 0 && firstBarrier(ctx.entities, e, target, e.team) === undefined) {
     const amount = def.attack.damage;
     if (dealDamage(ctx, { src: e.id, dst: target.id, amount, tags: ['melee'] }) > 0) {
       e.attack.cooldown = ticks(def.attack.cooldown);

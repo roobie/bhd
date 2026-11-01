@@ -4,12 +4,14 @@
 // IDs are monotonic integers, never reused, iterated in ID order (project DESIGN.md §6.1).
 
 import type { GunnerState } from './heroes/gunner.ts';
+import type { PenitentState } from './heroes/penitent.ts';
+import type { PsykerState } from './heroes/psyker.ts';
 import type { StandinState } from './heroes/standins.ts';
 
-export type EntityKind = 'hero' | 'enemy' | 'ancient';
+export type EntityKind = 'hero' | 'enemy' | 'ancient' | 'prop';
 
 /** Stable numeric codes for the state hash. Append only; never renumber. */
-export const ENTITY_KIND_CODE: Readonly<Record<EntityKind, number>> = { hero: 1, enemy: 2, ancient: 3 };
+export const ENTITY_KIND_CODE: Readonly<Record<EntityKind, number>> = { hero: 1, enemy: 2, ancient: 3, prop: 4 };
 
 /** 0 = defenders (heroes, Ancient), 1 = attackers. */
 export type Team = 0 | 1;
@@ -53,10 +55,28 @@ export interface KitBase {
   hold: boolean;
   /** Autocast toggles, bit i = ability slot i (4 bits). */
   autocast: number;
+  /** 0 = up. While downed (hp 0, hero kept in the store): the tick the hero revives at (sim/respawn.ts). */
+  respawnAt: number;
 }
 
 /** Hero-only per-kit state, discriminated on `kind`; each member is defined in its kit's file and extends `KitBase`. */
-export type HeroKitState = GunnerState | StandinState;
+export type HeroKitState = GunnerState | PenitentState | PsykerState | StandinState;
+
+/**
+ * A prop (kind `prop`): a placed barrier, e.g. the Gunner's Pavise. Never targeted or damaged, hp 1.
+ * The barrier is the segment `(x, y) +- (ux, uy) * halfLength`; (ux, uy) is the unit vector ALONG
+ * the barrier (no angle is stored: the barrier clip uses detmath-only arithmetic, query.ts
+ * `firstBarrier`). `team` is the owner's team. Removed by `propSystem` once `tick >= until`.
+ */
+interface PropState {
+  /** Entity id of the placer. */
+  readonly owner: number;
+  /** First tick the prop is gone. */
+  readonly until: number;
+  readonly ux: number;
+  readonly uy: number;
+  readonly halfLength: number;
+}
 
 export interface Entity {
   readonly id: number;
@@ -76,9 +96,11 @@ export interface Entity {
   move: MoveState;
   attack: AttackState;
   kit?: HeroKitState;
+  /** Props only. */
+  prop?: PropState;
 }
 
-/** Everything `add` needs; `kit` is set for heroes only. */
+/** Everything `add` needs; `kit` is set for heroes only, `prop` for props only. */
 export interface NewEntity {
   readonly kind: EntityKind;
   readonly def: string;
@@ -91,6 +113,7 @@ export interface NewEntity {
   readonly speed: number;
   readonly move?: MoveState;
   readonly kit?: HeroKitState;
+  readonly prop?: PropState;
 }
 
 /** Read-only view for code outside the sim (client, bots, perception) and for queries. */
@@ -135,6 +158,9 @@ export class EntityStore implements EntityView {
     };
     if (init.kit !== undefined) {
       e.kit = init.kit;
+    }
+    if (init.prop !== undefined) {
+      e.prop = init.prop;
     }
     this.#byId.set(id, e);
     return e;

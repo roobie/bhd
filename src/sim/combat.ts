@@ -24,13 +24,22 @@ export interface HealSpec {
   readonly tags: readonly string[];
 }
 
-/** Restores hp up to maxHp and emits `heal`; returns the amount actually healed. No-op on dead or missing units and on the Ancient. */
+/**
+ * Restores hp up to maxHp and emits `heal`; returns the amount actually healed (after the target's
+ * `healTaken` hook, e.g. the Penitent's x0.25). No-op on dead or missing units, props and the Ancient.
+ */
 export function heal(ctx: TickContext, spec: HealSpec): number {
   const target = ctx.entities.get(spec.dst);
-  if (target === undefined || target.kind === 'ancient' || target.hp <= 0 || !(spec.amount > 0)) {
+  if (
+    target === undefined ||
+    target.kind === 'ancient' ||
+    target.kind === 'prop' ||
+    target.hp <= 0 ||
+    !(spec.amount > 0)
+  ) {
     return 0;
   }
-  const healed = Math.min(spec.amount, target.maxHp - target.hp);
+  const healed = Math.min(ctx.hooks.healTaken(ctx, target, spec.amount), target.maxHp - target.hp);
   if (healed <= 0) {
     return 0;
   }
@@ -52,6 +61,12 @@ function blockedByTeam(ctx: TickContext, spec: DamageSpec, victim: Readonly<Enti
   }
   const attacker = ctx.entities.get(spec.src);
   return attacker !== undefined && attacker.team === victim.team && !spec.tags.includes('ff');
+}
+
+/** True when the attacker is on the victim's team (an `ff` hit; the self hit is already dropped). */
+function isFriendly(ctx: TickContext, spec: DamageSpec, victim: Readonly<Entity>): boolean {
+  const attacker = ctx.entities.get(spec.src);
+  return attacker !== undefined && attacker.team === victim.team;
 }
 
 /** Marked, Clumped and armour applied to a non-leak hit (steps 3-5 of the pipeline). */
@@ -91,6 +106,9 @@ function modify(ctx: TickContext, spec: DamageSpec, victim: Entity): number {
  *    Clumped value. Not consumed; it expires on its own.
  * 5. Armour: effective = max(0, armour - max Exposed value). Unless the hit has the `pierce` tag,
  *    amount = max(amount - effective, amount * 0.2): armour never removes more than 80% of a hit.
+ * 6. Props are never damaged. The `damageTaken` hook (kit of the victim) then sets the final amount
+ *    and a `minHp` floor that applies to same-team (`ff`) hits only; the `dmg` event carries the hp
+ *    actually lost. Leak damage skips the hook.
  */
 export function dealDamage(ctx: TickContext, spec: DamageSpec): number {
   const victim = ctx.entities.get(spec.dst);
@@ -98,14 +116,26 @@ export function dealDamage(ctx: TickContext, spec: DamageSpec): number {
     return 0;
   }
   const leak = spec.tags.includes('leak');
-  if (!leak && (victim.kind === 'ancient' || blockedByTeam(ctx, spec, victim))) {
+  if (!leak && (victim.kind === 'ancient' || victim.kind === 'prop' || blockedByTeam(ctx, spec, victim))) {
     return 0;
   }
-  const amount = leak ? spec.amount : modify(ctx, spec, victim);
-  victim.hp -= amount;
+  let amount = leak ? spec.amount : modify(ctx, spec, victim);
+  let floor = 0;
+  if (!leak) {
+    const taken = ctx.hooks.damageTaken(ctx, { victim, spec, raw: amount, amount });
+    ({ amount } = taken);
+    floor = isFriendly(ctx, spec, victim) ? taken.minHp : 0;
+  }
+  const before = victim.hp;
+  victim.hp = Math.max(before - amount, Math.min(before, floor));
+  // The event reports the hp actually lost, so a floor shows up as a smaller hit.
+  const lost = floor > 0 ? before - victim.hp : amount;
+  if (!(lost > 0)) {
+    return 0;
+  }
   if (victim.hp <= 0) {
     ctx.killers.set(victim.id, spec.src);
   }
-  ctx.emit({ tick: ctx.tick, kind: 'dmg', src: spec.src, dst: spec.dst, amount, tags: spec.tags });
-  return amount;
+  ctx.emit({ tick: ctx.tick, kind: 'dmg', src: spec.src, dst: spec.dst, amount: lost, tags: spec.tags });
+  return lost;
 }

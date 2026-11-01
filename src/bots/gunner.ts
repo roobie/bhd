@@ -6,7 +6,7 @@
 //   gunner.stance    free | brace                Brace is a toggle and roots; the option is the wanted state
 //   gunner.fire      fire | hold                 `hold` command; allies in the overpen line are a cost (pillar 1)
 //   gunner.vent      wait | vent                 against heat bands
-//   gunner.suppress  wait | suppress             Suppressing Fire, costs heat
+//   (gunner.pavise   wait | pavise               slice C, w8: the Pavise barrier; the bot does not cast it yet)
 //   gunner.furnace   wait | furnace              per doctrine.ultimate: free | spike | combo
 //   gunner.reserve   none | furnace | vent       follow a 'pull' intent (the support's) with an armed cast
 // A decision with nothing meaningful to weigh (ability not ready, braced and cannot move, ...) is
@@ -58,7 +58,7 @@ interface Frame {
 
 const DEFAULTS = gunnerWeights();
 const NEAR = 1;
-const SLOT = { brace: 0, vent: 1, suppress: 2, furnace: 3 } as const;
+const SLOT = { brace: 0, vent: 1, pavise: 2, furnace: 3 } as const;
 
 function dist(a: Point, b: Point): number {
   const dx = a.x - b.x;
@@ -391,55 +391,6 @@ function ventDecision(f: Frame): Decision | undefined {
   };
 }
 
-// ---------------------------------------------------------------- gunner.suppress
-
-function suppressAim(f: Frame, range: number): { readonly aim: Point | undefined; readonly count: number } {
-  const { me } = f;
-  const shape = { range, cos: f.g.suppressCos };
-  const fresh = f.enemies.filter((e) => !e.statuses.some((s) => s.status === 'suppressed'));
-  if (f.braced) {
-    return { aim: f.aim, count: inCone(me, f.aim, fresh, shape).length };
-  }
-  const candidates: Point[] = f.ctx.p.clumps.filter((c) => dist(me, c) <= shape.range).map((c) => ({ x: c.x, y: c.y }));
-  if (f.focus !== undefined) {
-    candidates.push(f.focus);
-  }
-  let best: { aim: Point | undefined; count: number } = { aim: undefined, count: 0 };
-  for (const c of candidates) {
-    const count = inCone(me, c, fresh, shape).length;
-    if (count > best.count) {
-      best = { aim: c, count };
-    }
-  }
-  return best;
-}
-
-function suppressDecision(f: Frame): Decision | undefined {
-  const { me, w } = f;
-  const ab = abilityOf(me, SLOT.suppress);
-  if (ab === undefined || !ab.ready || f.locked) {
-    return undefined;
-  }
-  if (pending(f, (c) => c.kind === 'ability' && c.slot === SLOT.suppress)) {
-    return undefined;
-  }
-  const { aim, count } = suppressAim(f, ab.range);
-  const value =
-    w('gunner.suppress.perEnemy') * Math.min(count, 8) + (count > 0 ? w('gunner.suppress.threat') * me.threat : 0);
-  const heatCost = f.g.suppressHeat;
-  const hot = Math.max(0, f.heat - f.g.pierceAbove);
-  const price = w('gunner.suppress.heatPrice') * heatCost * (1 + 4 * hot);
-  // Suppressing Fire adds heat: never into an overheat lockout.
-  const overheat = f.heat + heatCost >= 1 && !f.furnace ? w('gunner.reserve.heldAbility') : 0;
-  return {
-    id: 'gunner.suppress',
-    options: [
-      idle('wait', w('gunner.suppress.waitBase')),
-      { id: 'suppress', value, cost: price + overheat, commands: [castAt(f, SLOT.suppress, aim)] },
-    ],
-  };
-}
-
 // ---------------------------------------------------------------- gunner.furnace
 
 /** Price of spending Furnace Heart under the doctrine's ultimate policy. */
@@ -577,7 +528,6 @@ export const gunnerBrain: Brain<Memory> = {
       stanceDecision(f),
       fireDecision(f),
       ventDecision(f),
-      suppressDecision(f),
       furnaceDecision(f),
       reserveDecision(f),
     ];

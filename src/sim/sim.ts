@@ -17,10 +17,12 @@ import type { EntityView } from './entities.ts';
 import { EntityStore } from './entities.ts';
 import type { EndReason, SimEvent } from './events.ts';
 import { stateHash } from './hash.ts';
-import { heroSystem, spawnHero } from './heroes/index.ts';
+import { heroHooks, heroSystem, spawnHero } from './heroes/index.ts';
 import type { MasterState } from './master.ts';
 import { createMasterState } from './master.ts';
 import { moveSystem } from './movement.ts';
+import { propSystem } from './props.ts';
+import { respawnSystem } from './respawn.ts';
 import { statusSystem } from './statuses.ts';
 import { ticks } from './time.ts';
 import type { WaveState } from './waves.ts';
@@ -117,8 +119,10 @@ export class Sim implements SimView {
         return sim.#tick;
       },
       entities: this.entities,
+      seed: this.seed,
       rng: this.rng,
       emit,
+      hooks: heroHooks,
       game: this.game,
       waves: this.waves,
       intents: this.intents,
@@ -203,7 +207,7 @@ export class Sim implements SimView {
 
   /**
    * Runs one tick and returns its events in emission order. Tick order: commands, intents, waves (spawn),
-   * statuses (expire), movement, hero kits, enemies, deaths (+ end), hash. After the game has
+   * statuses (expire), props (expire), respawns, movement, hero kits, enemies, deaths (+ end), hash. After the game has
    * ended, a tick only advances the clock and emits `hash` events: commands already queued are dropped unlogged and new ones are rejected (`ended`)
    * and no system runs.
    */
@@ -235,6 +239,8 @@ export class Sim implements SimView {
     intentSystem(ctx);
     waveSystem(ctx);
     statusSystem(ctx);
+    propSystem(ctx);
+    respawnSystem(ctx);
     moveSystem(ctx);
     heroSystem(ctx);
     enemySystem(ctx);

@@ -38,6 +38,8 @@ function play(over: Partial<MatchOptions> = {}): { thinks: Think[]; events: stri
   const defaults = defaultBrains();
   const brains: BrainTable = {
     gunner: defaults.gunner,
+    penitent: defaults.penitent,
+    psyker: defaults.psyker,
     standin: (seat): Bot => {
       const bot = createBot(standinBrain, seat);
       return {

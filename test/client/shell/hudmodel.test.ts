@@ -10,6 +10,7 @@ import { createMemory } from '../../../src/perception/memory.ts';
 import { perceive } from '../../../src/perception/perceive.ts';
 import type { HeroView, Perception } from '../../../src/perception/types.ts';
 import { Sim } from '../../../src/sim/sim.ts';
+import { rosterGame } from '../../legacy.ts';
 
 const BAD = /NaN|undefined|\?|\{|\}/u;
 const HEX = /^#[0-9a-f]{6}$/u;
@@ -182,7 +183,7 @@ describe('hudInsets', () => {
 });
 
 describe('help model', () => {
-  const game = defaultGame();
+  const game = rosterGame();
   const open = { ...controls, help: true };
 
   it('is absent while closed and present when open', () => {

@@ -26,7 +26,7 @@ export interface StandinState extends KitBase {
 }
 
 export function initStandin(_def: StandinDef): StandinState {
-  return { kind: 'standin', hold: false, autocast: 0, cooldowns: Array.from({ length: SLOTS }, () => 0) };
+  return { kind: 'standin', hold: false, autocast: 0, respawnAt: 0, cooldowns: Array.from({ length: SLOTS }, () => 0) };
 }
 
 /** Everything a kit function needs about one hero. */
