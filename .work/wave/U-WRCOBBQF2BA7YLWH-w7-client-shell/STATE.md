@@ -1,16 +1,16 @@
 ---
-phase: initialize
+phase: execute
 parent: U-RTZB3ZJZRHUYJYR5
 owner:
   - claude
 created: 2026-11-01
 success_criteria:
   - '`play.html` (also on Pages) draws the live match with the WebGL2 instanced SDF renderer, interpolated between ticks, with the whole map visible at 390×844 portrait and 1280×720 landscape; screenshots of both in Evidence'
-  - 'With `#drive=<slot>` a human moves, casts every ability of that hero, toggles autocast, stop and hold, by mouse+keys and by touch (Playwright touch emulation); these actions reach the sim only as `cmd` events from player = slot'
-  - 'The HUD shows hero cards (hp, resource bars with marks, statuses), cooldowns, wave preview and Ancient hp from Perception plus `src/content/presentation.ts`; a hero, effect or status without a presentation entry still renders through fallbacks (tested); no `shell/` code switches on a hero, kit or effect name'
-  - 'A human arms a trigger (`intent post`), and reserves and cancels on intents; in the step-3 demo a bot Gunner reserves against a human-armed pull, and the log shows reserve, fire and fulfil'
-  - 'A driven local game''s `cmd` events replay into a fresh sim with identical hashes (node test); the golden is unchanged by the wave'
-  - 'The debug viewer at `index.html` works as before and its browser tests pass; `npm run ci` is green, with gl and shell browser tests in chromium, firefox and webkit (or the WebGL2-unavailable fallback asserted and recorded)'
+  - With `#drive=<slot>` a human moves, casts every ability of that hero, toggles autocast, stop and hold, by mouse+keys and by touch (Playwright touch emulation); these actions reach the sim only as `cmd` events from player = slot
+  - The HUD shows hero cards (hp, resource bars with marks, statuses), cooldowns, wave preview and Ancient hp from Perception plus `src/content/presentation.ts`; a hero, effect or status without a presentation entry still renders through fallbacks (tested); no `shell/` code switches on a hero, kit or effect name
+  - A human arms a trigger (`intent post`), and reserves and cancels on intents; in the step-3 demo a bot Gunner reserves against a human-armed pull, and the log shows reserve, fire and fulfil
+  - A driven local game's `cmd` events replay into a fresh sim with identical hashes (node test); the golden is unchanged by the wave
+  - The debug viewer at `index.html` works as before and its browser tests pass; `npm run ci` is green, with gl and shell browser tests in chromium, firefox and webkit (or the WebGL2-unavailable fallback asserted and recorded)
 ---
 
 # wave/w7-client-shell
@@ -54,3 +54,4 @@ Design written; awaiting lead review before execute.
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 design drafted by an Opus planner (purpose, scope, criteria, slices)
+- 2026-11-01 phase initialize → execute
