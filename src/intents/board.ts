@@ -1,30 +1,40 @@
 // Intents board (project DESIGN.md §6.3; wave w2-bots DESIGN "Intents board lives in the sim").
-// STUB: contracts fixed the state shape, the three entry points and the hash; the intents slice
-// fills in the rest. Owner: intents.
+// Owner: intents.
 //
 // A human's armed trigger and a bot intent are the same object and fire on the lockstep tick, so
 // the board is sim state (hashed) and its phase runs right after commands: `intentSystem`.
 //
-// Contract (the full spec, of which this stub implements post, fire and the poster's cancel):
+// Contract:
 // - post: `{op:'post', hero, slot, intentKind, x, y, fireIn}`; `fireTick = applyTick + fireIn`
-//   (fireIn >= 1 whole ticks); one unfired posted intent per hero; at most `intents.maxLive` live.
-//   Emits `intent post`. Refused (logged `cmd` only) for a missing or dead hero.
+//   (fireIn >= 1 whole ticks); one pending (unfired, before fireTick) intent per hero; at most
+//   `intents.maxLive` on the board. Emits `intent post`. Refused (logged `cmd` only) for a missing
+//   or dead hero.
 // - At `fireTick` the sim casts the poster's `slot` at (x, y) with `ctx.cast`: success -> `fire`,
-//   failure (dead, cooldown, locked) -> `expire`, intent removed.
+//   failure (dead, cooldown, locked) -> `expire`.
 // - reserve: `{op:'reserve', hero, intent, slot, offset}`: an armed follow-up; at `fireTick + offset`
 //   the sim casts the reserver's slot at the intent point: success -> `fulfil` (by reserver),
 //   failure or the intent never fired -> `expire` (by reserver). Accepted only before fireTick, one
 //   per hero per intent, `offset` whole ticks <= ticks(intents.maxOffsetSeconds). No ability lock:
-//   casting it early just makes the reservation expire. (STUB: accepted commands are no-ops.)
-// - cancel: `{op:'cancel', hero, intent}`: the poster cancels before fireTick; a reserver cancels
-//   its own reservation. The intent is removed after its last reservation resolves.
-// - Ops within one tick resolve in ascending intent id, then reservations in ascending hero id.
+//   casting it early just makes the reservation expire. The reserver must be a live hero and not
+//   the poster. Emits `reserve` (by the reserver).
+// - cancel: `{op:'cancel', hero, intent}`: the poster cancels before fireTick (emits `cancel` by the
+//   poster, removes the intent and expires its reservations at once, `expire` by each reserver in
+//   ascending hero id); a reserver cancels its own reservation at any time before it resolves (emits
+//   `cancel` by the reserver). Anything else is a logged no-op.
+// - An intent whose poster cast went through, or failed, lingers while reservations remain and is
+//   removed when the last one resolves. Only a pending intent counts as the poster's one live post,
+//   so a poster may post again once its intent fired or expired.
+// - Ops within one tick resolve in ascending intent id; for each intent the poster's fire/expire
+//   comes first, then due reservations (fireTick + offset <= tick) in ascending reserver hero id.
+//   Commands (post/reserve/cancel) are applied before the intents phase, so a command applied at
+//   fireTick - 1 is the last one accepted, and a post with fireIn 1 fires on the next tick.
 // - Cast success is observed from `ability` events (ctx.cast), so kit files stay untouched.
 // A field added to these types MUST be added to `hashIntents` (L-53OTZPIIVO2XYNNL).
 
 import type { IntentCommand } from '../sim/commands.ts';
 import type { TickContext } from '../sim/context.ts';
 import type { StateHasher } from '../sim/hash.ts';
+import { ticks } from '../sim/time.ts';
 
 /** An armed follow-up on someone else's intent. */
 interface Reservation {
@@ -58,11 +68,13 @@ export interface IntentBoard {
   live: Intent[];
 }
 
+type IntentOp = 'post' | 'reserve' | 'fire' | 'fulfil' | 'expire' | 'cancel';
+
 export function createIntentBoard(): IntentBoard {
   return { nextId: 1, live: [] };
 }
 
-/** True once any intent has ever been posted; the hash covers the board only from then on. */
+/** True once any intent has ever been posted. */
 export function boardUsed(board: IntentBoard): boolean {
   return board.nextId !== 1;
 }
@@ -79,13 +91,26 @@ export function hashIntents(h: StateHasher, board: IntentBoard): void {
   }
 }
 
+function liveHero(ctx: TickContext, id: number): boolean {
+  const hero = ctx.entities.get(id);
+  return hero?.kind === 'hero' && hero.hp > 0;
+}
+
+function emitOp(ctx: TickContext, intent: Intent, op: IntentOp, by: number): void {
+  ctx.emit({ tick: ctx.tick, kind: 'intent', id: intent.id, op, by, intentKind: intent.intentKind });
+}
+
+/** Unfired and before its fire tick: the poster's one live post. */
+function pending(ctx: TickContext, intent: Intent): boolean {
+  return !intent.fired && ctx.tick < intent.fireTick;
+}
+
 function post(ctx: TickContext, cmd: Extract<IntentCommand, { op: 'post' }>): void {
   const board = ctx.intents;
-  const hero = ctx.entities.get(cmd.hero);
-  if (hero?.kind !== 'hero' || hero.hp <= 0 || board.live.length >= ctx.game.intents.maxLive) {
+  if (!liveHero(ctx, cmd.hero) || board.live.length >= ctx.game.intents.maxLive) {
     return;
   }
-  if (board.live.some((i) => i.by === cmd.hero && !i.fired)) {
+  if (board.live.some((i) => i.by === cmd.hero && pending(ctx, i))) {
     return;
   }
   const intent: Intent = {
@@ -101,24 +126,51 @@ function post(ctx: TickContext, cmd: Extract<IntentCommand, { op: 'post' }>): vo
   };
   board.nextId += 1;
   board.live.push(intent);
-  ctx.emit({ tick: ctx.tick, kind: 'intent', id: intent.id, op: 'post', by: intent.by, intentKind: intent.intentKind });
+  emitOp(ctx, intent, 'post', intent.by);
+}
+
+function reserve(ctx: TickContext, cmd: Extract<IntentCommand, { op: 'reserve' }>): void {
+  const intent = ctx.intents.live.find((i) => i.id === cmd.intent);
+  if (
+    intent === undefined ||
+    !pending(ctx, intent) ||
+    intent.by === cmd.hero ||
+    !liveHero(ctx, cmd.hero) ||
+    cmd.offset > ticks(ctx.game.intents.maxOffsetSeconds) ||
+    intent.reservations.some((r) => r.hero === cmd.hero)
+  ) {
+    return;
+  }
+  intent.reservations.push({ hero: cmd.hero, slot: cmd.slot, offset: cmd.offset });
+  intent.reservations.sort((a, b) => a.hero - b.hero);
+  emitOp(ctx, intent, 'reserve', cmd.hero);
 }
 
 function cancel(ctx: TickContext, cmd: Extract<IntentCommand, { op: 'cancel' }>): void {
   const board = ctx.intents;
   const intent = board.live.find((i) => i.id === cmd.intent);
-  if (intent === undefined || intent.by !== cmd.hero || intent.fired) {
+  if (intent === undefined) {
     return;
   }
-  board.live = board.live.filter((i) => i.id !== intent.id);
-  ctx.emit({
-    tick: ctx.tick,
-    kind: 'intent',
-    id: intent.id,
-    op: 'cancel',
-    by: intent.by,
-    intentKind: intent.intentKind,
-  });
+  if (intent.by === cmd.hero) {
+    if (!pending(ctx, intent)) {
+      return;
+    }
+    emitOp(ctx, intent, 'cancel', intent.by);
+    for (const r of intent.reservations) {
+      emitOp(ctx, intent, 'expire', r.hero);
+    }
+    board.live = board.live.filter((i) => i.id !== intent.id);
+    return;
+  }
+  if (!intent.reservations.some((r) => r.hero === cmd.hero)) {
+    return;
+  }
+  intent.reservations = intent.reservations.filter((r) => r.hero !== cmd.hero);
+  emitOp(ctx, intent, 'cancel', cmd.hero);
+  if (intent.reservations.length === 0 && !pending(ctx, intent)) {
+    board.live = board.live.filter((i) => i.id !== intent.id);
+  }
 }
 
 /** Applies an `intent` command (called from commands.ts). Bad references are logged no-ops. */
@@ -131,7 +183,7 @@ export function applyIntentCommand(ctx: TickContext, cmd: IntentCommand): void {
       cancel(ctx, cmd);
       return;
     case 'reserve':
-      // TODO(intents slice): see the contract above.
+      reserve(ctx, cmd);
       return;
     default: {
       const unknown: never = cmd;
@@ -140,24 +192,31 @@ export function applyIntentCommand(ctx: TickContext, cmd: IntentCommand): void {
   }
 }
 
+function resolveReservations(ctx: TickContext, intent: Intent): void {
+  const rest: Reservation[] = [];
+  for (const r of intent.reservations) {
+    if (ctx.tick < intent.fireTick + r.offset) {
+      rest.push(r);
+    } else {
+      const ok = intent.fired && ctx.cast(r.hero, r.slot, intent);
+      emitOp(ctx, intent, ok ? 'fulfil' : 'expire', r.hero);
+    }
+  }
+  intent.reservations = rest;
+}
+
 /** The intents phase, right after commands: fires due intents and resolves reservations. */
 export function intentSystem(ctx: TickContext): void {
   const board = ctx.intents;
-  if (board.live.length === 0) {
-    return;
-  }
   const keep: Intent[] = [];
   for (const intent of board.live) {
-    if (!intent.fired && ctx.tick >= intent.fireTick) {
+    if (!intent.fired && ctx.tick === intent.fireTick) {
       const ok = ctx.cast(intent.by, intent.slot, intent);
-      const op = ok ? 'fire' : 'expire';
-      ctx.emit({ tick: ctx.tick, kind: 'intent', id: intent.id, op, by: intent.by, intentKind: intent.intentKind });
+      emitOp(ctx, intent, ok ? 'fire' : 'expire', intent.by);
       intent.fired = ok;
     }
-    // TODO(intents slice): resolve reservations here.
-    if (intent.fired && intent.reservations.length > 0) {
-      keep.push(intent);
-    } else if (!intent.fired && ctx.tick < intent.fireTick) {
+    resolveReservations(ctx, intent);
+    if (intent.reservations.length > 0 || pending(ctx, intent)) {
       keep.push(intent);
     }
   }
