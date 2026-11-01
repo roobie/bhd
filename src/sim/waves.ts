@@ -4,6 +4,7 @@
 // A wave ENDS (`wave` event, phase 'end', same composition) on the first waves phase after all of
 // its units have spawned and every one of them is gone: killed or leaked (missing, or at 0 hp).
 // Waves may overlap; each ends on its own. The game's 'victory' waits for the last wave's end.
+// In wave master mode (`game.master`, see master.ts) the schedule supplies only the clock and the count.
 // The scheduler state is hashed here (`hashWaves`) because it is not an entity field.
 
 import type { WaveDef } from '../content/types.ts';
@@ -11,6 +12,7 @@ import { findById } from '../content/types.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import type { StateHasher } from './hash.ts';
+import { endedComposition, takePending } from './master.ts';
 import { ticks } from './time.ts';
 
 interface SpawnJob {
@@ -66,7 +68,8 @@ export function wavesExhausted(ctx: TickContext): boolean {
   return w.n >= ctx.game.waves.waves.length && w.queue.length === 0 && w.open.length === 0;
 }
 
-function startWave(ctx: TickContext, wave: WaveDef): void {
+/** Starts the next wave with composition `wave`: the schedule's, or in master mode the pending one (see master.ts). */
+export function startWave(ctx: TickContext, wave: WaveDef): void {
   const w = ctx.waves;
   w.n += 1;
   ctx.emit({
@@ -100,13 +103,11 @@ function endFinishedWaves(ctx: TickContext): void {
   for (const o of w.open) {
     if (o.unspawned === 0 && o.ids.every((id) => isGone(ctx, id))) {
       const wave = ctx.game.waves.waves[o.n - 1];
-      ctx.emit({
-        tick: ctx.tick,
-        kind: 'wave',
-        n: o.n,
-        phase: 'end',
-        composition: (wave?.spawns ?? []).map((g) => ({ def: g.def, count: g.count })),
-      });
+      const composition =
+        ctx.master === undefined
+          ? (wave?.spawns ?? []).map((g) => ({ def: g.def, count: g.count }))
+          : endedComposition(ctx.master, o.n);
+      ctx.emit({ tick: ctx.tick, kind: 'wave', n: o.n, phase: 'end', composition });
     } else {
       still.push(o);
     }
@@ -114,12 +115,8 @@ function endFinishedWaves(ctx: TickContext): void {
   w.open = still;
 }
 
-export function waveSystem(ctx: TickContext): void {
+function spawnDue(ctx: TickContext): void {
   const w = ctx.waves;
-  const next = ctx.game.waves.waves[w.n];
-  if (next !== undefined && ctx.tick >= w.nextAt) {
-    startWave(ctx, next);
-  }
   const [start] = ctx.game.map.lane;
   while (w.queue.length > 0 && (w.queue[0]?.at ?? Number.POSITIVE_INFINITY) <= ctx.tick) {
     const job = w.queue.shift();
@@ -132,5 +129,15 @@ export function waveSystem(ctx: TickContext): void {
       open?.ids.push(spawnEnemy(ctx, def, start, 'lane').id);
     }
   }
+}
+
+export function waveSystem(ctx: TickContext): void {
+  const w = ctx.waves;
+  const next = ctx.game.waves.waves[w.n];
+  if (next !== undefined && ctx.tick >= w.nextAt) {
+    // Master mode: the schedule is only the clock; the pending queue is the wave.
+    startWave(ctx, ctx.master === undefined ? next : takePending(ctx));
+  }
+  spawnDue(ctx);
   endFinishedWaves(ctx);
 }

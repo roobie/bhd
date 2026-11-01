@@ -1,6 +1,7 @@
 // Event stream (project DESIGN.md §6.6): the source of truth for the reporter and replays.
-// Every event is `{tick, kind, ...}`. Wave 1 kinds are all defined here; `combo`, `intent` and
-// `choice` arrive in waves 2-3. Field names are part of the stored log format: add, don't rename.
+// Every event is `{tick, kind, ...}`. Wave 1 kinds, `intent` (emitted by the sim) and `choice`
+// (emitted by `Match`, never by the sim) are defined here; `combo` arrives later. Field names are
+// part of the stored log format: add, don't rename.
 
 import type { Command } from './commands.ts';
 import type { Team } from './entities.ts';
@@ -107,6 +108,38 @@ interface HashEvent extends EventBase {
   readonly stateHash: string;
 }
 
+type IntentOp = 'post' | 'reserve' | 'fire' | 'fulfil' | 'expire' | 'cancel';
+
+/**
+ * Intents board lifecycle (src/intents/board.ts). `by` is the hero the op concerns: the poster for
+ * post / fire / cancel-by-poster, the reserver for reserve / fulfil / expire-of-a-reservation.
+ * `intentKind` is the intent's kind label (named so it does not clash with the `kind` discriminator).
+ */
+interface IntentEvent extends EventBase {
+  readonly kind: 'intent';
+  readonly id: number;
+  readonly op: IntentOp;
+  readonly by: number;
+  readonly intentKind: string;
+}
+
+interface ChoiceOption {
+  readonly id: string;
+  readonly score: number;
+}
+
+/**
+ * A bot decision between >= 2 options, emitted by `Match` (not the sim) when first evaluated and
+ * whenever its pick changes. `options` are in the decision's fixed order, `picked` is one of their ids.
+ */
+interface ChoiceEvent extends EventBase {
+  readonly kind: 'choice';
+  readonly hero: number;
+  readonly decision: string;
+  readonly options: readonly ChoiceOption[];
+  readonly picked: string;
+}
+
 export type SimEvent =
   | CmdEvent
   | WaveEvent
@@ -119,4 +152,6 @@ export type SimEvent =
   | DeathEvent
   | LeakEvent
   | EndEvent
-  | HashEvent;
+  | HashEvent
+  | IntentEvent
+  | ChoiceEvent;

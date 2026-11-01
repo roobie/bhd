@@ -5,9 +5,13 @@
 // (little-endian, so the result is platform independent; -0 and 0 differ).
 
 import type { Rng } from '../detmath/index.ts';
+import type { IntentBoard } from '../intents/board.ts';
+import { boardUsed, hashIntents } from '../intents/board.ts';
 import type { EntityStore } from './entities.ts';
 import { ENTITY_KIND_CODE, MOVE_MODE_CODE } from './entities.ts';
 import { hashKit } from './heroes/index.ts';
+import type { MasterState } from './master.ts';
+import { hashMaster } from './master.ts';
 import type { WaveState } from './waves.ts';
 import { hashWaves } from './waves.ts';
 
@@ -88,12 +92,15 @@ interface HashedState {
   readonly entities: EntityStore;
   readonly waves: WaveState;
   readonly rng: Rng;
+  readonly intents: IntentBoard;
+  readonly master: MasterState | undefined;
 }
 
 /**
  * Canonical hash of game state, in a fixed order: tick, ended flag, entity store (next ID, count,
  * then each entity in ID order: id, kind, def, team, x, y, radius, hp, maxHp, armour, speed,
- * statuses, move, attack, kit), wave scheduler, sim RNG state. Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
+ * statuses, move, attack, kit), wave scheduler, sim RNG state, then (only once used, so games
+ * that never use them keep their pre-existing hashes) the intents board and the wave master state. Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
  * move modes through append-only code tables; content ids (def, status) as text. Pending commands
  * are excluded on purpose: in lockstep, future inputs arrive at different times on different peers
  * without being a desync.
@@ -118,6 +125,12 @@ export function stateHash(s: HashedState): string {
   hashWaves(h, s.waves);
   for (const w of s.rng.state) {
     h.u32(w);
+  }
+  if (boardUsed(s.intents)) {
+    hashIntents(h, s.intents);
+  }
+  if (s.master !== undefined) {
+    hashMaster(h, s.master);
   }
   return h.digest();
 }

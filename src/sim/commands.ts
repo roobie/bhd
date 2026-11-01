@@ -3,14 +3,19 @@
 // Validation is shape only; commands naming missing entities or bad targets are semantic no-ops
 // (still logged). No ownership checks until wave 10.
 //
+// Wave-master and intents commands are routed to sim/master.ts and intents/board.ts.
+//
 // Adding a command: extend the union, `isValidCommand`, `canonicalCommand` and `applyCommand`
 // (exhaustiveness checks catch kinds, not new optional fields) and the scenario in
 // test/determinism/scenario.ts.
 
 import { findById } from '../content/types.ts';
+import { applyIntentCommand } from '../intents/board.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import { commandHero, spawnHero } from './heroes/index.ts';
+import { applySummon, sendWave } from './master.ts';
+import { startWave } from './waves.ts';
 
 const ABILITY_SLOTS = 4;
 
@@ -59,10 +64,48 @@ interface SpawnCommand {
   readonly y: number;
 }
 
+/**
+ * Intents board ops (src/intents/board.ts). `hero` is the acting hero: the poster of a `post`, the
+ * reserver of a `reserve`, whoever cancels a `cancel`. `intentKind` labels the intent (a name
+ * that cannot clash with the command's own `kind`); `fireIn` and `offset` are whole ticks.
+ */
+export type IntentCommand =
+  | {
+      readonly kind: 'intent';
+      readonly op: 'post';
+      readonly hero: number;
+      readonly slot: number;
+      readonly intentKind: string;
+      readonly x: number;
+      readonly y: number;
+      readonly fireIn: number;
+    }
+  | {
+      readonly kind: 'intent';
+      readonly op: 'reserve';
+      readonly hero: number;
+      readonly intent: number;
+      readonly slot: number;
+      readonly offset: number;
+    }
+  | { readonly kind: 'intent'; readonly op: 'cancel'; readonly hero: number; readonly intent: number };
+
+/** Wave master (player 4 by convention): buy `count` units of enemy `def` into the pending wave. */
+export interface SummonCommand {
+  readonly kind: 'summon';
+  readonly def: string;
+  readonly count: number;
+}
+
+/** Wave master: start the pending wave early (see sim/master.ts). */
+interface SendCommand {
+  readonly kind: 'send';
+}
+
 /** The commands that address one hero. */
 export type HeroCommand = MoveCommand | StopCommand | HoldCommand | AbilityCommand | AutocastCommand;
 
-export type Command = HeroCommand | SpawnCommand;
+export type Command = HeroCommand | IntentCommand | SummonCommand | SendCommand | SpawnCommand;
 
 function isId(n: unknown): boolean {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -74,6 +117,36 @@ function isSlot(n: unknown): boolean {
 
 function isCoord(n: unknown): boolean {
   return typeof n === 'number' && Number.isFinite(n);
+}
+
+const MAX_SUMMON = 1000;
+const MAX_TICKS = 1_000_000;
+
+function isTicks(n: unknown, min: number): boolean {
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= min && n <= MAX_TICKS;
+}
+
+function isIntentShape(cmd: IntentCommand): boolean {
+  if (!isId(cmd.hero)) {
+    return false;
+  }
+  switch (cmd.op) {
+    case 'post':
+      return (
+        isSlot(cmd.slot) &&
+        typeof cmd.intentKind === 'string' &&
+        cmd.intentKind.length > 0 &&
+        isCoord(cmd.x) &&
+        isCoord(cmd.y) &&
+        isTicks(cmd.fireIn, 1)
+      );
+    case 'reserve':
+      return isId(cmd.intent) && isSlot(cmd.slot) && isTicks(cmd.offset, 0);
+    case 'cancel':
+      return isId(cmd.intent);
+    default:
+      return false;
+  }
 }
 
 function isAbilityShape(cmd: AbilityCommand): boolean {
@@ -100,6 +173,19 @@ export function isValidCommand(cmd: Command): boolean {
       return isId(cmd.hero) && isAbilityShape(cmd);
     case 'autocast':
       return isId(cmd.hero) && isSlot(cmd.slot) && typeof cmd.on === 'boolean';
+    case 'intent':
+      return isIntentShape(cmd);
+    case 'summon':
+      return (
+        typeof cmd.def === 'string' &&
+        cmd.def.length > 0 &&
+        typeof cmd.count === 'number' &&
+        Number.isSafeInteger(cmd.count) &&
+        cmd.count >= 1 &&
+        cmd.count <= MAX_SUMMON
+      );
+    case 'send':
+      return true;
     case 'spawn':
       return typeof cmd.def === 'string' && cmd.def.length > 0 && isCoord(cmd.x) && isCoord(cmd.y);
     default:
@@ -126,6 +212,33 @@ function canonicalAbility(cmd: AbilityCommand): Command {
   return out;
 }
 
+function canonicalIntent(cmd: IntentCommand): Command {
+  switch (cmd.op) {
+    case 'post':
+      return {
+        kind: 'intent',
+        op: 'post',
+        hero: cmd.hero + 0,
+        slot: cmd.slot + 0,
+        intentKind: cmd.intentKind,
+        x: cmd.x + 0,
+        y: cmd.y + 0,
+        fireIn: cmd.fireIn + 0,
+      };
+    case 'reserve':
+      return {
+        kind: 'intent',
+        op: 'reserve',
+        hero: cmd.hero + 0,
+        intent: cmd.intent + 0,
+        slot: cmd.slot + 0,
+        offset: cmd.offset + 0,
+      };
+    default:
+      return { kind: 'intent', op: 'cancel', hero: cmd.hero + 0, intent: cmd.intent + 0 };
+  }
+}
+
 /**
  * Own copy of `cmd` with -0 turned into 0 in every numeric field. JSON writes -0 as "0", so a
  * logged or networked command would otherwise replay as a different float than the one that ran
@@ -143,6 +256,12 @@ export function canonicalCommand(cmd: Command): Command {
       return canonicalAbility(cmd);
     case 'autocast':
       return { kind: 'autocast', hero: cmd.hero + 0, slot: cmd.slot + 0, on: cmd.on };
+    case 'intent':
+      return canonicalIntent(cmd);
+    case 'summon':
+      return { kind: 'summon', def: cmd.def, count: cmd.count + 0 };
+    case 'send':
+      return { kind: 'send' };
     case 'spawn':
       return { kind: 'spawn', def: cmd.def, x: cmd.x + 0, y: cmd.y + 0 };
     default: {
@@ -168,6 +287,21 @@ function applySpawn(ctx: TickContext, cmd: SpawnCommand): void {
 export function applyCommand(ctx: TickContext, cmd: Command): void {
   if (cmd.kind === 'spawn') {
     applySpawn(ctx, cmd);
+    return;
+  }
+  if (cmd.kind === 'intent') {
+    applyIntentCommand(ctx, cmd);
+    return;
+  }
+  if (cmd.kind === 'summon') {
+    applySummon(ctx, cmd);
+    return;
+  }
+  if (cmd.kind === 'send') {
+    const wave = sendWave(ctx);
+    if (wave !== undefined) {
+      startWave(ctx, wave);
+    }
     return;
   }
   const hero = ctx.entities.get(cmd.hero);

@@ -6,6 +6,8 @@ import type { GameConfig } from '../content/index.ts';
 import { validateGame } from '../content/index.ts';
 import type { Rng } from '../detmath/index.ts';
 import { deriveRng } from '../detmath/index.ts';
+import type { IntentBoard } from '../intents/board.ts';
+import { createIntentBoard, intentSystem } from '../intents/board.ts';
 import type { Command } from './commands.ts';
 import { applyCommand, canonicalCommand, isValidCommand } from './commands.ts';
 import type { TickContext } from './context.ts';
@@ -16,6 +18,8 @@ import { EntityStore } from './entities.ts';
 import type { EndReason, SimEvent } from './events.ts';
 import { stateHash } from './hash.ts';
 import { heroSystem, spawnHero } from './heroes/index.ts';
+import type { MasterState } from './master.ts';
+import { createMasterState } from './master.ts';
 import { moveSystem } from './movement.ts';
 import { statusSystem } from './statuses.ts';
 import { ticks } from './time.ts';
@@ -65,6 +69,9 @@ export class Sim implements SimView {
   readonly entities = new EntityStore();
   readonly rng: Rng;
   readonly waves: WaveState;
+  readonly intents: IntentBoard = createIntentBoard();
+  /** Wave master state; undefined in schedule mode. */
+  readonly master: MasterState | undefined;
   #tick = 0;
   #ended = false;
   /** Commands keyed by the tick they apply at. */
@@ -85,6 +92,7 @@ export class Sim implements SimView {
     this.game = options.game;
     this.rng = deriveRng(this.seed, 'sim');
     this.waves = createWaveState(ticks(this.game.waves.firstDelay));
+    this.master = this.game.master === undefined ? undefined : createMasterState(this.game.master);
     const { ancient } = this.game.map;
     const emit = (event: SimEvent): void => {
       this.#out.push(event);
@@ -113,6 +121,9 @@ export class Sim implements SimView {
       emit,
       game: this.game,
       waves: this.waves,
+      intents: this.intents,
+      master: this.master,
+      cast: (hero, slot, at) => sim.#cast(hero, slot, at),
       ancientId: ancientEntity.id,
       killers: new Map(),
       end: (reason) => {
@@ -124,6 +135,23 @@ export class Sim implements SimView {
       const at = spawns[i % spawns.length];
       spawnHero(this.#ctx, def, at?.x ?? ancient.x, at?.y ?? ancient.y);
     });
+  }
+
+  /** Casts an ability like an `ability` command, minus the `cmd` event; true if the kit emitted `ability` for it. */
+  #cast(hero: number, slot: number, at?: { readonly x: number; readonly y: number }): boolean {
+    let cast = false;
+    const ctx: TickContext = {
+      ...this.#ctx,
+      tick: this.#tick,
+      emit: (event) => {
+        cast ||= event.kind === 'ability' && event.hero === hero && event.slot === slot;
+        this.#ctx.emit(event);
+      },
+    };
+    const cmd: Command =
+      at === undefined ? { kind: 'ability', hero, slot } : { kind: 'ability', hero, slot, x: at.x, y: at.y };
+    applyCommand(ctx, cmd);
+    return cast;
   }
 
   /** True once the game has ended; gameplay no longer advances (see `step`). */
@@ -174,7 +202,7 @@ export class Sim implements SimView {
   }
 
   /**
-   * Runs one tick and returns its events in emission order. Tick order: commands, waves (spawn),
+   * Runs one tick and returns its events in emission order. Tick order: commands, intents, waves (spawn),
    * statuses (expire), movement, hero kits, enemies, deaths (+ end), hash. After the game has
    * ended, a tick only advances the clock and emits `hash` events: commands already queued are dropped unlogged and new ones are rejected (`ended`)
    * and no system runs.
@@ -204,6 +232,7 @@ export class Sim implements SimView {
         applyCommand(ctx, p.cmd);
       }
     }
+    intentSystem(ctx);
     waveSystem(ctx);
     statusSystem(ctx);
     moveSystem(ctx);
@@ -220,6 +249,8 @@ export class Sim implements SimView {
       entities: this.entities,
       waves: this.waves,
       rng: this.rng,
+      intents: this.intents,
+      master: this.master,
     });
   }
 }

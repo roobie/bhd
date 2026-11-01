@@ -2,11 +2,15 @@
 // the reporter can compare two configs without a code change. `defaultGame()` is the shipping
 // config. Content is authored in seconds / per-second units (see types.ts).
 
+import type { MasterDef } from './director.ts';
+import { defaultMaster } from './director.ts';
 import { defaultEnemies } from './enemies.ts';
 import type { GunnerDef } from './heroes/gunner.ts';
 import { gunnerDef } from './heroes/gunner.ts';
 import type { StandinDef } from './heroes/standins.ts';
 import { standinDefs } from './heroes/standins.ts';
+import type { IntentsDef } from './intents.ts';
+import { defaultIntents } from './intents.ts';
 import { defaultMap } from './map.ts';
 import { defaultStatuses } from './statuses.ts';
 import type { EnemyDef, MapDef, StatusDef, WaveSchedule } from './types.ts';
@@ -22,6 +26,14 @@ export interface GameConfig {
   readonly waves: WaveSchedule;
   /** The team: spawned in order at the map's hero spawns. */
   readonly heroes: readonly HeroDef[];
+  /** Intents board limits. */
+  readonly intents: IntentsDef;
+  /**
+   * Set = wave master mode: the wave schedule supplies only the clock and the wave count; waves
+   * are bought with `summon` commands and may start early with `send` (sim/master.ts). Unset =
+   * schedule mode (the waves' own compositions spawn).
+   */
+  readonly master?: MasterDef;
 }
 
 /** A fresh config each call, so callers can derive variants without sharing mutable state. */
@@ -32,7 +44,13 @@ export function defaultGame(): GameConfig {
     statuses: defaultStatuses(),
     waves: defaultWaves(),
     heroes: [gunnerDef(), ...standinDefs()],
+    intents: defaultIntents(),
   };
+}
+
+/** `defaultGame()` in wave master mode: the same lane and roster, waves bought by the Director. */
+export function defaultMasterGame(): GameConfig {
+  return { ...defaultGame(), master: defaultMaster() };
 }
 
 function checkFinite(value: unknown, path: string): void {
@@ -68,4 +86,15 @@ export function validateGame(game: GameConfig): void {
     game.statuses.map((s) => s.id),
     'status',
   );
+  const { master } = game;
+  if (master !== undefined) {
+    for (const c of master.costs) {
+      if (!(game.enemies.some((e) => e.id === c.def) && c.cost > 0)) {
+        throw new Error(`game config: master cost for '${c.def}' needs a known enemy and a positive cost`);
+      }
+    }
+    if (master.budgetPerWave.length === 0) {
+      throw new Error('game config: master.budgetPerWave must not be empty');
+    }
+  }
 }

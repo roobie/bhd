@@ -53,6 +53,9 @@ function ctxOf(sim: Sim): TickContext {
     emit: () => undefined,
     game: sim.game,
     waves: sim.waves,
+    intents: sim.intents,
+    master: sim.master,
+    cast: () => false,
     ancientId: ANCIENT,
     killers: new Map<number, number>(),
     end: () => undefined,
@@ -319,7 +322,15 @@ describe('cooldowns', () => {
     spawn(a, 'grunt', 3, 0);
     spawn(b, 'grunt', 3, 0);
     const hash = (s: Sim): string =>
-      stateHash({ tick: s.tick, ended: s.ended, entities: s.entities, waves: s.waves, rng: s.rng });
+      stateHash({
+        tick: s.tick,
+        ended: s.ended,
+        entities: s.entities,
+        waves: s.waves,
+        rng: s.rng,
+        intents: s.intents,
+        master: s.master,
+      });
     expect(hash(a)).toBe(hash(b));
     unitKit(a, TANK);
     const { kit } = unit(a, TANK);

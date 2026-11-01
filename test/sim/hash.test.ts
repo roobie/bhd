@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGame } from '../../src/content/index.ts';
+import { defaultGame, defaultMasterGame } from '../../src/content/index.ts';
 import type { Entity, HeroKitState } from '../../src/sim/entities.ts';
 import { stateHash } from '../../src/sim/hash.ts';
 import { initGunner } from '../../src/sim/heroes/gunner.ts';
@@ -15,8 +15,8 @@ const REPLACEMENTS: Record<string, string> = {
   'move.mode': 'point',
 };
 
-function fixture(): Sim {
-  const sim = new Sim({ seed: 3, game: defaultGame() });
+function fixture(game = defaultGame()): Sim {
+  const sim = new Sim({ seed: 3, game });
   for (const id of [GUNNER, TANK]) {
     const h = sim.entities.get(id);
     if (h === undefined) {
@@ -27,6 +27,25 @@ function fixture(): Sim {
     h.attack = { cooldown: 1.5, target: 5 };
   }
   sim.waves.queue.push({ at: 9, def: 'grunt', wave: 1 });
+  // Board and master state, built by hand so every leaf (incl. a reservation) exists to perturb.
+  sim.intents.nextId = 3;
+  sim.intents.live.push({
+    id: 2,
+    by: GUNNER,
+    slot: 1,
+    intentKind: 'pull',
+    x: 4,
+    y: 5,
+    fireTick: 60,
+    fired: false,
+    reservations: [{ hero: TANK, slot: 0, offset: 6 }],
+  });
+  if (sim.master !== undefined) {
+    sim.master.budget = 7;
+    sim.master.lastStart = 3;
+    sim.master.pending.push({ def: 'grunt', count: 2 });
+    sim.master.started.push({ n: 1, composition: [{ def: 'brute', count: 1 }] });
+  }
   return sim;
 }
 
@@ -37,6 +56,8 @@ function hashOf(sim: Sim, over: { tick?: number; ended?: boolean } = {}): string
     entities: sim.entities,
     waves: sim.waves,
     rng: sim.rng,
+    intents: sim.intents,
+    master: sim.master,
   });
 }
 
@@ -128,6 +149,35 @@ describe('state hash covers every field', () => {
       const sim = fixture();
       perturb(sim.waves as unknown as Tree, path);
       expect(hashOf(sim), path.join('.')).not.toBe(base);
+    }
+  });
+
+  it('changes when any intents board field changes', () => {
+    const paths: string[][] = [];
+    leafPaths(fixture().intents, [], paths);
+    expect(paths.map((p) => p.join('.'))).toEqual(
+      expect.arrayContaining(['nextId', 'live.0.fireTick', 'live.0.fired', 'live.0.reservations.0.offset']),
+    );
+    for (const path of paths) {
+      const sim = fixture();
+      perturb(sim.intents as unknown as Tree, path);
+      expect(hashOf(sim), path.join('.')).not.toBe(base);
+    }
+  });
+
+  it('changes when any wave master field changes', () => {
+    const masterBase = hashOf(fixture(defaultMasterGame()));
+    expect(masterBase).not.toBe(base);
+    const paths: string[][] = [];
+    const probe = fixture(defaultMasterGame()).master;
+    leafPaths(probe, [], paths);
+    expect(paths.map((p) => p.join('.'))).toEqual(
+      expect.arrayContaining(['budget', 'lastStart', 'pending.0.count', 'started.0.composition.0.def']),
+    );
+    for (const path of paths) {
+      const sim = fixture(defaultMasterGame());
+      perturb(sim.master as unknown as Tree, path);
+      expect(hashOf(sim), path.join('.')).not.toBe(masterBase);
     }
   });
 

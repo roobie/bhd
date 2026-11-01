@@ -1,7 +1,9 @@
 import type { GameConfig } from '../content/index.ts';
 import type { Rng } from '../detmath/index.ts';
+import type { IntentBoard } from '../intents/board.ts';
 import type { EntityStore } from './entities.ts';
 import type { EndReason, SimEvent } from './events.ts';
+import type { MasterState } from './master.ts';
 import type { WaveState } from './waves.ts';
 
 /** What a system or command handler may touch during one tick. */
@@ -15,6 +17,16 @@ export interface TickContext {
   readonly game: GameConfig;
   /** Wave scheduler state (owned by waves.ts; hashed through `hashWaves`). */
   readonly waves: WaveState;
+  /** Intents board (owned by intents/board.ts; hashed through `hashIntents`). */
+  readonly intents: IntentBoard;
+  /** Wave master state; undefined in schedule mode (owned by master.ts; hashed through `hashMaster`). */
+  readonly master: MasterState | undefined;
+  /**
+   * Casts `hero`'s ability `slot` (at (x, y) when given) exactly as an `ability` command would,
+   * without a `cmd` event. True if the cast went through (the kit emitted an `ability` event for that
+   * hero and slot). Used by the intents phase.
+   */
+  readonly cast: (hero: number, slot: number, at?: { readonly x: number; readonly y: number }) => boolean;
   /** Entity id of the Ancient. */
   readonly ancientId: number;
   /**
