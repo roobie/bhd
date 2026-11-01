@@ -28,6 +28,9 @@ interface ChainDef {
   /** Taunts and Exposes enemies within this of him. */
   readonly radius: number;
   readonly tauntSeconds: number;
+  /** Exposed (flat armour removed) applied to the same enemies. */
+  readonly exposedSeconds: number;
+  readonly exposedValue: number;
 }
 
 interface MartyrdomDef {
@@ -66,7 +69,7 @@ export function penitentDef(): PenitentDef {
     attack: { damage: 18, range: 2, cooldown: 1 },
     pain: { max: 1000, drainPerSecond: 0.05, drainDelaySeconds: 3, friendlyFireMult: 1.5, healMult: 0.25 },
     zeal: { maxBonus: 0.6 },
-    chain: { cooldown: 9, radius: 8, tauntSeconds: 3 },
+    chain: { cooldown: 9, radius: 8, tauntSeconds: 3, exposedSeconds: 3, exposedValue: 5 },
     martyrdom: {
       cooldown: 90,
       seconds: 6,

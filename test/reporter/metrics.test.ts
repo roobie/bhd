@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { defaultBotSetup } from '../../src/content/bots.ts';
+import type { GameConfig } from '../../src/content/index.ts';
 import type { GameEnd, GameSpec } from '../../src/match/run.ts';
 import { RUN_ABI, runGame } from '../../src/match/run.ts';
 import type { LogHeader } from '../../src/replay/log.ts';
@@ -22,7 +23,11 @@ const SPEC: GameSpec = {
   hashEvery: 30,
 };
 
-function logOf(events: SimEvent[], end: GameEnd = { tick: 1000, wave: 2, reason: 'victory' }): GameLog {
+function logOf(
+  events: SimEvent[],
+  end: GameEnd = { tick: 1000, wave: 2, reason: 'victory' },
+  game: GameConfig = legacyGame(),
+): GameLog {
   const header: LogHeader = {
     format: 'bhd-log',
     v: 1,
@@ -33,7 +38,7 @@ function logOf(events: SimEvent[], end: GameEnd = { tick: 1000, wave: 2, reason:
     dirty: false,
     fingerprint: 'x',
     spec: SPEC,
-    resolved: { game: legacyGame(), bots: defaultBotSetup() },
+    resolved: { game, bots: defaultBotSetup() },
     end,
     ticks: end.tick,
   };
@@ -272,7 +277,7 @@ describe('every metric is finite', () => {
 
   it('on one real full runGame log', () => {
     const game = runGame({ ...SPEC, maxTicks: 30_000 });
-    const log = logOf(game.events, game.end);
+    const log = logOf(game.events, game.end, game.resolved.game);
     expect(nonFinite(log)).toEqual([]);
     expect(Object.keys(computeMetrics(log)).length).toBeGreaterThan(0);
   });
