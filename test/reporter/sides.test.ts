@@ -131,6 +131,10 @@ describe('resolveSide', () => {
   it('rejects a ref that is not in the repo, and a commit with no run.ts', () => {
     const repo = repoRoot(ROOT);
     expect(() => resolveSide('base', 'no-such-ref-xyz', repo, ROOT)).toThrow('not a git ref');
+    // A shallow clone (CI) has no root commit that predates run.ts.
+    if (git(repo, 'rev-parse', '--is-shallow-repository').trim() === 'true') {
+      return;
+    }
     const root = git(repo, 'rev-list', '--max-parents=0', 'HEAD').split('\n')[0] ?? '';
     expect(() => checkRunAbi(repo, root, 'base')).toThrow('predates');
   });
