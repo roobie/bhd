@@ -99,8 +99,8 @@ interface HashedState {
 /**
  * Canonical hash of game state, in a fixed order: tick, ended flag, entity store (next ID, count,
  * then each entity in ID order: id, kind, def, team, x, y, radius, hp, maxHp, armour, speed,
- * statuses, move, attack, kit), wave scheduler, sim RNG state, then (only once used, so games
- * that never use them keep their pre-existing hashes) the intents board and the wave master state. Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
+ * statuses, move, attack, kit), wave scheduler, sim RNG state, then the intents board (a presence byte,
+ * then the board once used) and the wave master state (a presence byte, then the state). Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
  * move modes through append-only code tables; content ids (def, status) as text. Pending commands
  * are excluded on purpose: in lockstep, future inputs arrive at different times on different peers
  * without being a desync.
@@ -126,9 +126,14 @@ export function stateHash(s: HashedState): string {
   for (const w of s.rng.state) {
     h.u32(w);
   }
-  if (boardUsed(s.intents)) {
+  // Each optional section is tagged present/absent, so a section can never be mistaken for the
+  // bytes of the next one (or for a missing one).
+  const board = boardUsed(s.intents);
+  h.bool(board);
+  if (board) {
     hashIntents(h, s.intents);
   }
+  h.bool(s.master !== undefined);
   if (s.master !== undefined) {
     hashMaster(h, s.master);
   }

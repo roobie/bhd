@@ -2,7 +2,17 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Scripted } from './scenario.ts';
-import { hashesOf, runScenario, runSim, runSimInterleaved, SCRIPT, SEED, TICKS } from './scenario.ts';
+import {
+  hashesOf,
+  MASTER_TICKS,
+  runMasterSim,
+  runScenario,
+  runSim,
+  runSimInterleaved,
+  SCRIPT,
+  SEED,
+  TICKS,
+} from './scenario.ts';
 
 describe('determinism (node)', () => {
   it('runs twice to identical results', () => {
@@ -56,5 +66,16 @@ describe('determinism (node)', () => {
     const b = hashesOf(runSim(SEED + 1, SCRIPT, TICKS));
     expect(b).toHaveLength(a.length);
     expect(b).not.toEqual(a);
+  });
+
+  it('the master-mode script exercises the board (post, cancel, a cast) and the master (summon, send)', () => {
+    const events = runMasterSim(SEED, MASTER_TICKS);
+    const ops = new Set(events.flatMap((e) => (e.kind === 'intent' ? [e.op] : [])));
+    // `reserve` is still a stub on the board (accepted, logged, no events): the intents slice owns it.
+    expect(ops.has('post')).toBe(true);
+    expect(ops.has('cancel')).toBe(true);
+    expect(ops.has('fire') || ops.has('expire')).toBe(true);
+    const starts = events.filter((e) => e.kind === 'wave' && e.phase === 'start');
+    expect(starts.length).toBeGreaterThan(0);
   });
 });

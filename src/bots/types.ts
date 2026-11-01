@@ -40,6 +40,12 @@ export interface SeatInfo {
   readonly post: Point;
 }
 
+/** A command the seat has submitted that the sim has not applied yet (applies at tick `at`). */
+export interface InFlight {
+  readonly cmd: Command;
+  readonly at: number;
+}
+
 export interface BotCtx {
   readonly p: Perception;
   readonly me: HeroView;
@@ -50,6 +56,8 @@ export interface BotCtx {
   readonly rng: Rng;
   /** The tick whose state `p` describes. */
   readonly tick: number;
+  /** The seat's own commands submitted but not yet applied (copies), oldest first. */
+  readonly inFlight: readonly InFlight[];
 }
 
 /** Per-kit logic with private memory `M`. */
@@ -61,6 +69,8 @@ export interface Brain<M> {
 /** A brain bound to its memory; one per seat. */
 export interface Bot {
   think: (ctx: BotCtx) => Decision[];
+  /** For the viewer: where the brain currently holds, if it moved its post off `SeatInfo.post`. */
+  status?: () => { readonly post?: Point };
 }
 
 /** Makes a seat's bot; the default table dispatches on `def.kit`. Tests inject their own. */

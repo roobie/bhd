@@ -4,6 +4,7 @@
 // reaction delay. Pure function of (perception, master view, own state, own rng). `status()` is
 // read by the viewer. The Director paces for tension and never plays to win.
 
+import type { InFlight } from '../bots/types.ts';
 import type { DirectorDef } from '../content/director.ts';
 import type { Rng } from '../detmath/index.ts';
 import type { MasterView, Perception } from '../perception/types.ts';
@@ -18,6 +19,8 @@ interface DirectorCtx {
   readonly rng: Rng;
   /** The tick whose state `p` describes. */
   readonly tick: number;
+  /** The Director's own commands submitted but not yet applied (copies), oldest first. */
+  readonly inFlight: readonly InFlight[];
 }
 
 export interface DirectorStatus {

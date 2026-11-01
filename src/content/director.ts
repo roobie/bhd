@@ -2,6 +2,11 @@
 // `MasterDef` configures the SIM side (sim/master.ts): budget, costs and the send window.
 // `DirectorDef` configures the bot side (src/director): cadence, tension model and spend mix.
 // Authored in seconds / per-second units.
+// TODO(director slice): the content/director tension nits from the Opus review of w2-contracts
+// commits 0079efa and b4d3733 (see .work/slice/U-LJEDSZA4LC22MX2H-w2-contracts/STATE.md Harvest)
+// are deliberately left as they are here; the director slice owns and resolves them. Candidates
+// seen while writing the stub: DirectorDef.mix vs MasterDef.costs (a def in one and not the
+// other), and Director pacing (think / reaction seconds) vs MasterDef.minIntervalSeconds.
 
 /** What one unit of an enemy def costs the wave master. Defs not listed cannot be summoned. */
 interface MasterCost {

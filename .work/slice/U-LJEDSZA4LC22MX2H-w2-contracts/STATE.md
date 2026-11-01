@@ -36,6 +36,8 @@ Both commits done (sim side `0079efa`, bot side next commit). Criteria hold; rea
 - Commit 1 (sim side): `npm run ci` exit 0; node 392 tests, browser 78; the schedule-mode golden is byte-identical (board and master hashed only once used).
 - Commit 2 (bot side): `npm run ci` exit 0; node 440 tests / 27 files, browser 78. An all-bot Match with the stub Director runs to `end` (tick 4880 at seed 7). Golden diff is additions only (the `match` section).
 
+- Review-fix commit: `npm run ci` exit 0; node 456 tests / 27 files, browser 78. Golden regenerated (presence-tagged hash sections change every hash; new `master` section from the master-mode script).
+
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
      - [ ] decision: …   → record decision
@@ -56,6 +58,14 @@ Both commits done (sim side `0079efa`, bot side next commit). Criteria hold; rea
 - [ ] decision: the golden has a `match` section (default bots + Director, master game, 3000 ticks, one golden file). Every bot or Director tweak needs `npm run golden`; parallel step-2 slices conflict on golden.ts, the lead regenerates at integration.
 - [ ] learning: Match's choice emit rule: a decision absent from a think is forgotten, so its next appearance emits again.
 - [ ] backlog: docs/EVENTS.md does not exist; the wave-1 design assumed one. Create it when the event schema is next refined (wave 3 reporter).
+- [ ] decision: Match dedupes per channel against the seat's most recent pending command only (channel = kind+hero(+slot) for hero commands, op+hero for intents; `summon` has none); key is `JSON.stringify(canonicalCommand(cmd))`; a command `sim.command` rejects is not recorded.
+- [ ] decision: brains get `inFlight` (copies of the seat's pending `{cmd, at}`, oldest first) in `BotCtx` and `DirectorCtx`; shared type `InFlight` in bots/types.ts. `DirectorCtx` stays unexported (knip says unused).
+- [ ] decision: Perception and MasterView are deep-frozen always (plain small data, once per tick); `Match.masterView` is memoised by tick.
+- [ ] decision: optional Bot `status()` lets a brain report a moved post; `SeatView` has `post` (copy) and `leash`.
+- [ ] decision: hash sections for the board and master are now always preceded by a presence flag (u32 0/1, via `bool`), replacing the "hash only once used" trick; all hashes changed once.
+- [ ] decision: master-mode determinism script (`MASTER_SCRIPT`, `master` golden section) covers intent post/reserve/cancel, ctx.cast via fire, summon, send. Board `reserve` is still a stub, so only its accepted `cmd` is covered until the intents slice lands.
+- [ ] learning: the layering test now guards perception/, match/ and intents/ for bots and director too (perception/types.ts type-only allowed).
+- [ ] backlog: the content/director tension nits were not itemised in the review request; the TODO(director slice) in content/director.ts names the two I could see (mix vs costs, pacing vs minIntervalSeconds). The lead should confirm the list.
 
 ## Log
 - 2026-11-01 initialized
@@ -63,3 +73,4 @@ Both commits done (sim side `0079efa`, bot side next commit). Criteria hold; rea
 - 2026-11-01 commit 1: sim side (events, commands, intents phase, master hook, hash, content shapes)
 - 2026-11-01 commit 2: bot side (perception basics, bots, director stub, Match, tests, Match golden)
 - 2026-11-01 phase execute → finalize
+- 2026-11-01 review fixes (flaky end test, dedupe, inFlight, viewer data, layering, freezing, nits, master golden)

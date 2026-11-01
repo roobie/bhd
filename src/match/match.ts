@@ -8,22 +8,25 @@
 //  3. on think ticks (T % thinkEvery == 0) perception is computed once (memoised by tick as
 //     `perception`) and every seat thinks, from state no newer than T;
 //  4. each seat's picked commands go to `sim.command(player, cmd, T + d)` with
-//     d = max(1, ticks(reactionSeconds)); a seat dedupes a command identical to one of its own
-//     not-yet-applied commands;
+//     d = max(1, ticks(reactionSeconds)); a seat skips a command identical to its most recent
+//     not-yet-applied command on the same channel (see `channelOf`); the rest is in `inFlight`;
 //  5. the result is the sim's events followed by `choice` events (tick T).
 // Seats: players 0-3 = lineup slots 0-3, player 4 = the Director (needs `game.master`).
 // RNG streams: deriveRng(seed, 'bot:<slot>') and deriveRng(seed, 'director'); the sim's is never read.
 // A `choice` is emitted for a decision with >= 2 options when it is first evaluated and whenever its
 // pick changes; a decision absent from a think is forgotten (its next appearance is "first").
+// Brains receive the cached Perception and MasterView deep-frozen (always on: the objects are
+// small plain data built once per think tick, so freezing them costs next to nothing).
 
 import { defaultBrains } from '../bots/brains.ts';
-import type { Bot, BrainTable, Decision, SeatInfo } from '../bots/types.ts';
+import type { Bot, BrainTable, Decision, InFlight, SeatInfo } from '../bots/types.ts';
 import { decide } from '../bots/utility.ts';
 import type { BotSetup, Doctrine } from '../content/bots.ts';
 import type { DirectorDef } from '../content/director.ts';
 import type { GameConfig } from '../content/index.ts';
 import type { PerceptionDef } from '../content/perception.ts';
 import { defaultPerception } from '../content/perception.ts';
+import type { Point } from '../content/types.ts';
 import type { Rng } from '../detmath/index.ts';
 import { deriveRng } from '../detmath/index.ts';
 import type { Director, DirectorStatus } from '../director/director.ts';
@@ -31,8 +34,9 @@ import { createDirector } from '../director/director.ts';
 import type { PerceptionMemory } from '../perception/memory.ts';
 import { createMemory, foldEvents } from '../perception/memory.ts';
 import { perceive, perceiveMaster } from '../perception/perceive.ts';
-import type { Perception } from '../perception/types.ts';
+import type { MasterView, Perception } from '../perception/types.ts';
 import type { Command } from '../sim/commands.ts';
+import { canonicalCommand } from '../sim/commands.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
@@ -66,6 +70,10 @@ export interface SeatView {
   /** Hero entity id. */
   readonly hero: number;
   readonly doctrine: string;
+  /** Where the seat holds now (a copy): the brain's moved post if it reports one, else the default post. */
+  readonly post: { readonly x: number; readonly y: number };
+  /** Doctrine leash, measured from `post`. */
+  readonly leash: number;
   /** From the seat's latest think, in the bot's decision order. */
   readonly decisions: readonly DecisionView[];
 }
@@ -74,14 +82,25 @@ interface Pacing {
   readonly player: number;
   readonly thinkEvery: number;
   readonly delay: number;
-  /** Canonical command text -> the tick it applies at, while not yet applied. */
-  readonly pending: Map<string, number>;
+  /** Submitted and not yet applied, oldest first. */
+  pending: Pended[];
+}
+
+interface Pended {
+  /** Canonical copy. */
+  readonly cmd: Command;
+  readonly at: number;
+  /** `channelOf(cmd)`; undefined = never deduped. */
+  readonly channel: string | undefined;
+  /** JSON of the canonical command. */
+  readonly key: string;
 }
 
 interface Seat extends Pacing {
   readonly slot: number;
   readonly hero: number;
   readonly doctrine: Doctrine;
+  readonly post: Point;
   readonly weights: Readonly<Record<string, number>>;
   readonly rng: Rng;
   readonly bot: Bot;
@@ -107,8 +126,52 @@ function pacing(player: number, thinkSeconds: number, reactionSeconds: number): 
     player,
     thinkEvery: Math.max(1, ticks(thinkSeconds)),
     delay: Math.max(1, ticks(reactionSeconds)),
-    pending: new Map(),
+    pending: [],
   };
+}
+
+/**
+ * The dedupe channel of a command: what a later command on the same channel supersedes. Hero
+ * commands: kind + hero (+ slot for abilities and autocast); intents: op + hero. A summon has no
+ * channel: two summons are two purchases.
+ */
+function channelOf(cmd: Command): string | undefined {
+  switch (cmd.kind) {
+    case 'summon':
+      return undefined;
+    case 'ability':
+    case 'autocast':
+      return `${cmd.kind}:${cmd.hero}:${cmd.slot}`;
+    case 'intent':
+      return `intent:${cmd.op}:${cmd.hero}`;
+    case 'move':
+    case 'stop':
+    case 'hold':
+      return `${cmd.kind}:${cmd.hero}`;
+    case 'send':
+    case 'spawn':
+      return cmd.kind;
+    default: {
+      const unknown: never = cmd;
+      throw new Error(`unhandled command ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
+/** Drops what has applied by `tick`, returns copies of what is still pending. */
+function inFlight(who: Pacing, tick: number): InFlight[] {
+  who.pending = who.pending.filter((e) => e.at > tick);
+  return who.pending.map((e) => ({ cmd: { ...e.cmd }, at: e.at }));
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value)) {
+      deepFreeze(v);
+    }
+  }
+  return value;
 }
 
 function heroIds(sim: Sim): number[] {
@@ -128,6 +191,7 @@ export class Match {
   readonly #seats: Seat[] = [];
   readonly #director: DirectorSeat | undefined;
   #cached: Perception | undefined;
+  #masterCached: { readonly tick: number; readonly view: MasterView | undefined } | undefined;
 
   constructor(options: MatchOptions) {
     const { seed, game, bots } = options;
@@ -148,12 +212,13 @@ export class Match {
       if (s.slot > 3 || this.#seats.some((o) => o.slot === s.slot)) {
         throw new RangeError(`bad seat: slot ${s.slot} is out of range or taken`);
       }
-      const info: SeatInfo = { slot: s.slot, hero, kit: def.kit, post };
+      const info: SeatInfo = { slot: s.slot, hero, kit: def.kit, post: { x: post.x, y: post.y } };
       this.#seats.push({
         ...pacing(s.slot, bots.thinkSeconds, s.reactionSeconds),
         slot: s.slot,
         hero,
         doctrine,
+        post: { x: post.x, y: post.y },
         weights: { ...bots.kitWeights, ...doctrine.weights },
         rng: deriveRng(seed, `bot:${s.slot}`),
         bot: brains[def.kit](info),
@@ -189,6 +254,8 @@ export class Match {
       slot: s.slot,
       hero: s.hero,
       doctrine: s.doctrine.id,
+      post: { ...(s.bot.status?.()?.post ?? s.post) },
+      leash: s.doctrine.leash,
       decisions: s.decisions,
     }));
   }
@@ -200,9 +267,17 @@ export class Match {
   /** Perception of the current tick, computed on first use (memory is folded every tick). */
   get perception(): Perception {
     if (this.#cached?.tick !== this.sim.tick) {
-      this.#cached = perceive(this.sim, this.#memory);
+      this.#cached = deepFreeze(perceive(this.sim, this.#memory));
     }
     return this.#cached;
+  }
+
+  /** The wave master's view of the current tick (undefined without `game.master`); memoised by tick. */
+  get masterView(): MasterView | undefined {
+    if (this.#masterCached?.tick !== this.sim.tick) {
+      this.#masterCached = { tick: this.sim.tick, view: deepFreeze(perceiveMaster(this.sim)) };
+    }
+    return this.#masterCached.view;
   }
 
   step(): SimEvent[] {
@@ -240,10 +315,14 @@ export class Match {
       weights: seat.weights,
       rng: seat.rng,
       tick,
+      inFlight: inFlight(seat, tick),
     });
     const views: DecisionView[] = [];
     const seen = new Map<string, string>();
     for (const d of decisions) {
+      if (seen.has(d.id)) {
+        throw new Error(`seat ${seat.slot}: duplicate decision id '${d.id}' in one think`);
+      }
       views.push(this.#resolve(seat, d, { tick, seen, out }));
     }
     seat.prev.clear();
@@ -270,26 +349,34 @@ export class Match {
   }
 
   #thinkDirector(dir: DirectorSeat, tick: number): void {
-    const master = perceiveMaster(this.sim);
+    const master = this.masterView;
     if (master === undefined) {
       return;
     }
-    const cmds = dir.director.think({ p: this.perception, master, def: dir.def, rng: dir.rng, tick });
+    const cmds = dir.director.think({
+      p: this.perception,
+      master,
+      def: dir.def,
+      rng: dir.rng,
+      tick,
+      inFlight: inFlight(dir, tick),
+    });
     this.#submit(dir, cmds, tick);
   }
 
   #submit(who: Pacing, cmds: readonly Command[], tick: number): void {
-    for (const [key, at] of who.pending) {
-      if (at <= tick) {
-        who.pending.delete(key);
-      }
-    }
+    who.pending = who.pending.filter((e) => e.at > tick);
     for (const cmd of cmds) {
-      const key = JSON.stringify(cmd);
-      if (!who.pending.has(key)) {
-        const at = tick + who.delay;
-        this.sim.command(who.player, cmd, at);
-        who.pending.set(key, at);
+      const canon = canonicalCommand(cmd);
+      const channel = channelOf(canon);
+      const key = JSON.stringify(canon);
+      const last = channel === undefined ? undefined : who.pending.findLast((e) => e.channel === channel);
+      if (last?.key === key) {
+        continue;
+      }
+      const at = tick + who.delay;
+      if (this.sim.command(who.player, canon, at).ok) {
+        who.pending.push({ cmd: canon, at, channel, key });
       }
     }
   }

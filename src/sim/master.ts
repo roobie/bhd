@@ -98,7 +98,12 @@ export function takePending(ctx: TickContext): WaveDef {
   return { spawns: taken.map((g) => ({ def: g.def, count: g.count, gap: def.gap })) };
 }
 
-/** `send` command handler: the wave to start now, if the send is allowed. */
+/**
+ * `send` command handler: the wave to start now, if the send is allowed. Allowed once
+ * `minIntervalSeconds` have passed since the previous wave started (`lastStart` is 0 at game
+ * start), so wave 1 can start by `send` after `minIntervalSeconds`, before `waves.firstDelay` when
+ * that is longer.
+ */
 export function sendWave(ctx: TickContext): WaveDef | undefined {
   const { master } = ctx;
   const def = ctx.game.master;

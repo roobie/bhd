@@ -5,10 +5,19 @@ import { describe, expect, it } from 'vitest';
 // Bots and the Director only issue commands (wave w2-bots DESIGN "Bots run outside the sim step"):
 // from sim/ they may import only the command and event shapes (as types) and time conversion
 // (ticks(), a pure function of constants; adjusted from the design's "commands.ts and events.ts only").
+// They may also type-import the perception shapes (perception/types.ts), but never perception's
+// computation, and never anything from match/ or intents/ (Match drives them, not the other way).
 
 const DIRS = ['bots', 'director'];
 const ALLOWED_VALUE = new Set(['src/sim/time.ts']);
-const ALLOWED_TYPE = new Set(['src/sim/commands.ts', 'src/sim/events.ts', 'src/sim/time.ts']);
+const ALLOWED_TYPE = new Set([
+  'src/sim/commands.ts',
+  'src/sim/events.ts',
+  'src/sim/time.ts',
+  'src/perception/types.ts',
+]);
+/** Layers that bots and the Director may only reach through the allow-lists above. */
+const GUARDED = ['src/sim/', 'src/perception/', 'src/match/', 'src/intents/'];
 const SOURCE_FILE = /\.ts$/u;
 const IMPORT =
   /(?:^|\n)\s*(?<kind>import|export)\s+(?<type>type\s+)?(?<body>[^;]*?)\s*from\s*['"](?<spec>[^'"]+)['"]/gu;
@@ -21,15 +30,15 @@ interface Use {
   readonly typeOnly: boolean;
 }
 
-/** Imports of `source` (a file at `file`) that resolve into src/sim. */
-function simImports(source: string, file: string): Use[] {
+/** Imports of `source` (a file at `file`) that resolve into a guarded layer. */
+function guardedImports(source: string, file: string): Use[] {
   const uses: Use[] = [];
   const add = (spec: string, typeOnly: boolean): void => {
     if (!spec.startsWith('.')) {
       return;
     }
     const target = posix.normalize(posix.join(posix.dirname(file), spec));
-    if (target.startsWith('src/sim/')) {
+    if (GUARDED.some((g) => target.startsWith(g))) {
       uses.push({ target, typeOnly });
     }
   };
@@ -47,7 +56,7 @@ function simImports(source: string, file: string): Use[] {
 }
 
 function violations(source: string, file: string): string[] {
-  return simImports(source, file).flatMap((u) => {
+  return guardedImports(source, file).flatMap((u) => {
     const ok = u.typeOnly ? ALLOWED_TYPE.has(u.target) : ALLOWED_VALUE.has(u.target);
     return ok ? [] : [`${file}: ${u.typeOnly ? 'type' : 'value'} import of ${u.target}`];
   });
@@ -77,6 +86,14 @@ describe('layering scanner', () => {
     ["import type { Sim } from '../sim/sim.ts';", 1],
     ["import { applyCommand } from '../sim/commands.ts';", 1],
     ["import { findById } from '../content/types.ts';", 0],
+    ["import type { Perception } from '../perception/types.ts';", 0],
+    ["import { x } from '../perception/types.ts';", 1],
+    ["import type { PerceptionMemory } from '../perception/memory.ts';", 1],
+    ["import { perceive } from '../perception/perceive.ts';", 1],
+    ["import type { Match } from '../match/match.ts';", 1],
+    ["import { Match } from '../match/match.ts';", 1],
+    ["import type { IntentBoard } from '../intents/board.ts';", 1],
+    ["import { applyIntentCommand } from '../intents/board.ts';", 1],
     ["export { x } from '../sim/entities.ts';", 1],
     ["import '../sim/sim.ts';", 1],
     ["const m = await import('../sim/sim.ts');", 1],
@@ -91,7 +108,7 @@ describe('layering', () => {
     expect(sources(join('src', dir)).length).toBeGreaterThan(0);
   });
 
-  it.each(DIRS)('src/%s imports only commands.ts and events.ts (types) and time.ts from sim', (dir) => {
+  it.each(DIRS)('src/%s imports only the allowed shapes (sim commands/events/time, perception types)', (dir) => {
     const bad = sources(join('src', dir)).flatMap((f) => violations(readFileSync(f, 'utf8'), f.split('\\').join('/')));
     expect(bad).toEqual([]);
   });

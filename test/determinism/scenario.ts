@@ -2,7 +2,7 @@
 // both compare its result to golden.ts: that is how "browser matches Node" is proven.
 
 import { defaultBotSetup } from '../../src/content/bots.ts';
-import { defaultDirector } from '../../src/content/director.ts';
+import { defaultDirector, defaultMaster } from '../../src/content/director.ts';
 import type { GameConfig } from '../../src/content/index.ts';
 import { defaultGame, defaultMasterGame } from '../../src/content/index.ts';
 import {
@@ -28,6 +28,8 @@ export const TICKS = 1800;
 /** Ticks of the Match run (default bots and Director, master mode). */
 const MATCH_TICKS = 3000;
 const HASH_EVERY = 37;
+/** Ticks of the master-mode script run. */
+export const MASTER_TICKS = 1300;
 
 export interface Scripted {
   readonly tick: number;
@@ -131,6 +133,67 @@ export const SCRIPT: readonly Scripted[] = [
   { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 5, on: true } },
 ];
 
+/** The scenario game in master mode (wave master seat 4, default budget and costs). */
+function masterScenarioGame(): GameConfig {
+  return { ...scenarioGame(), master: defaultMaster() };
+}
+
+/**
+ * Master-mode script: the intents board (post, reserve, cancel; the fire runs `ctx.cast`) and the
+ * wave master (summon, send). Heroes: gunner 2, tank 3, ranged 4, support 5; the first post is
+ * intent 1, the second 2, the third 3. `send` is allowed from `minIntervalSeconds` (tick 300).
+ */
+const MASTER_SCRIPT: readonly Scripted[] = [
+  { tick: 3, player: 4, cmd: { kind: 'summon', def: 'grunt', count: 3 } },
+  { tick: 4, player: 4, cmd: { kind: 'summon', def: 'brute', count: 1 } },
+  { tick: 5, player: 4, cmd: { kind: 'summon', def: 'nonesuch', count: 1 } },
+  {
+    tick: 10,
+    player: 0,
+    cmd: { kind: 'intent', op: 'post', hero: 2, slot: 1, intentKind: 'vent', x: 60, y: 28, fireIn: 30 },
+  },
+  { tick: 12, player: 1, cmd: { kind: 'intent', op: 'reserve', hero: 3, intent: 1, slot: 0, offset: 5 } },
+  { tick: 14, player: 2, cmd: { kind: 'intent', op: 'reserve', hero: 5, intent: 1, slot: 1, offset: 12 } },
+  {
+    tick: 20,
+    player: 2,
+    cmd: { kind: 'intent', op: 'post', hero: 4, slot: 0, intentKind: 'mark', x: 70, y: 30, fireIn: 60 },
+  },
+  { tick: 25, player: 2, cmd: { kind: 'intent', op: 'cancel', hero: 4, intent: 2 } },
+  {
+    tick: 26,
+    player: 1,
+    cmd: { kind: 'intent', op: 'post', hero: 3, slot: 0, intentKind: 'taunt', x: 72, y: 31, fireIn: 20 },
+  },
+  { tick: 27, player: 1, cmd: { kind: 'intent', op: 'cancel', hero: 5, intent: 1 } },
+  {
+    tick: 150,
+    player: 0,
+    cmd: { kind: 'intent', op: 'post', hero: 5, slot: 1, intentKind: 'heal', x: 72, y: 33, fireIn: 15 },
+  },
+  { tick: 299, player: 4, cmd: { kind: 'send' } },
+  { tick: 310, player: 4, cmd: { kind: 'send' } },
+  { tick: 320, player: 4, cmd: { kind: 'summon', def: 'runner', count: 4 } },
+  { tick: 330, player: 4, cmd: { kind: 'summon', def: 'runner', count: 2 } },
+  { tick: 700, player: 4, cmd: { kind: 'send' } },
+  { tick: 701, player: 4, cmd: { kind: 'summon', def: 'grunt', count: 2 } },
+  { tick: 1100, player: 4, cmd: { kind: 'send' } },
+];
+
+/** Runs `MASTER_SCRIPT` on a fresh master-mode sim, every command submitted up front. */
+export function runMasterSim(seed: number, ticks: number): SimEvent[] {
+  return drive(
+    { seed, game: masterScenarioGame() },
+    ticks,
+    (sim) => {
+      for (const s of MASTER_SCRIPT) {
+        submit(sim, s, s.tick);
+      }
+    },
+    () => undefined,
+  );
+}
+
 interface MatchResult {
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];
@@ -139,6 +202,8 @@ interface MatchResult {
 }
 
 export interface ScenarioResult {
+  /** Master-mode script (intents board, `ctx.cast`, summon, send): cross-checks board and master hashing. */
+  readonly master: MatchResult;
   /** An all-bot Match with the default bots and Director: any bot or Director change moves it (`npm run golden`). */
   readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
@@ -174,12 +239,13 @@ function submit(sim: Sim, s: Scripted, tick?: number): void {
  * last ticks (when `ticks` is not a multiple of HASH_EVERY) are covered too.
  */
 function drive(
-  seed: number,
+  init: { readonly seed: number; readonly game: GameConfig },
+
   ticks: number,
   setup: (sim: Sim) => void,
   beforeTick: (sim: Sim, tick: number) => void,
 ): SimEvent[] {
-  const sim = new Sim({ seed, game: scenarioGame(), hashEvery: HASH_EVERY });
+  const sim = new Sim({ ...init, hashEvery: HASH_EVERY });
   setup(sim);
   const events: SimEvent[] = [];
   for (let i = 1; i <= ticks; i++) {
@@ -195,7 +261,7 @@ function drive(
 /** Runs `script` on a fresh sim, every command submitted up front with its tick. */
 export function runSim(seed: number, script: readonly Scripted[], ticks: number): SimEvent[] {
   return drive(
-    seed,
+    { seed, game: scenarioGame() },
     ticks,
     (sim) => {
       for (const s of script) {
@@ -209,7 +275,7 @@ export function runSim(seed: number, script: readonly Scripted[], ticks: number)
 /** Like `runSim`, but each command is submitted just before its tick runs (default tick), as a live client would. */
 export function runSimInterleaved(seed: number, script: readonly Scripted[], ticks: number): SimEvent[] {
   return drive(
-    seed,
+    { seed, game: scenarioGame() },
     ticks,
     () => undefined,
     (sim, tick) => {
@@ -322,10 +388,15 @@ function runMatch(): MatchResult {
   return { hashes: hashesOf(events), eventDigest: digestOf(events) };
 }
 
+function summarise(events: readonly SimEvent[]): MatchResult {
+  return { hashes: hashesOf(events), eventDigest: digestOf(events) };
+}
+
 export function runScenario(): ScenarioResult {
   const events = runSim(SEED, SCRIPT, TICKS);
   return {
     match: runMatch(),
+    master: summarise(runMasterSim(SEED, MASTER_TICKS)),
     hashes: hashesOf(events),
     eventDigest: digestOf(events),
     detmath: detmathValues(),

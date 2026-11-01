@@ -48,6 +48,7 @@ function oneSeat(
   return { seed: SEED, game: defaultMasterGame(), bots, brains };
 }
 
+const DUPLICATE_ID = /duplicate decision id/u;
 const HOLD_ON = (hero: number): Command => ({ kind: 'hold', hero, on: true });
 
 describe('determinism', () => {
@@ -97,7 +98,10 @@ describe('determinism', () => {
   it('an all-bot game with the Director runs to an end event', () => {
     const events = run(options());
     expect(events.filter((e) => e.kind === 'end')).toHaveLength(1);
-    expect(events.at(-1)?.kind).toBe('end');
+    // A `hash` may follow `end` (when the end tick is a hash tick), but nothing happens later.
+    const end = events.find((e) => e.kind === 'end');
+    expect(end).toBeDefined();
+    expect(events.filter((e) => e.tick > (end?.tick ?? 0))).toEqual([]);
   });
 
   it('a schedule-mode game (no Director) also runs to an end event', () => {
@@ -157,6 +161,67 @@ describe('reaction delay', () => {
     );
     const applied = run(opts, (m) => m.tick >= 200).flatMap((e) => (e.kind === 'cmd' ? [e.tick] : []));
     expect(applied).toEqual([75, 135, 195]);
+  });
+
+  /** Seat 0 submits `script[n]` (a command list) at its nth think, nothing after; returns the applied `cmd` events. */
+  function scripted(script: readonly (readonly Command[])[]): { cmd: Command; tick: number }[] {
+    let n = 0;
+    const opts = oneSeat(
+      () => {
+        const commands = script[n] ?? [];
+        n += 1;
+        return [{ id: 'x.script', options: [{ id: 'go', value: 1, cost: 0, commands }] }];
+      },
+      { thinkSeconds: 0.5, reactionSeconds: 2 },
+    );
+    return run(opts, (m) => m.tick >= 300).flatMap((e) => (e.kind === 'cmd' ? [{ cmd: e.cmd, tick: e.tick }] : []));
+  }
+
+  const MoveA: Command = { kind: 'move', hero: 2, x: 10, y: 10 };
+  const MoveB: Command = { kind: 'move', hero: 2, x: 20, y: 20 };
+
+  it('only the most recent pending command on a channel is compared: A, B, A keeps the final A', () => {
+    expect(scripted([[MoveA], [MoveB], [MoveA], [MoveA]]).map((c) => c.cmd)).toEqual([MoveA, MoveB, MoveA]);
+  });
+
+  it('commands on different channels do not dedupe each other (hero and ability slot)', () => {
+    const other: Command = { kind: 'move', hero: 3, x: 10, y: 10 };
+    const slot0: Command = { kind: 'ability', hero: 2, slot: 0 };
+    const slot1: Command = { kind: 'ability', hero: 2, slot: 1 };
+    const cmds = scripted([
+      [MoveA, other, slot0, slot1],
+      [MoveA, other, slot0, slot1],
+    ]).map((c) => c.cmd);
+    expect(cmds).toEqual([MoveA, other, slot0, slot1]);
+  });
+
+  it('never dedupes a summon: two identical summons are two purchases', () => {
+    const summon: Command = { kind: 'summon', def: 'grunt', count: 1 };
+    const cmds = scripted([[summon, summon], [summon]]).map((c) => c.cmd);
+    expect(cmds).toEqual([summon, summon, summon]);
+  });
+
+  it('inFlight lists the seat own pending commands as copies, and drops them once applied', () => {
+    const seen: { tick: number; inFlight: readonly { cmd: Command; at: number }[] }[] = [];
+    const opts = oneSeat(
+      (ctx) => {
+        seen.push({ tick: ctx.tick, inFlight: ctx.inFlight });
+        return [{ id: 'x.m', options: [{ id: 'a', value: 1, cost: 0, commands: [{ ...MoveA, hero: ctx.me.id }] }] }];
+      },
+      { thinkSeconds: 0.5, reactionSeconds: 1 },
+    );
+    run(opts, (m) => m.tick >= 100);
+    expect(seen[0]?.inFlight).toEqual([]);
+    // Reaction 30 ticks, thinks at 15, 30, 45, ...: the move from tick 15 applies at 45 (the repeat
+    // at 30 is deduped), so at 45 nothing is in flight and the move submitted then applies at 75.
+    expect(seen.find((x) => x.tick === 30)?.inFlight).toEqual([{ cmd: { ...MoveA, hero: 2 }, at: 45 }]);
+    expect(seen.find((x) => x.tick === 45)?.inFlight).toEqual([]);
+    expect(seen.find((x) => x.tick === 60)?.inFlight.map((f) => f.at)).toEqual([75]);
+    const first = seen.find((x) => x.tick === 30)?.inFlight[0];
+    if (first === undefined) {
+      throw new Error('no in-flight entry');
+    }
+    expect(first.cmd).not.toBe(seen.find((x) => x.tick === 60)?.inFlight[0]?.cmd);
   });
 });
 
@@ -234,6 +299,51 @@ describe('choice events', () => {
 });
 
 describe('seats and perception', () => {
+  it('throws on a duplicate decision id within one think', () => {
+    const d: Decision = { id: 'x.same', options: [{ id: 'a', value: 1, cost: 0, commands: [] }] };
+    const m = new Match(oneSeat(() => [d, d], { thinkSeconds: 0.5, reactionSeconds: 0.1 }));
+    expect(() => {
+      while (m.tick < 30) {
+        m.step();
+      }
+    }).toThrow(DUPLICATE_ID);
+  });
+
+  it('seat views carry a copy of the post, the doctrine leash, and a post the brain reports moved', () => {
+    let moved: { x: number; y: number } | undefined;
+    const bot: Bot = { think: () => [], status: () => (moved === undefined ? {} : { post: moved }) };
+    const base = oneSeat(() => [], { thinkSeconds: 0.5, reactionSeconds: 0.1, doctrine: { leash: 7 } });
+    const m = new Match({ ...base, brains: { gunner: () => bot, standin: () => bot } });
+    const [seat] = m.seats;
+    expect(seat?.leash).toBe(7);
+    const [spawn] = m.sim.game.map.heroSpawns;
+    expect(seat?.post).toEqual(spawn);
+    expect(seat?.post).not.toBe(spawn);
+    moved = { x: 1.5, y: 2.5 };
+    expect(m.seats[0]?.post).toEqual({ x: 1.5, y: 2.5 });
+    expect(m.seats[0]?.post).not.toBe(moved);
+  });
+
+  it('masterView is memoised by tick, undefined without a master, and frozen along with perception', () => {
+    const m = new Match(options());
+    m.step();
+    expect(m.masterView).toBeDefined();
+    expect(m.masterView).toBe(m.masterView);
+    const before = m.masterView;
+    m.step();
+    expect(m.masterView).not.toBe(before);
+    expect(Object.isFrozen(m.masterView)).toBe(true);
+    expect(Object.isFrozen(m.masterView?.costs)).toBe(true);
+    expect(Object.isFrozen(m.perception)).toBe(true);
+    expect(Object.isFrozen(m.perception.heroes)).toBe(true);
+    expect(Object.isFrozen(m.perception.heroes[0])).toBe(true);
+    const { master: _master, ...schedule } = defaultMasterGame();
+    const { director: _director, ...rest } = options({ game: schedule });
+    const plain = new Match(rest);
+    plain.step();
+    expect(plain.masterView).toBeUndefined();
+  });
+
   it('rejects a bad slot, a repeated slot, an unknown doctrine and a Director without a master', () => {
     const bots = defaultBotSetup();
     const [s0] = bots.seats;

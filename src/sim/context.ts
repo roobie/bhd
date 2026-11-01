@@ -24,7 +24,8 @@ export interface TickContext {
   /**
    * Casts `hero`'s ability `slot` (at (x, y) when given) exactly as an `ability` command would,
    * without a `cmd` event. True if the cast went through (the kit emitted an `ability` event for that
-   * hero and slot). Used by the intents phase.
+   * hero and slot). For the intents phase only: calling it from another phase would reorder the
+   * kit's events relative to the tick order in `Sim.step`.
    */
   readonly cast: (hero: number, slot: number, at?: { readonly x: number; readonly y: number }) => boolean;
   /** Entity id of the Ancient. */

@@ -82,12 +82,13 @@ describe('wave master hooks', () => {
     const { master } = sim;
     expect(master).toBeDefined();
     const start = master?.budget ?? 0;
+    const unit = game.master?.costs.find((c) => c.def === 'grunt')?.cost ?? Number.NaN;
     sim.command(4, { kind: 'summon', def: 'grunt', count: 1 }, 2);
     sim.command(4, { kind: 'summon', def: 'boss', count: 1000 }, 3);
     sim.command(4, { kind: 'summon', def: 'nonesuch', count: 1 }, 4);
     sim.command(4, { kind: 'send' }, 5);
     const events = runTo(sim, 6);
-    expect(master?.budget).toBe(start - 1);
+    expect(master?.budget).toBe(start - unit);
     expect(master?.pending).toEqual([{ def: 'grunt', count: 1 }]);
     expect(events.filter((e) => e.kind === 'wave')).toEqual([]);
     const minTick = ticks(game.master?.minIntervalSeconds ?? 0);
