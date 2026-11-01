@@ -1,0 +1,108 @@
+// Repo-wide lint and format config: as much static analysis and as strict formatting
+// as the tools allow (same baseline as skelly). Every stable rule is on as an error; each
+// opt-out below says why. Nursery (unstable) rules are left out.
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "includes": ["**", "!**/dist", "!**/package-lock.json", "!**/__snapshots__", "!**/*.md", "!.work"] },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
+  "javascript": {
+    "formatter": { "quoteStyle": "single", "trailingCommas": "all", "arrowParentheses": "always" }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "rules": {
+      "a11y": "error",
+      "complexity": "error",
+      "correctness": "error",
+      "performance": "error",
+      "security": "error",
+      "style": "error",
+      "suspicious": "error"
+    },
+    "domains": {
+      // Module-graph rules (unresolved imports, import cycles…) and test-framework rules.
+      "project": "all",
+      "test": "all",
+      // Frameworks we don't use: their rules only misfire.
+      "astro": "none",
+      "drizzle": "none",
+      "next": "none",
+      "playwright": "none",
+      "qwik": "none",
+      "react": "none",
+      "reactNative": "none",
+      "solid": "none",
+      "svelte": "none",
+      "tailwind": "none",
+      "vue": "none"
+    }
+  },
+  "overrides": [
+    {
+      // Opt-outs. A group set to "error" above can't also list rules, so they live here.
+      "includes": ["**"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            // noExcessiveCognitiveComplexity (on) measures what matters; raw length doesn't.
+            "noExcessiveLinesPerFunction": "off"
+          },
+          "security": {
+            // Entropy-based: flags CSS selectors and HTML strings. There are no secrets here.
+            "noSecrets": "off"
+          },
+          "style": {
+            // Early `continue` keeps loops flat; banning it adds nesting.
+            "noContinue": "off",
+            "noExcessiveLinesPerFile": "off",
+            // Geometry, colours and tuning constants are numbers by nature.
+            "noMagicNumbers": "off",
+            "noHexColors": "off",
+            // tsconfig's noUncheckedIndexedAccess makes every index read `T | undefined`;
+            // `!` is the explicit, reviewed acknowledgement on hot typed-array reads.
+            "noNonNullAssertion": "off",
+            // Single-level ternaries are fine; noNestedTernary (on) catches the unreadable ones.
+            "noTernary": "off",
+            // Helpers are defined next to their use, not hoisted above all exports.
+            "useExportsLast": "off",
+            "noIncrementDecrement": { "level": "error", "options": { "allowForLoopAfterthoughts": true } },
+            "useNamingConvention": {
+              "level": "error",
+              "options": {
+                // Allow acronyms like mulMV.
+                "strictCase": false,
+                "conventions": [
+                  { "selector": { "kind": "objectLiteralProperty" }, "formats": ["camelCase", "CONSTANT_CASE"] }
+                ]
+              }
+            }
+          },
+          "suspicious": {
+            // Hashing, RNG and fixed-point math are bit arithmetic.
+            "noBitwiseOperators": "off",
+            // Type inference is not reliable yet: it reported RegExp#exec (nullable) as always
+            // truthy, and only when run on its own. Revisit on Biome upgrades.
+            "noUnnecessaryConditions": "off"
+          }
+        }
+      }
+    },
+    {
+      // Node is allowed only in CLIs, tests and build config; sim and client code stay browser-pure.
+      // src/reporter is a headless Node CLI by design (DESIGN.md §6.5).
+      "includes": ["src/reporter/**", "test/**", "vite.config.ts"],
+      "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
+    },
+    {
+      // CLIs talk to the terminal.
+      "includes": ["src/reporter/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      // Vite requires a default export.
+      "includes": ["vite.config.ts"],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    }
+  ]
+}

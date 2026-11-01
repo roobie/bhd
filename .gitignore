@@ -1,0 +1,6 @@
+node_modules/
+dist/
+test-results/
+
+# Host-local mise settings (tokens, env).
+mise.local.toml

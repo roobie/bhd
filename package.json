@@ -1,0 +1,31 @@
+{
+  "name": "bhd",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "check": "biome check",
+    "fix": "biome check --write",
+    "knip": "knip",
+    "ci": "biome ci && tsc && knip && vitest run",
+    "bhd": "node src/reporter/cli.ts"
+  },
+  "dependencies": {
+    "lit-html": "3.3.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/node": "26.6.6",
+    "knip": "6.44.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  }
+}
