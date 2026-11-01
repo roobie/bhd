@@ -34,6 +34,7 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
+- review-fix pass: M1 legend from applying ability, M2 help closes on cast and picker/hint above it, M3/L3 autoattack-only tracers, L1/L2/L4 tracer timing/follow/dedupe, brighter tracers, L6-L9 a11y/keys/format/layout; tests in test/client/shell/{help,hudmodel,projectiles,controls}.test.ts
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -46,3 +47,4 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 w7b review-fix pass (M1-M3, L1-L9) implemented

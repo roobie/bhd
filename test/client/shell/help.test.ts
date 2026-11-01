@@ -21,7 +21,9 @@ import { Sim } from '../../../src/sim/sim.ts';
 const game = defaultGame();
 const p = perceive(new Sim({ seed: 1, game }), createMemory(defaultPerception()));
 const PATH = /^M/u;
+const facts = { statuses: game.statuses, heroes: game.heroes };
 const BAD = /NaN|undefined|\?|\{|\}/u;
+const NO_NUMBERS = /\d|\?|\{/u;
 
 describe('icons and help cover the shipped content', () => {
   const ui = defaultPresentation();
@@ -38,9 +40,11 @@ describe('icons and help cover the shipped content', () => {
     }
   });
 
-  it('has a status help entry for every status in the config', () => {
-    for (const s of game.statuses) {
-      expect(describeStatus(s.id, game.statuses), s.id).toBeDefined();
+  it('has a status help entry for every status in the config that something applies', () => {
+    // exposed is defined but no hero ability applies it, so help leaves it out of the legend.
+    const unapplied = new Set(['exposed']);
+    for (const s of game.statuses.filter((x) => !unapplied.has(x.id))) {
+      expect(describeStatus(s.id, facts), s.id).toBeDefined();
     }
   });
 
@@ -76,11 +80,11 @@ describe('templates', () => {
   });
 
   it('fill completely from the shipped status defs', () => {
-    for (const t of statusTemplates(game.statuses)) {
+    for (const t of statusTemplates(facts)) {
       expect(t.unfilled, t.id).toEqual([]);
     }
-    for (const s of game.statuses) {
-      expect(describeStatus(s.id, game.statuses), s.id).not.toMatch(BAD);
+    for (const t of statusTemplates(facts)) {
+      expect(describeStatus(t.id, facts), t.id).not.toMatch(BAD);
     }
   });
 
@@ -91,14 +95,52 @@ describe('templates', () => {
 
   it('track the config: a tuned status duration changes the text', () => {
     const tuned = game.statuses.map((s) => (s.id === 'suppressed' ? { ...s, duration: 17 } : s));
-    expect(describeStatus('suppressed', tuned)).toContain('17');
+    expect(describeStatus('suppressed', { ...facts, statuses: tuned })).toContain('17');
+  });
+
+  it('take applied statuses from the applying ability, not the status def', () => {
+    const applier = game.heroes
+      .flatMap((h) => (h.kit === 'standin' ? h.abilities : []))
+      .find((a) => a.effect === 'mark');
+    expect(applier && 'value' in applier).toBe(true);
+    const duration = applier && 'duration' in applier ? applier.duration : Number.NaN;
+    const text = describeStatus('marked', facts) ?? '';
+    expect(text).toContain(`${duration}s`);
+    // Tuning the status def changes nothing: the sim ignores it for marked.
+    const tuned = game.statuses.map((s) => (s.id === 'marked' ? { ...s, duration: duration + 7 } : s));
+    expect(describeStatus('marked', { ...facts, statuses: tuned })).toBe(text);
+  });
+
+  it('omit the numbers when no ability, or differing abilities, apply a status', () => {
+    const none = describeStatus('marked', { ...facts, heroes: [] }) ?? '';
+    expect(none).not.toMatch(NO_NUMBERS);
+    expect(none.length).toBeGreaterThan(0);
+    const [first] = game.heroes.filter((h) => h.kit === 'standin');
+    const copy = (h: NonNullable<typeof first>) => ({
+      ...h,
+      abilities: h.abilities.map((a) =>
+        a.effect === 'mark' && 'duration' in a ? { ...a, duration: a.duration + 1 } : a,
+      ),
+    });
+    const heroes = [...game.heroes, ...game.heroes.filter((h) => h.kit === 'standin').map(copy)];
+    const many = describeStatus('marked', { ...facts, heroes }) ?? '';
+    expect(many).not.toMatch(NO_NUMBERS);
+  });
+
+  it('shows small fractions as whole percents', () => {
+    const tuned = game.heroes.map((h) =>
+      h.kit === 'standin'
+        ? { ...h, abilities: h.abilities.map((a) => (a.effect === 'mark' ? { ...a, value: 0.07 } : a)) }
+        : h,
+    );
+    expect(describeStatus('marked', { ...facts, heroes: tuned })).toContain('+7%');
   });
 });
 
 describe('unknown ids', () => {
   it('have no description', () => {
     expect(describeAbility('nope', { def: undefined, statuses: [] })).toBeUndefined();
-    expect(describeStatus('nope', [])).toBeUndefined();
+    expect(describeStatus('nope', { statuses: [], heroes: [] })).toBeUndefined();
   });
 
   it('show ? rather than inventing numbers when the def is missing', () => {

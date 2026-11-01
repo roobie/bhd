@@ -306,6 +306,12 @@ function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
   });
 }
 
+const WHITE: Rgba = [1, 1, 1, 1];
+
+function mix(a: Rgba, b: Rgba, t: number): Rgba {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, 1];
+}
+
 function shotColor(input: SceneInput, fx: Effect): Rgba {
   if (fx.srcKind === 'hero') {
     return parseHex(heroPresentation(input.ui, fx.srcDef ?? '').color);
@@ -316,25 +322,65 @@ function shotColor(input: SceneInput, fx: Effect): Rgba {
   return PALETTE.ancient;
 }
 
-/** Tracer: a short capsule trailing a bright head, flying from the source to the target. */
+/** Where a tracer endpoint is drawn now: the entity's interpolated position, else the stored point. */
+function drawnPoint(
+  input: SceneInput,
+  id: number | undefined,
+  fallback: { x: number; y: number },
+): { x: number; y: number } {
+  const e = id === undefined ? undefined : input.entities.find((d) => d.id === id);
+  return e === undefined ? fallback : { x: fin(e.x, fallback.x), y: fin(e.y, fallback.y) };
+}
+
+/** Tracer length floor (css px) and half-widths: a bright streak that reads at phone and desktop sizes. */
+const SHOT_TRAIL_PX = 44;
+const SHOT_WIDTH_PX = 2.5;
+const SHOT_HEAD_PX = 6;
+
+/** Tracer: a long glowing streak trailing a bright white-hot head, flying from the source to the target. */
 function shotInstances(input: SceneInput, fx: Effect, age: number, out: InstanceBuffer): void {
   const ppu = input.camera.pxPerUnit;
-  const x1 = fin(fx.toX ?? fx.x, fx.x);
-  const y1 = fin(fx.toY ?? fx.y, fx.y);
-  const at = (t: number): { x: number; y: number } => ({ x: fx.x + (x1 - fx.x) * t, y: fx.y + (y1 - fx.y) * t });
-  const head = at(age);
-  const tail = at(Math.max(0, age - 0.5));
+  const from = drawnPoint(input, fx.id, fx);
+  const to = drawnPoint(input, fx.toId, { x: fin(fx.toX ?? fx.x, fx.x), y: fin(fx.toY ?? fx.y, fx.y) });
+  const len = Math.hypot(to.x - from.x, to.y - from.y);
+  const at = (d: number): { x: number; y: number } => ({
+    x: from.x + (len > 0 ? ((to.x - from.x) / len) * d : 0),
+    y: from.y + (len > 0 ? ((to.y - from.y) / len) * d : 0),
+  });
+  const headD = len * age;
+  const tailD = Math.max(0, headD - Math.max(pxToWorld(SHOT_TRAIL_PX, ppu), len * 0.5));
+  const head = at(headD);
+  const tail = at(tailD);
   const color = shotColor(input, fx);
+  const fade = Math.min(1, (1 - age) * 4);
+  const rot = Math.atan2(to.y - from.y, to.x - from.x);
+  const mid = { x: (head.x + tail.x) / 2, y: (head.y + tail.y) / 2 };
+  const hw = (headD - tailD) / 2;
   emit(out, {
     shape: SHAPE.segment,
-    x: (head.x + tail.x) / 2,
-    y: (head.y + tail.y) / 2,
-    hw: Math.hypot(head.x - tail.x, head.y - tail.y) / 2,
-    rot: Math.atan2(y1 - fx.y, x1 - fx.x),
-    color: withAlpha(color, 0.7),
-    p0: pxToWorld(2.5, ppu),
+    x: mid.x,
+    y: mid.y,
+    hw,
+    rot,
+    color: withAlpha(color, 0.35 * fade),
+    p0: pxToWorld(SHOT_WIDTH_PX * 2.2, ppu),
   });
-  emit(out, { shape: SHAPE.circle, x: head.x, y: head.y, hw: pxToWorld(4, ppu), color: withAlpha(color, 1) });
+  emit(out, {
+    shape: SHAPE.segment,
+    x: mid.x,
+    y: mid.y,
+    hw,
+    rot,
+    color: withAlpha(mix(color, WHITE, 0.35), 0.95 * fade),
+    p0: pxToWorld(SHOT_WIDTH_PX, ppu),
+  });
+  emit(out, {
+    shape: SHAPE.circle,
+    x: head.x,
+    y: head.y,
+    hw: pxToWorld(SHOT_HEAD_PX, ppu),
+    color: withAlpha(WHITE, fade),
+  });
 }
 
 function effectInstance(input: SceneInput, fx: Effect, out: InstanceBuffer): void {

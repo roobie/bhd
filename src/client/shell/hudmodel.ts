@@ -216,15 +216,18 @@ function helpModel(input: HudInput): HelpModel | undefined {
       armable: pres.armable,
     };
   });
-  const statuses = ui.statuses.map((s) => ({
-    id: s.id,
-    label: s.label,
-    glyph: s.glyph,
-    icon: s.icon,
-    color: s.color,
-    harmful: s.harmful,
-    text: describeStatus(s.id, defs) ?? '',
-  }));
+  // Only statuses help can describe: one nothing applies has no entry and stays out of the legend.
+  const statuses = ui.statuses
+    .map((s) => ({
+      id: s.id,
+      label: s.label,
+      glyph: s.glyph,
+      icon: s.icon,
+      color: s.color,
+      harmful: s.harmful,
+      text: describeStatus(s.id, { statuses: defs, heroes: game?.heroes ?? [] }) ?? '',
+    }))
+    .filter((s) => s.text !== '');
   return { hero: hero === undefined ? '' : heroPresentation(ui, hero.def).label, abilities, statuses };
 }
 

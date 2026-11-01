@@ -205,13 +205,24 @@ describe('help model', () => {
     }
   });
 
-  it('lists every presented status with text and no NaN', () => {
+  it('lists the presented statuses help can describe, with text and no NaN, and leaves out the rest', () => {
     const m = buildHudModel(input({ game, controls: open }));
-    expect(m.help?.statuses.length).toBe(defaultPresentation().statuses.length);
+    const listed = m.help?.statuses.map((s) => s.id) ?? [];
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.length).toBeLessThan(defaultPresentation().statuses.length);
+    // exposed: defined and presented, but no hero ability applies it.
+    expect(listed).not.toContain('exposed');
     for (const s of m.help?.statuses ?? []) {
       expect(s.text).not.toMatch(BAD);
       expect(s.text.length).toBeGreaterThan(0);
     }
+  });
+
+  it('legend numbers equal the applying ability, read from the game', () => {
+    const m = buildHudModel(input({ game, controls: open }));
+    const mark = game.heroes.flatMap((h) => (h.kit === 'standin' ? h.abilities : [])).find((a) => a.effect === 'mark');
+    const duration = mark !== undefined && 'duration' in mark ? mark.duration : Number.NaN;
+    expect(m.help?.statuses.find((s) => s.id === 'marked')?.text).toContain(`${duration}s`);
   });
 
   it('falls back for an unknown effect and status: no text, still a card', () => {

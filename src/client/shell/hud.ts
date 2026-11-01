@@ -5,6 +5,7 @@
 import type { TemplateResult } from 'lit-html';
 import { html, render as litRender, nothing } from 'lit-html';
 import { styleMap } from 'lit-html/directives/style-map.js';
+import { KEY_HELP, KEY_HOLD, KEY_STOP } from './input.ts';
 import { armPickerView, intentsListView } from './intentsui.ts';
 import type {
   AbilityBarModel,
@@ -40,6 +41,11 @@ function iconView(icon: string | undefined, glyph: string): TemplateResult {
     return html`<span class="glyph">${glyph}</span>`;
   }
   return html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d=${icon}></path></svg>`;
+}
+
+/** Seconds for prose: whole numbers as is, otherwise one decimal (so "0.4s", never "0s"). */
+function seconds(s: number): string {
+  return `${Number.isInteger(s) && s >= 1 ? String(s) : s.toFixed(1)}s`;
 }
 
 const pct = (f: number): string => `${(f * 100).toFixed(1)}%`;
@@ -84,6 +90,8 @@ function resourceView(r: ResourceBarModel): TemplateResult {
 function pipView(s: StatusPipModel): TemplateResult {
   return html`<span
     class="pip ${s.harmful ? 'harmful' : 'boon'}"
+    role="img"
+    aria-label=${s.label}
     title="${s.label} ${s.secondsLeft.toFixed(1)}s"
     style=${styleMap({ '--c': s.color, '--ring': `${(s.frac * 360).toFixed(0)}deg` })}
     >${iconView(s.icon, s.glyph)}</span
@@ -221,16 +229,18 @@ function abilityView(b: AbilityButtonModel, gestures: Gestures): TemplateResult 
 function barView(bar: AbilityBarModel, gestures: Gestures, dispatch: Dispatch): TemplateResult {
   return html`<div class="abilities">
     ${bar.buttons.map((b) => abilityView(b, gestures))}
-    <button class="btn" type="button" ?disabled=${!bar.enabled} aria-label="Stop" @click=${() => dispatch({ kind: 'stop' })}>Stop</button>
+    <button class="btn" type="button" ?disabled=${!bar.enabled} aria-label="Stop (${KEY_STOP})" @click=${() => dispatch({ kind: 'stop' })}>
+      Stop<small class="key">${KEY_STOP}</small>
+    </button>
     <button
       class="btn ${bar.hold ? 'on' : ''}"
       type="button"
       ?disabled=${!bar.enabled}
       aria-pressed=${bar.hold ? 'true' : 'false'}
-      aria-label="Hold fire"
+      aria-label="Hold fire (${KEY_HOLD})"
       @click=${() => dispatch({ kind: 'hold' })}
     >
-      Hold
+      Hold<small class="key">${KEY_HOLD}</small>
     </button>
     <button
       class="btn ${bar.armOn ? 'on' : ''}"
@@ -248,7 +258,7 @@ function barView(bar: AbilityBarModel, gestures: Gestures, dispatch: Dispatch): 
 function helpAbilityView(a: HelpAbilityModel): TemplateResult {
   const facts = [
     html`<li>${a.targeting}</li>`,
-    html`<li>${a.cooldownSeconds > 0 ? `Cooldown ${a.cooldownSeconds.toFixed(0)}s` : 'No cooldown'}</li>`,
+    html`<li>${a.cooldownSeconds > 0 ? `Cooldown ${seconds(a.cooldownSeconds)}` : 'No cooldown'}</li>`,
     a.cost === '' ? nothing : html`<li>Cost: ${a.cost}</li>`,
     html`<li>${a.armable ? 'Can be armed as a timed trigger' : 'Cannot be armed'}</li>`,
   ];
@@ -273,12 +283,14 @@ function helpStatusView(s: HelpStatusModel): TemplateResult {
 }
 
 function helpView(h: HelpModel, dispatch: Dispatch): TemplateResult {
-  return html`<div class="help" data-hit role="dialog" aria-label="Help">
+  return html`<div class="help" data-hit role="dialog" aria-label="Help" tabindex="0">
     <header>
       <h2>${h.hero === '' ? 'Help' : `${h.hero}: abilities`}</h2>
-      <button class="btn" type="button" aria-label="Close help" @click=${() => dispatch({ kind: 'help' })}>&times;</button>
+      <button class="btn closehelp" type="button" aria-label="Close help" @click=${() => dispatch({ kind: 'help' })}>&times;</button>
     </header>
     <div class="helpcards">${h.abilities.map(helpAbilityView)}</div>
+    <h2>Keys</h2>
+    <p class="keys">${KEY_HELP.map((k) => html`<span><kbd>${k.keys}</kbd> ${k.does}</span>`)}</p>
     <h2>Statuses</h2>
     <ul class="legend">${h.statuses.map(helpStatusView)}</ul>
   </div>`;
@@ -324,9 +336,26 @@ export function createHud(root: HTMLElement, deps: HudDeps): Hud {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
+  let helpOpen = false;
+  let opener: HTMLElement | null = null;
   const draw = (model: HudModel): void => {
     lastMs = performance.now();
+    const open = model.help !== undefined;
+    if (open && !helpOpen) {
+      opener = document.activeElement as HTMLElement | null;
+    }
     litRender(template(model, deps, gestures), root);
+    if (open && !helpOpen) {
+      root.querySelector<HTMLElement>('.closehelp')?.focus();
+    } else if (!open && helpOpen) {
+      // Give focus back unless the player has already moved it to something else.
+      const active = document.activeElement;
+      if ((active === null || active === document.body) && opener?.isConnected === true) {
+        opener.focus();
+      }
+      opener = null;
+    }
+    helpOpen = open;
   };
 
   return {
