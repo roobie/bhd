@@ -221,3 +221,56 @@ describe('perceive', () => {
     expect(lineAllies()).toEqual([]);
   });
 });
+
+describe('perception fields for the client shell', () => {
+  const heroOf = (sim: Sim, slot: number) => {
+    const h = perceive(sim, createMemory(defaultPerception())).heroes[slot];
+    if (h === undefined) {
+      throw new Error(`no hero in slot ${slot}`);
+    }
+    return h;
+  };
+
+  it('abilities carry a cooldown length that bounds the time left', () => {
+    const { sim } = record(60);
+    const p = perceive(sim, createMemory(defaultPerception()));
+    for (const h of p.heroes) {
+      for (const a of h.abilities) {
+        expect(a.cooldownTicks).toBeGreaterThanOrEqual(0);
+        expect(a.cooldownLeft).toBeLessThanOrEqual(a.cooldownTicks);
+        expect(!a.ready || a.cooldownLeft === 0).toBe(true);
+      }
+    }
+  });
+
+  it('a cast starts a cooldown that counts down within its length', () => {
+    const { sim } = record(5);
+    const gunner = heroOf(sim, 0);
+    expect(sim.command(0, { kind: 'ability', hero: gunner.id, slot: 3 }).ok).toBe(true);
+    sim.step();
+    const after = heroOf(sim, 0).abilities.find((a) => a.slot === 3);
+    expect(after?.cooldownLeft).toBeGreaterThan(0);
+    expect(after?.cooldownLeft).toBeLessThanOrEqual(after?.cooldownTicks ?? 0);
+  });
+
+  it('resource marks are ascending fractions of the bar', () => {
+    const { sim } = record(5);
+    for (const h of perceive(sim, createMemory(defaultPerception())).heroes) {
+      for (const r of h.resources) {
+        expect(r.marks.every((m, i) => m > 0 && m <= 1 && (i === 0 || m > (r.marks[i - 1] ?? 0)))).toBe(true);
+      }
+    }
+  });
+
+  it('autocast reports the toggles the commands set, one bit per slot', () => {
+    const sim = new Sim({ seed: 7, game: defaultGame() });
+    const hero = heroOf(sim, 3);
+    expect(hero.autocast).toBe(0);
+    sim.command(3, { kind: 'autocast', hero: hero.id, slot: 1, on: true }, 1);
+    sim.step();
+    expect(heroOf(sim, 3).autocast).toBe(0b10);
+    sim.command(3, { kind: 'autocast', hero: hero.id, slot: 1, on: false }, 2);
+    sim.step();
+    expect(heroOf(sim, 3).autocast).toBe(0);
+  });
+});

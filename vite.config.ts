@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { configDefaults, defineConfig } from 'vitest/config';
 
@@ -8,11 +9,23 @@ const BROWSER_TESTS = [
   'test/detmath-trig.test.ts',
   'test/client/viewer.browser.test.ts',
   'test/client/replay.browser.test.ts',
+  // Wave 7 (the files arrive with their slices): the renderer and the shell.
+  'test/client/gl.browser.test.ts',
+  'test/client/shell.browser.test.ts',
 ];
 
 export default defineConfig({
   base: './',
   worker: { format: 'es' },
+  build: {
+    // Two pages: the debug viewer and the play shell.
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        play: fileURLToPath(new URL('./play.html', import.meta.url)),
+      },
+    },
+  },
   test: {
     projects: [
       {

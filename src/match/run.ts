@@ -25,7 +25,7 @@ export type Mode = 'director' | 'schedule';
 
 const SEATS = 4;
 
-/** Everything that determines one all-bot game, as plain JSON. */
+/** Everything that determines one game (all-bot unless `humans` is set), as plain JSON. */
 export interface GameSpec {
   /** Must equal `RUN_ABI` of the code that runs it. */
   readonly abi: number;
@@ -40,6 +40,11 @@ export interface GameSpec {
   readonly maxTicks: number;
   /** Ticks between `hash` events. */
   readonly hashEvery: number;
+  /**
+   * Hero slots (unique, 0-3) with no bot seat: a human drives them through `sim.command`. Absent or
+   * empty means an all-bot game, as before. The reporter never sets it.
+   */
+  readonly humans?: readonly number[];
   /** A patch on the shipped config; see content/overrides.ts. */
   readonly overrides?: ConfigOverrides;
 }
@@ -67,11 +72,13 @@ function botsFor(spec: GameSpec): BotSetup {
   return {
     ...base,
     thinkSeconds: spec.thinkSeconds,
-    seats: base.seats.map((s) => ({
-      ...s,
-      doctrine: spec.doctrines[s.slot] ?? s.doctrine,
-      reactionSeconds: spec.reactionSeconds,
-    })),
+    seats: base.seats
+      .filter((s) => !(spec.humans ?? []).includes(s.slot))
+      .map((s) => ({
+        ...s,
+        doctrine: spec.doctrines[s.slot] ?? s.doctrine,
+        reactionSeconds: spec.reactionSeconds,
+      })),
   };
 }
 
@@ -84,6 +91,13 @@ function checkSpec(spec: GameSpec): void {
   }
   if (!(Number.isSafeInteger(spec.maxTicks) && spec.maxTicks > 0)) {
     throw new RangeError(`GameSpec maxTicks must be a positive integer, got ${spec.maxTicks}`);
+  }
+  const seen = new Set<number>();
+  for (const slot of spec.humans ?? []) {
+    if (!(Number.isInteger(slot) && slot >= 0 && slot < SEATS) || seen.has(slot)) {
+      throw new RangeError(`GameSpec humans must be unique slots 0-${SEATS - 1}, got ${slot}`);
+    }
+    seen.add(slot);
   }
 }
 
@@ -111,7 +125,7 @@ function matchOf(spec: GameSpec, resolved: RunConfig): Match {
   });
 }
 
-/** The all-bot Match a spec describes, at tick 0. */
+/** The Match a spec describes, at tick 0: all bots, except the seats of `humans`. */
 export function buildMatch(spec: GameSpec): Match {
   return matchOf(spec, resolveSpec(spec));
 }

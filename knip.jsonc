@@ -1,6 +1,15 @@
 {
   "$schema": "./node_modules/knip/schema.json",
-  "entry": ["index.html!", "src/reporter/worker.ts!"],
+  "entry": [
+    "index.html!",
+    "play.html!",
+    "src/reporter/worker.ts!",
+    // Wave 7 stubs: the step-2 slices fill these in and nothing imports all of them yet.
+    // w7 step 3 (lead) removes these two lines once play.html's module graph reaches every file.
+    "src/client/shell/*.ts",
+    "src/client/gl/*.ts",
+    "src/content/presentation.ts"
+  ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
     "src/reporter/types.ts": ["exports", "types"],

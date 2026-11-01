@@ -1,0 +1,177 @@
+// Presentation content: kit-agnostic UI data for the client shell (wave 7 DESIGN "Presentation
+// content"). Pure data plus fallback lookups. Not part of `GameConfig`, never hashed, not
+// overridable, and the sim never reads it. The shell looks abilities up by their perception
+// `effect`, resources by `name`, statuses by `id` and units by def id; a missing entry is not an
+// error: every lookup falls back (label = id, hashed colour, targeting from range and radius), so
+// a new hero is playable before it has an entry. Shell code must not switch on any of these ids.
+
+/** How an ability is aimed. `instant` casts on press; the others need a world point or a unit. */
+export type Targeting = 'instant' | 'direction' | 'point' | 'unit';
+
+export interface AbilityPresentation {
+  /** The perception `AbilityView.effect` this entry describes. */
+  readonly effect: string;
+  readonly label: string;
+  /** One or two characters for buttons and markers. */
+  readonly glyph: string;
+  readonly targeting: Targeting;
+  /** Can be posted as an `intent post` (a timed trigger). */
+  readonly armable: boolean;
+  /** The `intentKind` an armed post carries; defaults to `effect`. Bots reserve against `'pull'`. */
+  readonly intentKind?: string;
+}
+
+export interface ResourcePresentation {
+  /** The perception `ResourceView.name`. */
+  readonly name: string;
+  readonly label: string;
+  /** `#rrggbb`. */
+  readonly color: string;
+}
+
+export interface StatusPresentation {
+  /** The status id (`StatusView.status`). */
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: string;
+  /** `#rrggbb`. */
+  readonly color: string;
+  /** A debuff on the unit carrying it (on an enemy, good for the team). */
+  readonly harmful: boolean;
+}
+
+export interface UnitPresentation {
+  /** Hero or enemy def id. */
+  readonly id: string;
+  readonly label: string;
+  /** `#rrggbb`. */
+  readonly color: string;
+  /** Body shape hint for the scene; absent means circle. */
+  readonly shape?: 'circle' | 'box' | 'triangle';
+}
+
+export interface Presentation {
+  readonly abilities: readonly AbilityPresentation[];
+  readonly resources: readonly ResourcePresentation[];
+  readonly statuses: readonly StatusPresentation[];
+  readonly heroes: readonly UnitPresentation[];
+  readonly enemies: readonly UnitPresentation[];
+}
+
+export function defaultPresentation(): Presentation {
+  return {
+    abilities: [
+      { effect: 'brace', label: 'Brace', glyph: 'Br', targeting: 'direction', armable: false },
+      { effect: 'vent', label: 'Vent', glyph: 'Vt', targeting: 'direction', armable: true },
+      { effect: 'suppress', label: 'Suppressing Fire', glyph: 'Sf', targeting: 'direction', armable: true },
+      { effect: 'furnace', label: 'Furnace Heart', glyph: 'Fh', targeting: 'instant', armable: true },
+      { effect: 'taunt', label: 'Taunt', glyph: 'Ta', targeting: 'instant', armable: true },
+      { effect: 'mark', label: 'Mark', glyph: 'Mk', targeting: 'unit', armable: false },
+      { effect: 'heal', label: 'Heal', glyph: 'He', targeting: 'instant', armable: true },
+      { effect: 'pull', label: 'Pull', glyph: 'Pu', targeting: 'point', armable: true, intentKind: 'pull' },
+    ],
+    resources: [{ name: 'heat', label: 'Heat', color: '#e8832a' }],
+    statuses: [
+      { id: 'suppressed', label: 'Suppressed', glyph: 'Su', color: '#6aa0ff', harmful: true },
+      { id: 'marked', label: 'Marked', glyph: 'Mk', color: '#e0c030', harmful: true },
+      { id: 'exposed', label: 'Exposed', glyph: 'Ex', color: '#d05050', harmful: true },
+      { id: 'clumped', label: 'Clumped', glyph: 'Cl', color: '#c45fa0', harmful: true },
+      { id: 'taunted', label: 'Taunted', glyph: 'Tn', color: '#c8a050', harmful: true },
+      { id: 'rooted', label: 'Rooted', glyph: 'Rt', color: '#8a7a5a', harmful: true },
+    ],
+    heroes: [
+      { id: 'gunner', label: 'Gunner', color: '#e8832a' },
+      { id: 'tank', label: 'Tank', color: '#3b82c4' },
+      { id: 'ranged', label: 'Ranger', color: '#2fa36b' },
+      { id: 'support', label: 'Support', color: '#c45fa0' },
+    ],
+    enemies: [
+      { id: 'runner', label: 'Runner', color: '#c85a3c', shape: 'triangle' },
+      { id: 'grunt', label: 'Grunt', color: '#b04030' },
+      { id: 'brute', label: 'Brute', color: '#8c2e28', shape: 'box' },
+      { id: 'boss', label: 'Boss', color: '#d02050', shape: 'box' },
+    ],
+  };
+}
+
+/** Stable hue 0..359 from a string. */
+function hueOf(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = (h * 31 + text.charCodeAt(i)) % 360;
+  }
+  return h;
+}
+
+/** `#rrggbb` for an HSL colour (h 0..359, s and l 0..1). */
+function hslHex(h: number, s: number, l: number): string {
+  const a = s * Math.min(l, 1 - l);
+  const channel = (n: number): string => {
+    const k = (n + h / 30) % 12;
+    const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(v * 255)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
+/** A stable `#rrggbb` for an id with no presentation colour. */
+export function hashedColor(id: string): string {
+  return hslHex(hueOf(id), 0.55, 0.55);
+}
+
+/** The aiming mode when an ability has no entry: a point if it has range and an area, a unit if only range, else instant. */
+export function fallbackTargeting(range: number, radius: number): Targeting {
+  if (range > 0 && radius > 0) {
+    return 'point';
+  }
+  return range > 0 ? 'unit' : 'instant';
+}
+
+/** What the shell knows about an ability that has no entry: its perception range and radius. */
+export interface AbilityShape {
+  readonly range: number;
+  readonly radius: number;
+}
+
+export function abilityPresentation(ui: Presentation, effect: string, shape: AbilityShape): AbilityPresentation {
+  return (
+    ui.abilities.find((a) => a.effect === effect) ?? {
+      effect,
+      label: effect,
+      glyph: effect.slice(0, 2),
+      targeting: fallbackTargeting(shape.range, shape.radius),
+      armable: false,
+    }
+  );
+}
+
+/** The `intentKind` an armed post of this ability carries. */
+export function intentKindOf(a: AbilityPresentation): string {
+  return a.intentKind ?? a.effect;
+}
+
+export function resourcePresentation(ui: Presentation, name: string): ResourcePresentation {
+  return ui.resources.find((r) => r.name === name) ?? { name, label: name, color: hashedColor(name) };
+}
+
+export function statusPresentation(ui: Presentation, id: string): StatusPresentation {
+  return (
+    ui.statuses.find((s) => s.id === id) ?? {
+      id,
+      label: id,
+      glyph: id.slice(0, 2),
+      color: hashedColor(id),
+      harmful: true,
+    }
+  );
+}
+
+export function heroPresentation(ui: Presentation, id: string): UnitPresentation {
+  return ui.heroes.find((h) => h.id === id) ?? { id, label: id, color: hashedColor(id) };
+}
+
+export function enemyPresentation(ui: Presentation, id: string): UnitPresentation {
+  return ui.enemies.find((e) => e.id === id) ?? { id, label: id, color: hashedColor(id) };
+}

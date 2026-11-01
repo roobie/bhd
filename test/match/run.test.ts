@@ -75,3 +75,40 @@ describe('the viewer and the runner build the same Match', () => {
     expect(configFromSpec(specFromConfig(cfg))).toEqual(cfg);
   });
 });
+
+describe('humans', () => {
+  it('leaves no bot seat for a human slot, and no bot command comes from its player', () => {
+    const m = buildMatch(spec({ humans: [0, 2] }));
+    expect(m.seats.map((x) => x.slot)).toEqual([1, 3]);
+    const r = runGame(spec({ humans: [0, 2], maxTicks: 900 }));
+    const players = new Set(r.events.flatMap((e) => (e.kind === 'cmd' ? [e.player] : [])));
+    expect(players.has(0)).toBe(false);
+    expect(players.has(2)).toBe(false);
+  });
+
+  it('an empty list is the same game as an absent one', () => {
+    expect(runGame(spec({ humans: [] })).events).toEqual(runGame(spec()).events);
+  });
+
+  it('rejects slots outside 0-3, duplicates and non-integers', () => {
+    for (const humans of [[4], [-1], [1, 1], [0.5]]) {
+      expect(() => buildMatch(spec({ humans }))).toThrow(RangeError);
+    }
+  });
+
+  it('a driven slot takes commands through sim.command like any player', () => {
+    const m = buildMatch(spec({ humans: [0] }));
+    const [hero] = m.perception.heroes;
+    expect(hero).toBeDefined();
+    m.sim.command(0, { kind: 'move', hero: hero?.id ?? 0, x: 10, y: 10 }, m.tick + 3);
+    const seen: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      for (const e of m.step()) {
+        if (e.kind === 'cmd' && e.player === 0) {
+          seen.push(e.tick);
+        }
+      }
+    }
+    expect(seen).toEqual([3]);
+  });
+});

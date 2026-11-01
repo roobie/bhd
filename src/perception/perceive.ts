@@ -93,24 +93,41 @@ function enemyViews(sim: Sim): EnemyView[] {
 function standinAbility(ab: StandinAbilityDef, cooldownLeft: number): AbilityView {
   const range = ab.effect === 'mark' || ab.effect === 'pull' ? ab.range : 0;
   const radius = ab.effect === 'mark' ? 0 : ab.radius;
-  return { slot: ab.slot, effect: ab.effect, ready: cooldownLeft === 0, cooldownLeft, range, radius };
+  return {
+    slot: ab.slot,
+    effect: ab.effect,
+    ready: cooldownLeft === 0,
+    cooldownLeft,
+    cooldownTicks: ticks(ab.cooldown),
+    range,
+    radius,
+  };
 }
 
 function gunnerAbilities(def: GunnerDef, kit: Extract<NonNullable<Entity['kit']>, { kind: 'gunner' }>): AbilityView[] {
   const usable = kit.lockTicks === 0;
-  const make = (slot: number, effect: string, cd: number, range: number): AbilityView => ({
+  const make = (slot: number, effect: string, cd: readonly [number, number], range: number): AbilityView => ({
     slot,
     effect,
-    ready: cd === 0 && usable,
-    cooldownLeft: cd,
+    ready: cd[0] === 0 && usable,
+    cooldownLeft: cd[0],
+    cooldownTicks: ticks(cd[1]),
     range,
     radius: 0,
   });
   return [
-    { slot: 0, effect: 'brace', ready: kit.unbraceTicks === 0, cooldownLeft: kit.unbraceTicks, range: 0, radius: 0 },
-    make(1, 'vent', kit.cdVent, def.vent.range),
-    make(2, 'suppress', kit.cdSuppress, def.suppress.range),
-    make(3, 'furnace', kit.cdFurnace, 0),
+    {
+      slot: 0,
+      effect: 'brace',
+      ready: kit.unbraceTicks === 0,
+      cooldownLeft: kit.unbraceTicks,
+      cooldownTicks: ticks(def.brace.unbraceSeconds),
+      range: 0,
+      radius: 0,
+    },
+    make(1, 'vent', [kit.cdVent, def.vent.cooldown], def.vent.range),
+    make(2, 'suppress', [kit.cdSuppress, def.suppress.cooldown], def.suppress.range),
+    make(3, 'furnace', [kit.cdFurnace, def.furnace.cooldown], 0),
   ];
 }
 
@@ -158,7 +175,9 @@ function heroParts(sim: Sim, e: Readonly<Entity>): HeroParts | undefined {
     return {
       kit: 'gunner',
       role: 'gunner',
-      resources: [{ name: 'heat', frac: heat, band: kit.heatBand }],
+      resources: [
+        { name: 'heat', frac: heat, band: kit.heatBand, marks: [def.heat.pierceAbove, def.heat.overpenAbove, 1] },
+      ],
       abilities: gunnerAbilities(def, kit),
       lineAllies: lineAlliesOf(
         sim,
@@ -225,6 +244,7 @@ function heroViews(sim: Sim, enemies: readonly EnemyView[], memory: PerceptionMe
       dest: e.move.mode === 'point' ? { x: e.move.tx, y: e.move.ty } : undefined,
       target: e.attack.target,
       hold: e.kit.hold,
+      autocast: e.kit.autocast,
       lineAllies: parts.lineAllies,
       ...(parts.gunner === undefined ? {} : { gunner: parts.gunner }),
     };

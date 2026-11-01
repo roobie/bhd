@@ -1,0 +1,4 @@
+/* HUD styles. Owner: w7-hud. The contracts slice leaves this empty; layout tokens live on :root in play.html. */
+#hud {
+  font-family: inherit;
+}

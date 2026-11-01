@@ -19,6 +19,8 @@ export interface ResourceView {
   readonly name: string;
   readonly frac: number;
   readonly band: number;
+  /** Thresholds 0..1, ascending, where the resource changes regime (the Gunner: pierce, overpen, 1). Empty when none. */
+  readonly marks: readonly number[];
 }
 
 export interface AbilityView {
@@ -29,6 +31,8 @@ export interface AbilityView {
   readonly ready: boolean;
   /** Ticks until ready, 0 when ready. */
   readonly cooldownLeft: number;
+  /** The full cooldown in ticks, 0 if the ability has none. `cooldownLeft / cooldownTicks` is the sweep. */
+  readonly cooldownTicks: number;
   /** Cast range from the hero, 0 if none. */
   readonly range: number;
   /** Area radius, 0 if none. */
@@ -93,6 +97,8 @@ export interface HeroView {
   /** Current attack target id, 0 for none. */
   readonly target: number;
   readonly hold: boolean;
+  /** Autocast bitmask: bit `slot` set means that ability autocasts. */
+  readonly autocast: number;
   /**
    * Allies (hero ids, ascending) the hero's overpenetration line would hit now: the segment from its
    * muzzle toward its current target, as long as its effective range (brace included), widened by the
