@@ -10,6 +10,7 @@ import { createMemory } from '../../../src/perception/memory.ts';
 import { perceive } from '../../../src/perception/perceive.ts';
 import type { HeroView, Perception } from '../../../src/perception/types.ts';
 import { Sim } from '../../../src/sim/sim.ts';
+import { TICK_HZ } from '../../../src/sim/time.ts';
 import { rosterGame } from '../../legacy.ts';
 
 const BAD = /NaN|undefined|\?|\{|\}/u;
@@ -249,5 +250,43 @@ describe('help model', () => {
     const m = buildHudModel(input({ game, controls: open }));
     expect(m.bar?.buttons.every((b) => b.icon !== undefined)).toBe(true);
     expect(m.top.help).toBe(true);
+  });
+});
+
+describe('respawn countdown and call wave', () => {
+  const fallen = (ticks: number): Perception => ({
+    ...base,
+    heroes: base.heroes.filter((h) => h.slot !== 1),
+    fallen: [{ id: 99, slot: 1, def: (base.heroes[1] as HeroView).def, respawnTicks: ticks }],
+  });
+
+  it('a downed hero is a dead card that counts down whole seconds from Perception.fallen', () => {
+    const [, card] = buildHudModel(input({ p: fallen(95) })).heroes;
+    expect(card?.dead).toBe(true);
+    expect(card?.respawnSeconds).toBe(Math.ceil(95 / TICK_HZ));
+    expect(card?.label).not.toBe('Hero 2');
+    const [, sooner] = buildHudModel(input({ p: fallen(1) })).heroes;
+    expect(sooner?.respawnSeconds).toBe(1);
+  });
+
+  it('a live hero has no countdown and a slot with no hero at all has none either', () => {
+    expect(buildHudModel(input()).heroes.every((c) => c.respawnSeconds === undefined)).toBe(true);
+    const gone: Perception = { ...base, heroes: base.heroes.filter((h) => h.slot !== 1) };
+    expect(buildHudModel(input({ p: gone })).heroes[1]?.respawnSeconds).toBeUndefined();
+  });
+
+  it('a downed hero card keeps the badge of its driver', () => {
+    const m = buildHudModel(input({ p: fallen(30), driven: [1] }));
+    expect(m.heroes[1]?.badge).toBe('you');
+    expect(m.heroes[0]?.badge).toBe('bot');
+  });
+
+  it('shows the time to the next wave and only offers the call while one is pending', () => {
+    const pending: Perception = { ...base, wave: { ...base.wave, n: 0, total: 5, nextAt: base.tick + 3 * TICK_HZ } };
+    const { top } = buildHudModel(input({ p: pending }));
+    expect(top.nextInSeconds).toBe(3);
+    expect(top.canCallWave).toBe(true);
+    const spent: Perception = { ...base, wave: { ...base.wave, n: 5, total: 5 } };
+    expect(buildHudModel(input({ p: spent })).top.canCallWave).toBe(false);
   });
 });

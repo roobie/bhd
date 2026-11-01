@@ -18,6 +18,7 @@ import type { Mode } from '../../match/run.ts';
 import type { Perception } from '../../perception/types.ts';
 import type { Command } from '../../sim/commands.ts';
 import type { EntityKind, Team } from '../../sim/entities.ts';
+import type { FeedbackSink } from './feedbackSink.ts';
 
 // ---------------------------------------------------------------------------------------------
 // Geometry
@@ -437,6 +438,8 @@ export interface TopBarModel {
   readonly paused: boolean;
   /** The help overlay is open (the "?" button shows pressed). */
   readonly help: boolean;
+  /** A wave is pending, so the call-wave button does something. */
+  readonly canCallWave: boolean;
 }
 
 export interface ResourceBarModel {
@@ -479,6 +482,8 @@ export interface HeroCardModel {
   readonly selected: boolean;
   /** No hero in perception for this slot (dead). */
   readonly dead: boolean;
+  /** Whole seconds until a downed hero respawns; undefined while it is up. */
+  readonly respawnSeconds: number | undefined;
 }
 
 export interface AbilityButtonModel {
@@ -652,6 +657,8 @@ export interface ShellOptions {
   readonly now?: () => number;
   /** Frame scheduler; default `requestAnimationFrame`. Returns a cancel function. */
   readonly schedule?: (frame: (nowMs: number) => void) => () => void;
+  /** Feedback layer (callouts, hitstop, stings); absent means none and visual time is the real clock. */
+  readonly feedback?: FeedbackSink;
 }
 
 export interface ShellHandle {

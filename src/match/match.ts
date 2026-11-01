@@ -12,6 +12,12 @@
 //     not-yet-applied command on the same channel (see `channelOf`); the rest is in `inFlight`;
 //  5. the result is the sim's events followed by `choice` events (tick T).
 // Seats: players 0-3 = lineup slots 0-3, player 4 = the Director (needs `game.master`).
+// Driven slots (a human plays them; `options.driven` and `setDriven`): their seats exist but do not
+// think. Driven-ness is Match state outside the sim; what it changes in the sim goes through
+// ordinary commands (player = slot, applied next tick): a bot-driven hero has every autocast bit on
+// and a human-driven one every bit off (a hold is cleared on each handover), and a bot's `ability`
+// command is dropped while that ability's autocast bit is off (the hero's mask is honoured).
+// A replay of the command log therefore reproduces any handover without knowing about Match.
 // RNG streams: deriveRng(seed, 'bot:<slot>') and deriveRng(seed, 'director'); the sim's is never read.
 // A `choice` is emitted for a decision with >= 2 options when it is first evaluated and whenever its
 // pick changes; a decision absent from a think is forgotten (its next appearance is "first").
@@ -43,6 +49,9 @@ import { ticks } from '../sim/time.ts';
 
 /** The player number of the wave master. */
 const DIRECTOR_PLAYER = 4;
+/** Ability slots whose autocast bit a handover sets. */
+const ABILITY_SLOTS = 4;
+const HERO_SLOTS = 4;
 
 export interface MatchOptions {
   readonly seed: number;
@@ -54,6 +63,8 @@ export interface MatchOptions {
   /** Defaults to `defaultBrains()`. */
   readonly brains?: BrainTable;
   readonly hashEvery?: number;
+  /** Slots a human plays from tick 0 (seats for them stay silent); see `Match.setDriven`. */
+  readonly driven?: readonly number[];
 }
 
 /** What the viewer shows for one decision of a seat. */
@@ -106,6 +117,10 @@ interface Seat extends Pacing {
   readonly bot: Bot;
   readonly prev: Map<string, string>;
   decisions: DecisionView[];
+  /** A human plays this hero: the seat does not think. */
+  driven: boolean;
+  /** The hero still has to be put in the state its driver wants (autocast bits, hold). */
+  sync: boolean;
 }
 
 /** What one think round collects. */
@@ -176,6 +191,32 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+function checkSlots(slots: readonly number[]): readonly number[] {
+  const seen = new Set<number>();
+  for (const slot of slots) {
+    if (!(Number.isInteger(slot) && slot >= 0 && slot < HERO_SLOTS) || seen.has(slot)) {
+      throw new RangeError(`driven slots must be unique integers 0-${HERO_SLOTS - 1}, got ${slot}`);
+    }
+    seen.add(slot);
+  }
+  return slots;
+}
+
+function directorSeat(def: DirectorDef | undefined, seed: number, game: GameConfig): DirectorSeat | undefined {
+  if (def === undefined) {
+    return undefined;
+  }
+  if (game.master === undefined) {
+    throw new RangeError('a Director needs game.master');
+  }
+  return {
+    ...pacing(DIRECTOR_PLAYER, def.thinkSeconds, def.reactionSeconds),
+    def,
+    rng: deriveRng(seed, 'director'),
+    director: createDirector(def),
+  };
+}
+
 function heroIds(sim: Sim): number[] {
   const out: number[] = [];
   for (const e of sim.entities.values()) {
@@ -203,6 +244,7 @@ export class Match {
     const brains = options.brains ?? defaultBrains();
     const heroes = heroIds(this.sim);
     const posts = game.map.heroSpawns;
+    const drivenAtStart = checkSlots(options.driven ?? []);
     for (const s of bots.seats) {
       const hero = heroes[s.slot];
       const def = game.heroes[s.slot];
@@ -226,21 +268,13 @@ export class Match {
         bot: brains[def.kit](info),
         prev: new Map(),
         decisions: [],
+        driven: false,
+        sync: true,
       });
     }
     this.#seats.sort((a, b) => a.slot - b.slot);
-    if (options.director !== undefined) {
-      if (game.master === undefined) {
-        throw new RangeError('a Director needs game.master');
-      }
-      const def = options.director;
-      this.#director = {
-        ...pacing(DIRECTOR_PLAYER, def.thinkSeconds, def.reactionSeconds),
-        def,
-        rng: deriveRng(seed, 'director'),
-        director: createDirector(def),
-      };
-    }
+    this.#startDriven(drivenAtStart);
+    this.#director = directorSeat(options.director, seed, game);
   }
 
   get tick(): number {
@@ -252,14 +286,84 @@ export class Match {
   }
 
   get seats(): readonly SeatView[] {
-    return this.#seats.map((s) => ({
-      slot: s.slot,
-      hero: s.hero,
-      doctrine: s.doctrine.id,
-      post: { ...s.post },
-      leash: s.doctrine.leash,
-      decisions: s.decisions,
-    }));
+    return this.#seats
+      .filter((s) => !s.driven)
+      .map((s) => ({
+        slot: s.slot,
+        hero: s.hero,
+        doctrine: s.doctrine.id,
+        post: { ...s.post },
+        leash: s.doctrine.leash,
+        decisions: s.decisions,
+      }));
+  }
+
+  /** The slots a human plays now, ascending. */
+  get driven(): readonly number[] {
+    return this.#seats.filter((s) => s.driven).map((s) => s.slot);
+  }
+
+  /**
+   * Sets which hero slots a human plays; every other seat is a bot. Slots without a seat are
+   * ignored (nothing to hand over). A seat that changes hands forgets what it was doing (so a
+   * returning bot starts from scratch and nothing is deduplicated against a stale order) and the
+   * hero is put in its new driver's state by commands, once it is alive to take them: bot ->
+   * every autocast bit on, human -> every bit off, hold cleared either way. Bot commands already
+   * queued in the sim (at most the bot's reaction delay) still apply.
+   */
+  setDriven(slots: readonly number[]): void {
+    const wanted = new Set(checkSlots(slots));
+    for (const seat of this.#seats) {
+      const driven = wanted.has(seat.slot);
+      if (driven === seat.driven) {
+        continue;
+      }
+      seat.driven = driven;
+      seat.sync = true;
+      seat.pending = [];
+      seat.prev.clear();
+      seat.decisions = [];
+      this.#syncSeat(seat);
+    }
+  }
+
+  /** Seats a human plays from the start go quiet; every seat gets its hero put in its driver's state. */
+  #startDriven(slots: readonly number[]): void {
+    for (const seat of this.#seats) {
+      seat.driven = slots.includes(seat.slot);
+    }
+    this.#syncSeats();
+  }
+
+  #syncSeats(): void {
+    for (const seat of this.#seats) {
+      this.#syncSeat(seat);
+    }
+  }
+
+  /** Commands that put a live hero in the state its driver expects; a downed hero waits for its respawn. */
+  #syncSeat(seat: Seat): void {
+    const hero = this.sim.entities.get(seat.hero);
+    if (!seat.sync || hero?.kit === undefined || hero.hp <= 0) {
+      return;
+    }
+    seat.sync = false;
+    const at = this.sim.tick + 1;
+    if (hero.kit.hold) {
+      this.sim.command(seat.slot, { kind: 'hold', hero: seat.hero, on: false }, at);
+    }
+    for (let slot = 0; slot < ABILITY_SLOTS; slot++) {
+      const on = !seat.driven;
+      if (((hero.kit.autocast >> slot) & 1) === (on ? 0 : 1)) {
+        this.sim.command(seat.slot, { kind: 'autocast', hero: seat.hero, slot, on }, at);
+      }
+    }
+  }
+
+  /** Whether the hero's autocast mask lets a bot cast `slot`. */
+  #maskAllows(seat: Seat, slot: number): boolean {
+    const kit = this.sim.entities.get(seat.hero)?.kit;
+    return kit === undefined || ((kit.autocast >> slot) & 1) === 1;
   }
 
   get directorStatus(): DirectorStatus | undefined {
@@ -290,8 +394,9 @@ export class Match {
       return events;
     }
     const choices: SimEvent[] = [];
+    this.#syncSeats();
     for (const seat of this.#seats) {
-      if (tick % seat.thinkEvery === 0) {
+      if (!seat.driven && tick % seat.thinkEvery === 0) {
         this.#thinkSeat(seat, tick, choices);
       }
     }
@@ -360,7 +465,11 @@ export class Match {
         picked: pickedLabel(d, picked),
       });
     }
-    this.#submit(seat, pick.option.commands, tick);
+    this.#submit(
+      seat,
+      pick.option.commands.filter((c) => c.kind !== 'ability' || this.#maskAllows(seat, c.slot)),
+      tick,
+    );
     return { id: d.id, options, picked, since: old?.picked === picked ? old.since : tick };
   }
 

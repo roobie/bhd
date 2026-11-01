@@ -94,3 +94,59 @@ it('asks the sink factory for a sink per match, so a restart rebinds it', () => 
   shell.dispose();
   remove();
 });
+
+it('solo: selecting another hero takes it over and hands the previous one back to its bot', () => {
+  if (!hasGl2) {
+    return;
+  }
+  const { canvas, hud, remove } = elements();
+  const shell = mountShell({ canvas, hud }, defaultShellConfig(), { now: () => 0, schedule: () => () => undefined });
+  expect(shell.match().driven).toEqual([0]);
+  shell.dispatch({ kind: 'select', slot: 2 });
+  expect(shell.match().driven).toEqual([2]);
+  expect(shell.controls().selected).toBe(2);
+  shell.dispatch({ kind: 'select', slot: 0 });
+  expect(shell.match().driven).toEqual([0]);
+  shell.dispatch({ kind: 'select', slot: 9 });
+  expect(shell.match().driven).toEqual([0]);
+  shell.dispatch({ kind: 'restart' });
+  expect(shell.match().driven).toEqual([0]);
+  shell.dispose();
+  remove();
+});
+
+it('a feedback sink sees every step and is asked for the visual time', () => {
+  if (!hasGl2) {
+    return;
+  }
+  const { canvas, hud, remove } = elements();
+  let t = 0;
+  let pending: ((ms: number) => void) | undefined;
+  let stepped = 0;
+  let asked = 0;
+  const shell = mountShell({ canvas, hud }, defaultShellConfig(), {
+    now: () => t,
+    schedule: (frame) => {
+      pending = frame;
+      return () => undefined;
+    },
+    feedback: {
+      onStep: () => {
+        stepped += 1;
+      },
+      visualTime: (nowMs) => {
+        asked += 1;
+        return nowMs / 2;
+      },
+    },
+  });
+  for (let i = 0; i < 5; i++) {
+    t += 1000 / 30;
+    pending?.(t);
+  }
+  expect(stepped).toBe(shell.match().tick);
+  expect(stepped).toBeGreaterThan(0);
+  expect(asked).toBeGreaterThan(0);
+  shell.dispose();
+  remove();
+});

@@ -59,10 +59,12 @@ function topBar(input: HudInput): TopBarModel {
     return { def: g.def, label: e.label, color: e.color, count: g.count };
   });
   const pending = p.wave.n < p.wave.total;
+  const nextInSeconds = pending ? secondsBetween(p.tick, p.wave.nextAt) : 0;
   return {
     wave: p.wave.n,
     total: p.wave.total,
-    nextInSeconds: pending ? secondsBetween(p.tick, p.wave.nextAt) : 0,
+    nextInSeconds,
+    canCallWave: nextInSeconds > 0,
     preview,
     previewHidden: preview.length === 0 && pending,
     ancientFrac: clamp01(p.ancient.hpFrac),
@@ -114,20 +116,30 @@ function statusPips(h: HeroView, p: Perception, ui: Presentation, longest: Map<s
   });
 }
 
-function deadCard(slot: number, selected: boolean): HeroCardModel {
+/** Whole seconds shown for a respawn timer: rounded up, so the card never reads 0 while still down. */
+function respawnSecondsOf(ticks: number): number {
+  return Math.max(1, Math.ceil(ticks / TICK_HZ));
+}
+
+/** A downed hero keeps its name and colour (from `p.fallen`) and counts down; a slot with no hero at all is blank. */
+function deadCard(input: HudInput, slot: number): HeroCardModel {
+  const { p, ui, controls, driven } = input;
+  const fallen = p.fallen.find((f) => f.slot === slot);
+  const pres = fallen === undefined ? undefined : heroPresentation(ui, fallen.def);
   return {
     slot,
-    def: '',
-    label: `Hero ${slot + 1}`,
-    color: DEAD_COLOR,
+    def: fallen?.def ?? '',
+    label: pres?.label ?? `Hero ${slot + 1}`,
+    color: pres?.color ?? DEAD_COLOR,
     hpFrac: 0,
     hp: 0,
     maxHp: 0,
     resources: [],
     statuses: [],
-    badge: 'bot',
-    selected,
+    badge: driven.includes(slot) ? 'you' : 'bot',
+    selected: controls.selected === slot,
     dead: true,
+    respawnSeconds: fallen === undefined ? undefined : respawnSecondsOf(fallen.respawnTicks),
   };
 }
 
@@ -139,7 +151,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
     const h = p.heroes.find((x) => x.slot === slot);
     const selected = controls.selected === slot;
     if (h === undefined) {
-      cards.push(deadCard(slot, selected));
+      cards.push(deadCard(input, slot));
       continue;
     }
     const pres = heroPresentation(ui, h.def);
@@ -156,6 +168,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
       badge: driven.includes(slot) ? 'you' : 'bot',
       selected,
       dead: false,
+      respawnSeconds: undefined,
     });
   }
   return cards;

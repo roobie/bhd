@@ -5,7 +5,7 @@
 import type { TemplateResult } from 'lit-html';
 import { html, render as litRender, nothing } from 'lit-html';
 import { styleMap } from 'lit-html/directives/style-map.js';
-import { KEY_HELP, KEY_HOLD, KEY_STOP } from './input.ts';
+import { KEY_CALL_WAVE, KEY_HELP, KEY_HOLD, KEY_STOP } from './input.ts';
 import { armPickerView, intentsListView } from './intentsui.ts';
 import type {
   AbilityBarModel,
@@ -60,6 +60,16 @@ function topBarView(t: TopBarModel, dispatch: Dispatch): TemplateResult {
   return html`<div class="top">
     <span class="wave">Wave ${t.wave}/${t.total}</span>
     ${next}
+    <button
+      class="btn callwave"
+      type="button"
+      ?disabled=${!t.canCallWave}
+      aria-label="Call next wave (${KEY_CALL_WAVE})"
+      title="Call next wave (${KEY_CALL_WAVE})"
+      @click=${() => dispatch({ kind: 'callWave' })}
+    >
+      Call<small class="hotkey">${KEY_CALL_WAVE}</small>
+    </button>
     <span class="preview">${preview}</span>
     <span class="ancient" role="progressbar" aria-label="Ancient hp" aria-valuenow=${Math.round(t.ancientFrac * 100)}>
       <i style=${styleMap({ width: pct(t.ancientFrac) })}></i>
@@ -108,11 +118,12 @@ function cardView(c: HeroCardModel, dispatch: Dispatch): TemplateResult {
     style=${styleMap({ '--c': c.color })}
     @click=${() => dispatch({ kind: 'select', slot: c.slot })}
   >
-    <span class="name"><i class="swatch"></i>${c.label}<small class="badge ${c.badge}">${c.badge}</small></span>
+    <span class="name"><i class="swatch"></i><span class="label">${c.label}</span><small class="badge ${c.badge}">${c.badge}</small></span>
     <span class="hp" role="progressbar" aria-label="${c.label} hp" aria-valuenow=${Math.round(c.hpFrac * 100)}>
       <i style=${styleMap({ width: pct(c.hpFrac) })}></i>
     </span>
     ${c.resources.map(resourceView)}
+    ${c.respawnSeconds === undefined ? nothing : html`<span class="respawn" role="timer" aria-label="Respawns in ${c.respawnSeconds} seconds">${c.respawnSeconds}s</span>`}
     <span class="pips">${c.statuses.map(pipView)}</span>
   </button>`;
 }

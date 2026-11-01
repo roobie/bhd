@@ -95,7 +95,10 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const schedule = options?.schedule ?? defaultSchedule;
   const ui = defaultPresentation();
   const spec = shellSpec(config);
-  const driven = config.drive;
+  const feedback = options?.feedback;
+  // One configured hero is a solo game: selecting another hero takes it over (the others become bots).
+  const solo = config.drive.length === 1;
+  let driven: readonly number[] = config.drive;
 
   let match: Match = buildMatch(spec);
   const makeSink = (m: Match): CommandSink => options?.sink?.(m) ?? localSink(m, INPUT_DELAY_TICKS);
@@ -135,6 +138,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
 
   function restart(): void {
     match = buildMatch(spec);
+    driven = config.drive;
     sink = makeSink(match);
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
@@ -146,6 +150,29 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     hudDirty = true;
   }
 
+  /** The hero slot an action selects: the `select` slot, or a plain click on another live hero. */
+  function selectedSlot(action: UiAction, state: ControlState): number | undefined {
+    if (action.kind === 'select') {
+      return action.slot;
+    }
+    if (action.kind === 'primary' && action.unit !== undefined && state.aim === undefined) {
+      return match.perception.heroes.find((h) => h.id === action.unit)?.slot;
+    }
+    return undefined;
+  }
+
+  /** Solo: choosing a hero makes it the human's and hands the previous one back to its bot. */
+  function takeOver(action: UiAction): void {
+    if (!solo || controls === undefined) {
+      return;
+    }
+    const slot = selectedSlot(action, controls);
+    if (slot !== undefined && Number.isInteger(slot) && slot >= 0 && slot <= 3 && driven[0] !== slot) {
+      driven = [slot];
+      match.setDriven(driven);
+    }
+  }
+
   function dispatch(action: UiAction): void {
     if (disposed || controls === undefined) {
       return;
@@ -154,6 +181,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       restart();
       return;
     }
+    takeOver(action);
     const result = reduce(controls, action, {
       p: match.perception,
       driven,
@@ -168,12 +196,14 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     hudDirty = true;
   }
 
-  function stepOnce(nowMs: number): void {
+  /** `nowMs` is the real clock, `visualMs` the (possibly hitstop-dilated) effect clock. */
+  function stepOnce(nowMs: number, visualMs: number): void {
     const events = match.step();
     prev = curr;
     curr = takeSnapshot(match.sim, prev);
     // Dead entities are gone from `curr`; the predecessor still has them.
-    effects = advanceEffects(effects, events, prev ?? curr, nowMs);
+    effects = advanceEffects(effects, events, prev ?? curr, visualMs);
+    feedback?.onStep(events, prev, nowMs);
     for (const e of events) {
       if (e.kind === 'end') {
         end = { reason: e.reason, wave: e.wave };
@@ -268,11 +298,12 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       if (disposed || controls === undefined || camera === undefined || curr === undefined) {
         return;
       }
-      const nowMs = now();
-      const plan = planFrame(clock, nowMs, { ...DEFAULT_FRAME_OPTIONS, paused: controls.paused });
+      const realMs = now();
+      const nowMs = feedback?.visualTime(realMs) ?? realMs;
+      const plan = planFrame(clock, realMs, { ...DEFAULT_FRAME_OPTIONS, paused: controls.paused });
       ({ clock } = plan);
       for (let i = 0; i < plan.steps && !match.ended && end === undefined; i++) {
-        stepOnce(nowMs);
+        stepOnce(realMs, nowMs);
       }
       const p = match.perception;
       drawn = interpolate(prev, curr, plan.alpha);
