@@ -1,5 +1,6 @@
 // Wave master and Director content. Owner: director (numbers are STARTING values, free to tune).
 // `MasterDef` configures the SIM side (sim/master.ts): budget, costs and the send window.
+// `DirectorDef` configures the bot side (src/director): cadence, tension model and spend mix.
 // Authored in seconds / per-second units.
 
 /** What one unit of an enemy def costs the wave master. Defs not listed cannot be summoned. */
@@ -22,6 +23,32 @@ export interface MasterDef {
   readonly gap: number;
 }
 
+/** Tension accumulator tunables (src/director/tension.ts). */
+interface TensionDef {
+  /** Tension gained per point of team damage taken (hp fraction of the team total). */
+  readonly damageGain: number;
+  /** Tension gained per second per hero below `lowHpFrac`. */
+  readonly lowHpGain: number;
+  readonly lowHpFrac: number;
+  /** Tension gained per leak. */
+  readonly leakGain: number;
+  /** Tension lost per second. */
+  readonly decayPerSecond: number;
+  /** Phase thresholds: build -> peak above `peakAbove`; peak -> relax at/below `relaxBelow`. */
+  readonly peakAbove: number;
+  readonly relaxBelow: number;
+}
+
+export interface DirectorDef {
+  /** The Director's own reaction delay (see Match: command scheduled at decision tick + this). */
+  readonly reactionSeconds: number;
+  /** Think cadence. */
+  readonly thinkSeconds: number;
+  readonly tension: TensionDef;
+  /** Enemy def ids in the order the Director prefers to buy them. */
+  readonly mix: readonly string[];
+}
+
 export function defaultMaster(): MasterDef {
   return {
     budgetPerWave: [8, 10, 12, 14, 18, 18, 20, 22, 24, 28, 28, 30, 32, 34, 40],
@@ -33,5 +60,22 @@ export function defaultMaster(): MasterDef {
     ],
     minIntervalSeconds: 10,
     gap: 0.6,
+  };
+}
+
+export function defaultDirector(): DirectorDef {
+  return {
+    reactionSeconds: 0.5,
+    thinkSeconds: 1,
+    tension: {
+      damageGain: 4,
+      lowHpGain: 0.2,
+      lowHpFrac: 0.4,
+      leakGain: 0.3,
+      decayPerSecond: 0.05,
+      peakAbove: 0.7,
+      relaxBelow: 0.3,
+    },
+    mix: ['grunt', 'runner', 'brute', 'boss'],
   };
 }

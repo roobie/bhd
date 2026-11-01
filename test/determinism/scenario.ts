@@ -1,8 +1,10 @@
 // The shared determinism scenario. Runs unchanged in Node and in browsers (no Node imports), and
 // both compare its result to golden.ts: that is how "browser matches Node" is proven.
 
+import { defaultBotSetup } from '../../src/content/bots.ts';
+import { defaultDirector } from '../../src/content/director.ts';
 import type { GameConfig } from '../../src/content/index.ts';
-import { defaultGame } from '../../src/content/index.ts';
+import { defaultGame, defaultMasterGame } from '../../src/content/index.ts';
 import {
   atan2,
   cos,
@@ -15,6 +17,7 @@ import {
   PI,
   sin,
 } from '../../src/detmath/index.ts';
+import { Match } from '../../src/match/match.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { StateHasher } from '../../src/sim/hash.ts';
@@ -22,6 +25,8 @@ import { Sim } from '../../src/sim/sim.ts';
 
 export const SEED = 0x5e_ed_12_34;
 export const TICKS = 1800;
+/** Ticks of the Match run (default bots and Director, master mode). */
+const MATCH_TICKS = 3000;
 const HASH_EVERY = 37;
 
 export interface Scripted {
@@ -126,7 +131,16 @@ export const SCRIPT: readonly Scripted[] = [
   { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 5, on: true } },
 ];
 
+interface MatchResult {
+  /** `stateHash` of every hash event, in order. */
+  readonly hashes: readonly string[];
+  /** Digest of the full event stream, `choice` events included. */
+  readonly eventDigest: string;
+}
+
 export interface ScenarioResult {
+  /** An all-bot Match with the default bots and Director: any bot or Director change moves it (`npm run golden`). */
+  readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];
   /** Digest of the full event stream (every event, every field). */
@@ -292,9 +306,26 @@ function detmathValues(): string[] {
   return out.map(show);
 }
 
+/** Default brains, doctrines and Director over the default master game, for MATCH_TICKS (or to its end). */
+function runMatch(): MatchResult {
+  const match = new Match({
+    seed: SEED,
+    game: defaultMasterGame(),
+    bots: defaultBotSetup(),
+    director: defaultDirector(),
+    hashEvery: HASH_EVERY,
+  });
+  const events: SimEvent[] = [];
+  while (match.tick < MATCH_TICKS && !match.ended) {
+    events.push(...match.step());
+  }
+  return { hashes: hashesOf(events), eventDigest: digestOf(events) };
+}
+
 export function runScenario(): ScenarioResult {
   const events = runSim(SEED, SCRIPT, TICKS);
   return {
+    match: runMatch(),
     hashes: hashesOf(events),
     eventDigest: digestOf(events),
     detmath: detmathValues(),
