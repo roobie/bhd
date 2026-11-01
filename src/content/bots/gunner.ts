@@ -57,6 +57,7 @@ export function gunnerWeights(): Record<string, number> {
     // ---- gunner.pavise: wait / shield / block. Costs: its cooldown, and the reach lost past the barrier
     // (enemies on her line behind it, weighted by how live the overpen line is, never below reachFloor).
     'gunner.pavise.waitBase': 6,
+    'gunner.pavise.selfBlock': 300,
     'gunner.pavise.shield': 60,
     'gunner.pavise.penitentBonus': 1,
     'gunner.pavise.gap': 0.8,

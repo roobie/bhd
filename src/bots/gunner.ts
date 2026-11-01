@@ -55,6 +55,8 @@ interface Frame {
   readonly lineAllies: number;
   /** Her standing Pavise crosses the line of fire: allies behind it are safe, so are enemies. */
   readonly covered: boolean;
+  /** Her standing Pavise lies between her and the nearest enemy: an overpenetrating line stops dead at it. */
+  readonly clipped: boolean;
   readonly w: (key: string) => number;
 }
 
@@ -203,10 +205,12 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
     me,
     p.enemies.filter((e) => dist(me, e) <= range),
   );
-  const covered =
-    g.pavise !== undefined &&
-    dir !== undefined &&
-    barrierCrossing(g.pavise, me, { x: me.x + dir.ux * range, y: me.y + dir.uy * range }) !== undefined;
+  const crossing =
+    g.pavise === undefined || dir === undefined
+      ? undefined
+      : barrierCrossing(g.pavise, me, { x: me.x + dir.ux * range, y: me.y + dir.uy * range });
+  const covered = crossing !== undefined;
+  const clipped = crossing !== undefined && dir !== undefined && crossing * range < dir.len;
   return {
     ctx,
     mem,
@@ -224,6 +228,7 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
     aim: braced ? (mem.braceAim ?? focus) : focus,
     lineAllies: listed > 0 || me.target !== 0 ? listed : estimateLine(ctx, g, w('gunner.geo.allyRadius')),
     covered,
+    clipped,
     w,
   };
 }
@@ -372,6 +377,9 @@ function fireDecision(f: Frame): Decision | undefined {
   const line =
     f.furnace || f.heat > overpen ? 1 : w('gunner.fire.anticipation') * clamp01((f.heat - pierce) / (overpen - pierce));
   const allyCost = f.covered ? 0 : w('gunner.redline.allyInLine') * f.lineAllies * line * (1 - risk);
+  // Overpenetrating rounds stop dead at a barrier in front of the target: those shots are wasted and
+  // clip her own line (the cause of the Pavise's self-blocks). Holding lets the heat fall back under it.
+  const selfBlock = f.clipped ? w('gunner.pavise.selfBlock') * line : 0;
   const cool = f.furnace ? 0 : w('gunner.fire.overheatAvoid') * clamp01((f.heat - 0.9) / 0.1) * (1 - risk);
   return {
     id: 'gunner.fire',
@@ -379,7 +387,7 @@ function fireDecision(f: Frame): Decision | undefined {
       {
         id: 'fire',
         value,
-        cost: allyCost,
+        cost: allyCost + selfBlock,
         commands: me.hold ? [{ kind: 'hold', hero: me.id, on: false }] : [],
       },
       {

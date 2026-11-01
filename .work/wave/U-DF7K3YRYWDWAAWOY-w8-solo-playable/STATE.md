@@ -45,6 +45,8 @@ Step 3 integration done and green: cross-runtime check, step-1 review fixes, wir
 - 2026-11-02 screenshots at 390x844 and 1280x720 in scratchpad w8-int/: normal game at 90 s, callout, help for Penitent and Psyker, downed countdown; no clipping found
 - 2026-11-02 review fixes: master callWave proven by a node spec (engine-hooks) and the master scenario script (callWave at its tick starts the pending wave); full CI and screenshots in scratchpad w8-fix/
 
+- 2026-11-02 Pavise self-blocks fix (100-game reporter batch, base 57cf014 vs cand, scratchpad pavise-fix): gunner.pavise selfBlocks 39.2 -> 8.1, blocked 40.3 -> 41.3, casts 7.6 -> 8.1, outcome.wave 14.36 -> 14.58, outcome.ancientHp[end] 0.215 -> 0.283
+
 ## Harvest
 - [x] decision: determinism spec is cross-runtime equality at test time, no committed golden (D-V4TA7WE5J4QC24D3, supersedes D-NMSA2YZXKCODLCC2)
 - [x] decision: D-ZMXSYC2O7WQ5PHZO (supersedes D-3F64ED62IYC4SCZH): callWave starts the Director's pending wave in master mode under both throttles; shared canCallWave predicate drives sim and HUD; a blocked swing still costs a full attack period
@@ -59,3 +61,4 @@ Step 3 integration done and green: cross-runtime check, step-1 review fixes, wir
 - 2026-11-02 step 3: step-1 review fixes (downGunner, callWave throttle, block/despawn events, fallen in team totals, intent drop on down, respawn first, damageTaken clamp)
 - 2026-11-02 step 3: feedback mounted in main (overlay layer + camera projection), help gains Resources and Rules, dead cards use respawnText/UI_TEXT, reporter gains combo.payoffs; all-bot evidence and screenshots recorded
 - 2026-11-02 review fixes: H1 master callWave starts the pending wave (shared canCallWave/canSend), M1 HUD reads wave.canCall, L1 gunner.pavise split blocked/selfBlocks, L2 combo.payoffs binary search, L3 browser reference guards, UI callouts merge (x N) and cap at 4
+- 2026-11-02 bot fix: Gunner kept firing overpenetrating rounds into her own Pavise (barrier between her and the nearest enemy stops the line dead); fire now costs 'gunner.pavise.selfBlock' x line liveness while the barrier is in front of the target, so she holds and the heat falls
