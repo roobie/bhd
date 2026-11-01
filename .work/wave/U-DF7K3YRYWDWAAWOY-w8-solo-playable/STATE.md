@@ -35,14 +35,15 @@ Decisions D-IL3SV332IUGDBPFW, D-ENVNBTY5YVUM7NAN, D-4TKP7DQRMLBK6K7W, D-XVHJGA43
 Step 1 (engine prep) running.
 
 ## Next
-- Ask B: Warp build rate (PLAN §3 Q1), Martyrdom nova FF (Q2).
 - Step 2 slices A–G in parallel after step 1 integrates.
 - Step 3 integration, golden regen, 8d reporter review with B.
 
 ## Evidence
 
 ## Harvest
+- [ ] decision: B (2026-11-01): Psyker basic-attack hits add Warp (about +4); Martyrdom nova hits enemies only (PLAN §3 Q1, Q2)
 
 ## Log
 - 2026-11-01 initialized from Opus plan
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 B answered PLAN §3 Q1/Q2 (Warp from basic attacks; nova enemies only), matching the step-1 knob defaults

@@ -1,6 +1,6 @@
 # Plan: wave 8 solo playable
 
-Drafted by an Opus planner from main 1bf0c9a. Lead rulings on its §3: Q3 Pavise blocks enemy hits too (G3 text, D-XVHJGA432FCOHEEU); Q4 hitstop is visual only (accepted); Q5 bots honour the autocast mask (accepted); Q1 Warp build and Q2 nova FF are asked of B, and step 1 ships them as knobs with the planner's defaults (basic attacks +4 Warp; nova does not hit allies).
+Drafted by an Opus planner from main 1bf0c9a. Lead rulings on its §3: Q3 Pavise blocks enemy hits too (G3 text, D-XVHJGA432FCOHEEU); Q4 hitstop is visual only (accepted); Q5 bots honour the autocast mask (accepted); B answered Q1 and Q2: basic attacks add Warp (+4 default) and the nova hits enemies only; both remain content knobs.
 
 ## 1. Steps and slices
 
