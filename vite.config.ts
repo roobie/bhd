@@ -12,6 +12,7 @@ const BROWSER_TESTS = [
   // Wave 7 (the files arrive with their slices): the renderer and the shell.
   'test/client/gl.browser.test.ts',
   'test/client/shell.browser.test.ts',
+  'test/client/shell/hud.browser.test.ts',
 ];
 
 export default defineConfig({
