@@ -1,8 +1,11 @@
 // Canvas 2D drawing for the debug viewer. Read-only over the sim.
 
+import type { Match } from '../match/match.ts';
 import type { Entity } from '../sim/entities.ts';
 import type { Sim } from '../sim/sim.ts';
 import { heroColor, statusLetters, teamColor } from './colors.ts';
+import type { OverlayFlags, RecentMove } from './overlay.ts';
+import { drawOverlays } from './overlay.ts';
 import type { Fit } from './view.ts';
 import { fitWorld, toScreen } from './view.ts';
 
@@ -132,11 +135,18 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Readonly<Entity>, scene: S
   }
 }
 
-export function drawSim(canvas: HTMLCanvasElement, sim: Sim, pal: Palette): void {
+/** What to draw over the map. */
+export interface Layers {
+  readonly flags: OverlayFlags;
+  readonly moves: ReadonlyMap<number, RecentMove>;
+}
+
+export function drawSim(canvas: HTMLCanvasElement, match: Match, pal: Palette, layers: Layers): void {
   const ctx = canvas.getContext('2d');
   if (ctx === null) {
     return;
   }
+  const { sim } = match;
   const { w, h, dpr } = syncSize(canvas);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
@@ -147,5 +157,16 @@ export function drawSim(canvas: HTMLCanvasElement, sim: Sim, pal: Palette): void
   ctx.textAlign = 'center';
   for (const e of sim.entities.values()) {
     drawEntity(ctx, e, { fit, pal, tick: sim.tick });
+  }
+  if (Object.values(layers.flags).some(Boolean)) {
+    drawOverlays({
+      ctx,
+      fit,
+      p: match.perception,
+      seats: match.seats,
+      moves: layers.moves,
+      flags: layers.flags,
+      color: pal.fg,
+    });
   }
 }

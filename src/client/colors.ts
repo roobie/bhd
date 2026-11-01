@@ -27,6 +27,39 @@ export function teamColor(team: Team, def: string): string {
   return team === 1 ? `hsl(${hueOf(def) % 30} 70% ${40 + (hueOf(def) % 20)}%)` : '#888';
 }
 
+export type IntentState = 'posted' | 'reserved' | 'fired';
+
+/** Op state of a live intent: fired, else reserved by at least one hero, else just posted. */
+export function intentState(i: { readonly fired: boolean; readonly reservers: readonly number[] }): IntentState {
+  if (i.fired) {
+    return 'fired';
+  }
+  return i.reservers.length > 0 ? 'reserved' : 'posted';
+}
+
+const INTENT_COLORS: Readonly<Record<IntentState, string>> = {
+  posted: '#3b82c4',
+  reserved: '#e0a020',
+  fired: '#2fa36b',
+};
+
+export function intentColor(state: IntentState): string {
+  return INTENT_COLORS[state];
+}
+
+export const OVERPEN_CLEAR = '#8a8f98';
+export const OVERPEN_BLOCKED = '#e03030';
+
+const PHASE_COLORS: Readonly<Record<string, string>> = {
+  build: '#3b82c4',
+  peak: '#e03030',
+  relax: '#2fa36b',
+};
+
+export function phaseColor(phase: string): string {
+  return PHASE_COLORS[phase] ?? '#888';
+}
+
 const STATUS_LETTERS: Readonly<Record<string, string>> = {
   taunted: 'T',
   marked: 'M',

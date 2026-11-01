@@ -1,6 +1,7 @@
 import { expect, test as it } from 'vitest';
-import { heroColor, statusLetters, teamColor } from '../../src/client/colors.ts';
-import { pushEvents } from '../../src/client/eventlog.ts';
+import { heroColor, intentColor, intentState, statusLetters, teamColor } from '../../src/client/colors.ts';
+import type { LogLine } from '../../src/client/eventlog.ts';
+import { pushEvents, visibleLines } from '../../src/client/eventlog.ts';
 import { fitWorld, toScreen } from '../../src/client/view.ts';
 
 it('fitWorld centres and keeps aspect', () => {
@@ -31,7 +32,7 @@ it('statusLetters lists only active, distinct statuses', () => {
 });
 
 it('pushEvents names entities, filters kinds and keeps the last lines', () => {
-  const log: string[] = [];
+  const log: LogLine[] = [];
   const book = new Map<number, string>();
   pushEvents(
     log,
@@ -44,7 +45,37 @@ it('pushEvents names entities, filters kinds and keeps the last lines', () => {
     ],
     20,
   );
-  expect(log).toEqual(['t4 grunt#2 died (killer none)', 't5 wave 1 start']);
+  expect(log.map((l) => l.text)).toEqual(['t4 grunt#2 died (killer none)', 't5 wave 1 start']);
   pushEvents(log, book, [{ tick: 6, kind: 'end', wave: 1, reason: 'victory' }], 2);
-  expect(log).toEqual(['t5 wave 1 start', 't6 game over: victory (wave 1)']);
+  expect(log.map((l) => l.text)).toEqual(['t5 wave 1 start', 't6 game over: victory (wave 1)']);
+});
+
+it('pushEvents categorises cmd, choice and intent lines and visibleLines filters them', () => {
+  const log: LogLine[] = [];
+  pushEvents(
+    log,
+    new Map(),
+    [
+      { tick: 1, kind: 'cmd', player: 0, cmd: { kind: 'move', hero: 2, x: 1, y: 2 } },
+      { tick: 2, kind: 'choice', hero: 2, decision: 'gunner.stance', options: [{ id: 'a', score: 1 }], picked: 'a' },
+      { tick: 3, kind: 'intent', id: 1, op: 'post', by: 2, intentKind: 'pull' },
+      { tick: 4, kind: 'wave', n: 1, phase: 'start', composition: [] },
+    ],
+    10,
+  );
+  expect(log.map((l) => l.cat)).toEqual(['cmd', 'choice', 'intent', 'other']);
+  const none = { cmd: false, choice: false, intent: false };
+  expect(visibleLines(log, none, 10).map((l) => l.cat)).toEqual(['other']);
+  expect(visibleLines(log, { ...none, cmd: true }, 10).map((l) => l.cat)).toEqual(['cmd', 'other']);
+  expect(visibleLines(log, { cmd: true, choice: true, intent: true }, 2).map((l) => l.cat)).toEqual([
+    'intent',
+    'other',
+  ]);
+});
+
+it('intent state follows fired then reservers; colours differ', () => {
+  expect(intentState({ fired: false, reservers: [] })).toBe('posted');
+  expect(intentState({ fired: false, reservers: [3] })).toBe('reserved');
+  expect(intentState({ fired: true, reservers: [3] })).toBe('fired');
+  expect(new Set([intentColor('posted'), intentColor('reserved'), intentColor('fired')]).size).toBe(3);
 });
