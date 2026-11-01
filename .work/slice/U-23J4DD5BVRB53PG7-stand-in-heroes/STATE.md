@@ -1,5 +1,5 @@
 ---
-phase: initialize
+phase: execute
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude
@@ -24,13 +24,15 @@ Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EW
 
 
 ## Now
-Waiting on sim-contracts.
+Implemented and gated (npm run ci green); awaiting review/merge.
 
 ## Next
-- Start after sim-contracts merges.
+- Review, merge.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+- Tank taunt, ranged mark, support heal pulse + pull (clumped), all PLACEHOLDER, no resources; cooldowns in kit state (hashed); autocast honoured.
+- test/standins/standins.test.ts: 20 tests (taunt vs real enemy aggro, mark 20 -> 17 vs brute, heal caps and skips Ancient, pull then line hit 129 vs 99, cooldown exact to the tick, attack period exact = ticks(1)).
+- Golden regenerated (kit hash gained cooldowns). npm run ci: 325 node + 75 browser tests green.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -39,6 +41,10 @@ Waiting on sim-contracts.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] learning: test/sim/hash.test.ts relabels the Gunner's kit as 'standin', so hashStandin must tolerate a kit without cooldowns (`?.`); better to perturb a real stand-in hero there.
+- [ ] backlog: enemies.ts attack cooldown has the same decrement-then-return off-by-one (period ticks+1) as the old stand-in attack; test/sim/heroes.test.ts also encodes +1 for the Gunner.
+- [ ] backlog: wave 3 may want a dedicated pull intent / bot hook; stand-in autocast pull aims at the nearest hostile.
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 implemented stand-in attack/abilities/tests
