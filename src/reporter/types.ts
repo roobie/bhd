@@ -116,6 +116,8 @@ export interface RunDone {
   readonly end: GameEnd;
   /** Wall time of `runGame` only, ms. Never written into logs. */
   readonly ms: number;
+  /** True when the log already existed and was reused: nothing ran, `ms` is 0. */
+  readonly cached?: boolean;
   /** Digest of the game's `hash` events; equal digests mean the same game. */
   readonly hashDigest: string;
   readonly values: MetricValues;

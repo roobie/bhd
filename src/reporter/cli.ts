@@ -6,13 +6,34 @@ import process from 'node:process';
 import { parseCli, USAGE } from './args.ts';
 import type { Deps } from './commands.ts';
 import { runCommand } from './commands.ts';
+import { DEEP, loadScenario, QUICK } from './scenarios.ts';
+import { resolveSide } from './sides.ts';
+import type { SideSpec } from './types.ts';
 
-// Side resolution and the built-in scenarios are the runner slice's (sides.ts, scenarios.ts);
-// until the lead wires them in, report and run stop here.
+/** The side's command-line form, as `sides.ts` parses it. */
+function sideLabel(spec: SideSpec): string {
+  switch (spec.kind) {
+    case 'worktree':
+      return 'WORKTREE';
+    case 'ref':
+      return spec.ref;
+    case 'overrides':
+      return spec.path;
+    default:
+      return `${spec.ref}:${spec.path}`;
+  }
+}
+
+// `npm run bhd` runs from the package root, which is the repository root.
+const REPO = process.cwd();
+
 const DEPS: Deps = {
-  resolveSide: () => Promise.reject(new Error('resolveSide: not implemented (runner slice)')),
-  loadScenario: () => {
-    throw new Error('loadScenario: not implemented (runner slice)');
+  resolveSide: (spec, side) => Promise.resolve().then(() => resolveSide(side, sideLabel(spec), REPO, REPO)),
+  loadScenario: (deep, file) => {
+    if (file !== undefined) {
+      return loadScenario(file);
+    }
+    return deep ? DEEP : QUICK;
   },
 };
 

@@ -2,7 +2,8 @@
   "$schema": "./node_modules/knip/schema.json",
   "entry": ["index.html!", "src/reporter/worker.ts!"],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
-  // computeMetrics has no importer until the runner worker (slice 2a) calls it; drop this then.
-  "ignore": ["src/reporter/metrics/registry.ts"],
-  "ignoreIssues": { "src/reporter/types.ts": ["exports", "types"] }
+  "ignoreIssues": {
+    "src/reporter/types.ts": ["exports", "types"],
+    "src/reporter/store.ts": ["exports"]
+  }
 }
