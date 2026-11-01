@@ -24,14 +24,15 @@ Out: playable client, multiplayer, non-Gunner hero kits (stand-ins only).
 Determinism rules in DESIGN.md §6.1 are pass/fail. Stand-in heroes are placeholders with no invented resources.
 
 ## Now
-Wave 0 (foundations) done: detmath, sim core, determinism gate, CI + Pages. Wave 1 next, awaiting B's go.
+Waves 0 (foundations) and 1 (content and combat) are done: deterministic sim, lane/waves, combat, Gunner, stand-ins, debug viewer on Pages. Next wave is the bots path (perception, bots, intents), being designed.
 
 ## Next
-- w1 (DESIGN.md §7 Wave 1): create the wave unit; consume B-GLHTOKUXFDT5U2ZC.
-- Waves 1–5: create each wave unit when the previous one closes.
+- Design the bots path wave (DESIGN.md §7 Waves 2-4); decide B-76GY2OACG5EKMQQC first where it blocks.
+- Later waves: create each wave unit when the previous one closes.
 
 ## Evidence
 ## Harvest
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 wave w1-content-combat done; next wave (bots path) being designed
