@@ -29,8 +29,8 @@ describe('hero kit stubs', () => {
     const hits = dmgBy(events, GUNNER);
     expect(hits.length).toBeGreaterThan(1);
     expect(hits.every((e) => e.kind === 'dmg' && e.dst === 6 && e.amount === 7)).toBe(true);
-    // grunt armour 1 takes 8 down to 7. 0.25 s cooldown = 8 ticks: hits are 9 ticks apart (cooldown counts down, then fires).
-    expect(hits[1]?.tick).toBe((hits[0]?.tick ?? 0) + ticks(0.25) + 1);
+    // grunt armour 1 takes 8 down to 7. The Gunner starts at spin 0: 40% fire rate, so 6 ticks / 0.4 = 15 ticks between shots.
+    expect(hits[1]?.tick).toBe((hits[0]?.tick ?? 0) + ticks(0.2) / 0.4);
   });
 
   it('do not attack out of range', () => {

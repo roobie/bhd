@@ -24,13 +24,14 @@ Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EW
 
 
 ## Now
-Waiting on sim-contracts.
+Implemented, `npm run ci` green; awaiting merge/review.
 
 ## Next
 - Start after sim-contracts merges.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+- `npm run ci` green (322 node + 75 browser tests), golden regenerated.
+- test/gunner/gunner.test.ts (17 tests): cadence, spin ramp/drain, heat bands + resource events both directions, pierce >60, overpen line incl. ally (ff) not self, overheat lockout exact ticks, Brace range/arc/root/unbrace, Vent scaling + spin reset, Suppressing Fire, Furnace Heart window + forced vent.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -39,6 +40,11 @@ Waiting on sim-contracts.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] decision: Gunner choices (tunable): heat decays only when no target; braced spin never decays, unbraced idle drain 2 s; unbrace = rooted and no fire 1 s; abilities refused while locked out; overpen skips the Ancient; braced cones aim along brace facing; one `resource` event per band change; heat bleeds linearly to 0 during lockout, spin resets on overheat.
+- [ ] learning: float periods (6/0.4 = 15.000000000000002) need an epsilon on cooldown compares or shots slip a tick.
+- [ ] backlog: autocast mask is stored but not honoured (bots, wave 3).
+- [ ] backlog: entities have no facing; Gunner keeps its own (kit.facing). Perception/bots may want a shared one.
+- [ ] process: scenario.ts hardcodes tick 40 in determinism-node.test.ts; a kit that roots heroes silently breaks the submission-order test.
 
 ## Log
 - 2026-11-01 initialized
