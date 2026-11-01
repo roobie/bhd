@@ -7,7 +7,9 @@
 // - Budget: wave 1's budget is granted at game start, wave n+1's when wave n starts (see
 //   `MasterDef.budgetPerWave`); unspent budget carries over.
 // - `summon {def, count}`: spends `count * cost(def)` into the pending wave (merging with a group of
-//   the same def). Unknown def, over budget or no wave left to buy: a logged no-op.
+//   the same def). Unknown def, a def not unlocked yet for the wave being
+//   bought (`MasterDef.costs[].unlockWave`), over budget or no wave left to buy: a logged no-op (the
+//   `cmd` event is logged, nothing changes).
 // - `send {}`: starts the pending wave now, only if at least `minIntervalSeconds` have passed since
 //   the last wave started, pending is non-empty and waves remain. Otherwise a logged no-op. The next
 //   wave's clock restarts from now (see waves.ts `startWave`).
@@ -69,11 +71,12 @@ export function applySummon(ctx: TickContext, cmd: SummonCommand): void {
   if (master === undefined || def === undefined || ctx.waves.n >= ctx.game.waves.waves.length) {
     return;
   }
-  const cost = def.costs.find((c) => c.def === cmd.def)?.cost;
-  if (cost === undefined || cost * cmd.count > master.budget) {
+  const entry = def.costs.find((c) => c.def === cmd.def);
+  // The wave being bought is the next one to start: ctx.waves.n + 1.
+  if (entry === undefined || (entry.unlockWave ?? 1) > ctx.waves.n + 1 || entry.cost * cmd.count > master.budget) {
     return;
   }
-  master.budget -= cost * cmd.count;
+  master.budget -= entry.cost * cmd.count;
   const group = master.pending.find((g) => g.def === cmd.def);
   if (group === undefined) {
     master.pending.push({ def: cmd.def, count: cmd.count });
