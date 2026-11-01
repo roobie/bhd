@@ -50,15 +50,16 @@ function hero(sim: Sim, id: number): NonNullable<ReturnType<Sim['entities']['get
 describe('heal', () => {
   it('restores hp, caps at maxHp, emits heal with the amount actually healed', () => {
     const { sim, events, ctx } = rig();
-    const tank = hero(sim, TANK);
-    tank.hp = 850;
-    expect(heal(ctx, { src: 5, dst: TANK, amount: 30, tags: [] })).toBe(30);
-    expect(heal(ctx, { src: 5, dst: TANK, amount: 100, tags: [] })).toBe(20);
-    expect(tank.hp).toBe(tank.maxHp);
-    expect(heal(ctx, { src: 5, dst: TANK, amount: 10, tags: [] })).toBe(0);
+    // The gunner, not the Penitent (heals on him are scaled by his kit).
+    const target = hero(sim, GUNNER);
+    target.hp = target.maxHp - 50;
+    expect(heal(ctx, { src: 5, dst: GUNNER, amount: 30, tags: [] })).toBe(30);
+    expect(heal(ctx, { src: 5, dst: GUNNER, amount: 100, tags: [] })).toBe(20);
+    expect(target.hp).toBe(target.maxHp);
+    expect(heal(ctx, { src: 5, dst: GUNNER, amount: 10, tags: [] })).toBe(0);
     expect(events).toEqual([
-      { tick: 10, kind: 'heal', src: 5, dst: TANK, amount: 30 },
-      { tick: 10, kind: 'heal', src: 5, dst: TANK, amount: 20 },
+      { tick: 10, kind: 'heal', src: 5, dst: GUNNER, amount: 30 },
+      { tick: 10, kind: 'heal', src: 5, dst: GUNNER, amount: 20 },
     ]);
   });
 
