@@ -7,6 +7,7 @@ const BROWSER_TESTS = [
   'test/detmath-rng.test.ts',
   'test/detmath-trig.test.ts',
   'test/client/viewer.browser.test.ts',
+  'test/client/replay.browser.test.ts',
 ];
 
 export default defineConfig({

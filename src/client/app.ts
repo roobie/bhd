@@ -1,12 +1,14 @@
 // Debug viewer app: read-only. Runs a live Sim, steps it from requestAnimationFrame at TICK_HZ x
 // speed, draws it, and shows a HUD. Sends no commands. NOT the game client (wave 7).
 
-import { html, render } from 'lit-html';
+import { html, nothing, render } from 'lit-html';
 import type { Match } from '../match/match.ts';
+import { buildMatch as buildSpecMatch } from '../match/run.ts';
 import { TICK_HZ } from '../sim/time.ts';
 import type { Mode, ViewerConfig } from './config.ts';
 import {
   DOCTRINE_IDS,
+  liveConfig,
   MODES,
   parseHash,
   parseMode,
@@ -24,7 +26,9 @@ import type { OverlayKey, RecentMove } from './overlay.ts';
 import { allOverlays, OVERLAY_KEYS, OVERLAY_LABELS } from './overlay.ts';
 import { pushSample } from './panelmath.ts';
 import { botPanel, directorPanel } from './panels.ts';
-import { buildMatch } from './setup.ts';
+import type { ReplayState } from './replay.ts';
+import { bannerOf, fastForwardTarget, loadReplay, recordLive, restartReplay } from './replay.ts';
+import { buildMatch, configFromSpec } from './setup.ts';
 
 const SPEEDS = [0.5, 1, 2, 4, 8] as const;
 /** Log lines kept per category, and lines shown after filtering. */
@@ -53,6 +57,9 @@ export function mount(root: HTMLElement): () => void {
   let acc = 0;
   let last: number | undefined;
   let endText: string | undefined;
+  /** Set when the URL carries `log=`: the game is rebuilt from the log and verified against it. */
+  let replay: ReplayState | undefined;
+  let replayLoad = 0;
   let raf = 0;
   let palette = readPalette(root);
   const scheme = globalThis.matchMedia('(prefers-color-scheme: dark)');
@@ -63,6 +70,9 @@ export function mount(root: HTMLElement): () => void {
 
   function stepOnce(): void {
     const events = match.step();
+    if (replay?.kind === 'ready') {
+      recordLive(replay, events);
+    }
     pushEvents(log, names, events, LOG_KEPT);
     for (const e of events) {
       if (e.kind === 'end') {
@@ -79,7 +89,11 @@ export function mount(root: HTMLElement): () => void {
   }
 
   function reset(): void {
-    match = buildMatch(cfg);
+    const ready = replay?.kind === 'ready' ? replay : undefined;
+    if (ready) {
+      restartReplay(ready);
+    }
+    match = ready ? buildSpecMatch(ready.spec) : buildMatch(cfg);
     names = new Map();
     log = [];
     moves = new Map();
@@ -89,18 +103,69 @@ export function mount(root: HTMLElement): () => void {
     acc = 0;
     // Setup events (spawns) are returned by the first step; run it so names are known.
     stepOnce();
+    if (ready) {
+      fastForward(fastForwardTarget(cfg.tick));
+    } else if (replay?.kind === 'loading') {
+      playing = false;
+    }
+  }
+
+  /** Steps to `target` without drawing, then pauses there (a replay link with a tick). */
+  function fastForward(target: number): void {
+    if (target === 0) {
+      return;
+    }
+    while (match.tick < target && endText === undefined) {
+      stepOnce();
+    }
+    playing = false;
+  }
+
+  /** Fetches the log of a replay link, then restarts the game from its header. */
+  async function startReplay(url: string): Promise<void> {
+    replayLoad += 1;
+    const id = replayLoad;
+    replay = { kind: 'loading' };
+    reset();
+    try {
+      const loaded = await loadReplay(url);
+      if (id !== replayLoad) {
+        return;
+      }
+      cfg = { ...configFromSpec(loaded.spec), log: url, ...(cfg.tick === undefined ? {} : { tick: cfg.tick }) };
+      replay = loaded;
+      reset();
+    } catch (error) {
+      if (id === replayLoad) {
+        replay = { kind: 'failed', message: error instanceof Error ? error.message : String(error) };
+        reset();
+      }
+    }
+  }
+
+  /** Applies a hash change or the first load: a replay link starts a replay, anything else a live game. */
+  function load(next: ViewerConfig): void {
+    cfg = next;
+    replayLoad += 1;
+    if (next.log === undefined) {
+      replay = undefined;
+      reset();
+    } else {
+      startReplay(next.log).catch(() => undefined);
+    }
   }
 
   /** Applies a changed config: share it in the URL hash, then restart the game. */
   function apply(next: ViewerConfig): void {
-    cfg = next;
+    cfg = liveConfig(next);
+    replay = undefined;
+    replayLoad += 1;
     globalThis.history.replaceState(null, '', serialiseHash(cfg));
     reset();
   }
 
   const onHashChange = (): void => {
-    cfg = parseHash(globalThis.location.hash);
-    reset();
+    load(parseHash(globalThis.location.hash));
   };
   globalThis.addEventListener('hashchange', onHashChange);
 
@@ -189,12 +254,21 @@ export function mount(root: HTMLElement): () => void {
       </select></label>`;
   }
 
+  function replayBanner() {
+    if (replay === undefined) {
+      return nothing;
+    }
+    const b = bannerOf(replay);
+    return html`<p class="replay ${b.tone}" role="status">${b.text}</p>`;
+  }
+
   function view() {
     const { sim } = match;
     const result = endText ?? 'running';
     return html`
       <h1>BHD debug viewer</h1>
       <p class="note">debug viewer — not the game client (wave 7). Read-only: bots play, you watch.</p>
+      ${replayBanner()}
       <div class="controls">
         <button type="button" @click=${togglePlay}>${playing ? 'Pause' : 'Play'}</button>
         <button type="button" @click=${stepButton}>Step</button>
@@ -252,7 +326,7 @@ export function mount(root: HTMLElement): () => void {
     raf = requestAnimationFrame(frame);
   }
 
-  reset();
+  load(cfg);
   raf = requestAnimationFrame(frame);
   return () => {
     cancelAnimationFrame(raf);

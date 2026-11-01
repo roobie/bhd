@@ -41,6 +41,23 @@ it('inputs are validated', () => {
   expect(parseMode('x')).toBeUndefined();
 });
 
+it('log and tick round-trip through the hash, and the link form is readable', () => {
+  const c = { ...defaultConfig(), seed: 9, log: '/__bhd/log', tick: 1234 };
+  expect(parseHash(serialiseHash(c))).toEqual(c);
+  expect(serialiseHash({ ...defaultConfig(), log: '/__bhd/log', tick: 7 })).toContain('&log=/__bhd/log&tick=7');
+  const remote = { ...defaultConfig(), log: 'https://example.test/a/b.ndjson?x=1&y=2' };
+  expect(parseHash(serialiseHash(remote))).toEqual(remote);
+  expect(parseHash(serialiseHash(defaultConfig())).log).toBeUndefined();
+});
+
+it('a bad log or tick is dropped; tick needs a log', () => {
+  expect(parseHash('#log=javascript:alert(1)&tick=5')).toEqual(defaultConfig());
+  expect(parseHash('#log=&tick=5')).toEqual(defaultConfig());
+  expect(parseHash('#tick=5')).toEqual(defaultConfig());
+  expect(parseHash('#log=/x&tick=-3')).toEqual({ ...defaultConfig(), log: '/x' });
+  expect(parseHash('#log=/x&tick=1.5')).toEqual({ ...defaultConfig(), log: '/x' });
+});
+
 it('every mode builds a Match that steps', () => {
   for (const mode of ['director', 'schedule'] as const) {
     const m = buildMatch({ ...defaultConfig(), mode });
