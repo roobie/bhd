@@ -89,6 +89,7 @@ describe('shot effects', () => {
         lastPost: undefined,
       },
       paused: false,
+      help: false,
       hint: undefined,
     };
     const dur = shot?.durationMs ?? 100;
