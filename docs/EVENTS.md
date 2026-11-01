@@ -30,7 +30,7 @@ a field says so. Hero and enemy `def` strings are content ids.
 | `intent` | `id`, `op`, `by`, `intentKind` | Intents board lifecycle. `op` is `post`\|`reserve`\|`fire`\|`fulfil`\|`expire`\|`cancel`; `by` is the hero the op concerns. |
 | `choice` | `hero`, `decision`, `options[{id,score}]`, `picked` | A bot decision between 2 or more options, emitted when first evaluated and whenever its pick changes. `options` are in the decision's fixed order; `picked` is one of their ids. Ids are the options' labels (`Option.label`, default the id): options that share a label (one per target) are one entry with the best score, so the log holds a category (`mark`), not an entity id. |
 
-`combo` events arrive with the combo waves (6 and 8). Pavise blocks, Pain amounts and backlash rolls have no event of their own yet; see the assumptions in `docs/METRICS.md`.
+`combo` events arrive with the combo waves (6 and 8). Planned at integration: `block {src, dst?, prop}` (a Pavise stopped a hit) and `despawn {id}` (a prop expired). Pain amounts and backlash rolls have no event of their own yet; see the assumptions in `docs/METRICS.md`.
 
 ## Log format (`bhd-log` v1)
 

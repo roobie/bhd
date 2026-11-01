@@ -23,7 +23,7 @@ the target's remaining hp, so overkill never counts.
 | 13 | `ult.timing` | at each hero's first ultimate cast: wave, team hp fraction, enemies alive; plus the cast count. Ultimate slot: kit table (`gunner` 3), else the hero's highest ability slot | `<hero>:wave`, `:teamHp`, `:enemies`, `:casts` | `<hero>.ult` | skip |
 
 | 14 | `hero.downtime`, `hero.respawns` | ticks a hero spent down (an unfinished down counts to the game end), and its `respawn` events | `<hero>` | `<hero>` | zero |
-| 15 | `gunner.pavise` | `casts`: `ability` events of the gunner in slot 2; `blocks`: `dmg` events tagged `blocked` | `casts`, `blocks` | `gunner.pavise` | zero |
+| 15 | `gunner.pavise` | `casts`: `ability` events of the gunner in slot 2; `blocks`: `block` events | `casts`, `blocks` | `gunner.pavise` | zero |
 | 16 | `penitent.pain` | `banked`: Pain estimated from damage taken (see below); `spent`: the Martyrdom casts' `value`, else the biggest nova hit of the burst / `novaPainMult` | `banked`, `spent` | `penitent.pain` | zero |
 | 17 | `penitent.nova` | clamped `splash` damage from the penitent, to enemies and to allies | `enemies`, `allies` | `penitent.nova` | zero |
 | 18 | `psyker.warp.high` | fraction of psyker alive time with its `warp` resource band at or above `backlash.freeBelow` (50) | `high` | `psyker.warp` | zero |
@@ -57,7 +57,6 @@ once the kits land:
   `value` on the Martyrdom cast would replace the estimate.
 - **Nova** hits are `splash` `dmg` events from the penitent.
 - **Warp** `resource` events carry the band's lower bound in Warp points.
-- **Pavise blocks** have no event yet. The metric reads `dmg` events tagged `blocked`; until the kit
-  emits something like that it reads 0.
+- **Pavise blocks** read `{kind: 'block', src, dst?, prop}` events (src the attacker, dst the protected target, prop the barrier id), which the lead adds at integration; `blocks` reads 0 until then. `despawn {id}` (a prop expiring) is not read by any metric.
 - **Backlash** with no target in range emits no `dmg`, so it is not counted.
 - Metric 9 (`combo.rate`) stays on the intent proxy.
