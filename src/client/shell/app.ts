@@ -297,7 +297,15 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
         hudTick = match.tick;
         hudDirty = false;
         hud.render(
-          buildHudModel({ p, ui, controls, driven, end, maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds }),
+          buildHudModel({
+            p,
+            ui,
+            controls,
+            driven,
+            end,
+            maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds,
+            game: match.sim.game,
+          }),
         );
       }
     };

@@ -32,6 +32,7 @@ it('hud renders cards and ability buttons, and a click dispatches', () => {
         lastPost: undefined,
       },
       paused: false,
+      help: false,
       hint: undefined,
     },
     driven: [0],

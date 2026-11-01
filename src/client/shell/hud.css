@@ -219,27 +219,37 @@
 
 .hud-root .pips {
   display: flex;
-  gap: 3px;
-  min-height: 16px;
+  gap: 4px;
+  min-height: 22px;
+  padding: 1px;
 }
 
 .hud-root .pip {
   position: relative;
-  width: 16px;
-  height: 16px;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
   border-radius: 50%;
-  background: conic-gradient(var(--c) var(--ring), #00000066 0);
+  background: conic-gradient(var(--c) var(--ring, 360deg), #00000066 0);
+  /* Harmful (red) and helpful (green) read at a glance from the outline */
+  box-shadow: 0 0 0 1.5px var(--bad);
 }
 
-.hud-root .pip em {
+.hud-root .pip.boon {
+  box-shadow: 0 0 0 1.5px var(--good);
+}
+
+.hud-root .pip .icon {
   position: absolute;
-  inset: 2px;
-  display: grid;
-  place-items: center;
+  inset: 3px;
+  width: 16px;
+  height: 16px;
+  padding: 1px;
+  box-sizing: border-box;
   border-radius: 50%;
   background: #1a1a1e;
-  font-size: 7px;
-  font-style: normal;
+  fill: var(--c);
 }
 
 /* Ability bar: above the cards in portrait */
@@ -284,6 +294,7 @@
 }
 
 .hud-root .ability.ready {
+  color: #fff;
   border-color: var(--good);
   box-shadow: 0 0 8px #5cb85c80;
 }
@@ -301,6 +312,23 @@
 .hud-root .glyph {
   font-size: 17px;
   font-weight: 600;
+}
+
+.hud-root .pip .glyph {
+  position: absolute;
+  inset: 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #1a1a1e;
+  font-size: 7px;
+  font-weight: 400;
+}
+
+.hud-root .ability .icon {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
 }
 
 .hud-root .key {
@@ -374,6 +402,131 @@
   margin: 0 0 8px;
 }
 
+/* Help overlay: over the free map area, scrolls when it does not fit */
+.hud-root .help {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--top-h) + 4px);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  max-height: calc(100% - var(--safe-top) - var(--top-h) - var(--safe-bottom) - var(--cards-h) - var(--bar-h) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  box-sizing: border-box;
+  padding: 8px 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgb(14 14 18 / 0.94);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.hud-root .help header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hud-root .help h2 {
+  margin: 4px 0 6px;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.hud-root .helpcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.hud-root .helpcard {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  column-gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff0d;
+}
+
+.hud-root .helpcard .ico {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+}
+
+.hud-root .helpcard .icon {
+  width: 30px;
+  height: 30px;
+  fill: var(--fg);
+}
+
+.hud-root .helpcard h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.hud-root kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.hud-root .helpcard ul {
+  margin: 2px 0;
+  padding: 0;
+  list-style: none;
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.hud-root .helpcard p {
+  margin: 2px 0 0;
+}
+
+.hud-root .legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-root .helpstatus {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  column-gap: 8px;
+  align-items: start;
+}
+
+.hud-root .helpstatus .pip {
+  margin: 2px;
+}
+
+.hud-root .helpstatus p {
+  margin: 0;
+  opacity: 0.9;
+}
+
+.hud-root .helpstatus small {
+  opacity: 0.6;
+}
+
+.hud-root .helpstatus.harmful small {
+  color: var(--bad);
+}
+
+.hud-root .helpstatus.boon small {
+  color: var(--good);
+}
+
 /* Landscape: hero cards in a left column, the ability cluster bottom-right */
 @media (orientation: landscape) {
   .hud-root .cards {
@@ -398,5 +551,10 @@
 
   .hud-root .picker {
     bottom: calc(var(--safe-bottom) + var(--bar-h) + 8px);
+  }
+
+  .hud-root .help {
+    left: calc(var(--safe-left) + var(--col-w) + 4px);
+    max-height: calc(100% - var(--safe-top) - var(--top-h) - var(--safe-bottom) - var(--bar-h) - 8px);
   }
 }

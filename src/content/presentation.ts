@@ -4,6 +4,9 @@
 // `effect`, resources by `name`, statuses by `id` and units by def id; a missing entry is not an
 // error: every lookup falls back (label = id, hashed colour, targeting from range and radius), so
 // a new hero is playable before it has an entry. Shell code must not switch on any of these ids.
+// Icons are path data (icons.ts); an entry without one renders its glyph text.
+
+import { ABILITY_ICONS, STATUS_ICONS } from './icons.ts';
 
 /** How an ability is aimed. `instant` casts on press; the others need a world point or a unit. */
 export type Targeting = 'instant' | 'direction' | 'point' | 'unit';
@@ -14,6 +17,8 @@ export interface AbilityPresentation {
   readonly label: string;
   /** One or two characters for buttons and markers. */
   readonly glyph: string;
+  /** SVG path `d` on a 24x24 viewBox; absent means the glyph text is shown. */
+  readonly icon?: string | undefined;
   readonly targeting: Targeting;
   /** Can be posted as an `intent post` (a timed trigger). */
   readonly armable: boolean;
@@ -34,6 +39,8 @@ export interface StatusPresentation {
   readonly id: string;
   readonly label: string;
   readonly glyph: string;
+  /** SVG path `d` on a 24x24 viewBox; absent means the glyph text is shown. */
+  readonly icon?: string | undefined;
   /** `#rrggbb`. */
   readonly color: string;
   /** A debuff on the unit carrying it (on an enemy, good for the team). */
@@ -61,23 +68,59 @@ export interface Presentation {
 export function defaultPresentation(): Presentation {
   return {
     abilities: [
-      { effect: 'brace', label: 'Brace', glyph: 'Br', targeting: 'direction', armable: false },
-      { effect: 'vent', label: 'Vent', glyph: 'Vt', targeting: 'direction', armable: true },
-      { effect: 'suppress', label: 'Suppressing Fire', glyph: 'Sf', targeting: 'direction', armable: true },
-      { effect: 'furnace', label: 'Furnace Heart', glyph: 'Fh', targeting: 'instant', armable: true },
-      { effect: 'taunt', label: 'Taunt', glyph: 'Ta', targeting: 'instant', armable: true },
-      { effect: 'mark', label: 'Mark', glyph: 'Mk', targeting: 'unit', armable: false },
-      { effect: 'heal', label: 'Heal', glyph: 'He', targeting: 'instant', armable: true },
-      { effect: 'pull', label: 'Pull', glyph: 'Pu', targeting: 'point', armable: true, intentKind: 'pull' },
+      {
+        effect: 'brace',
+        label: 'Brace',
+        glyph: 'Br',
+        icon: ABILITY_ICONS.brace,
+        targeting: 'direction',
+        armable: false,
+      },
+      { effect: 'vent', label: 'Vent', glyph: 'Vt', icon: ABILITY_ICONS.vent, targeting: 'direction', armable: true },
+      {
+        effect: 'suppress',
+        label: 'Suppressing Fire',
+        glyph: 'Sf',
+        icon: ABILITY_ICONS.suppress,
+        targeting: 'direction',
+        armable: true,
+      },
+      {
+        effect: 'furnace',
+        label: 'Furnace Heart',
+        glyph: 'Fh',
+        icon: ABILITY_ICONS.furnace,
+        targeting: 'instant',
+        armable: true,
+      },
+      { effect: 'taunt', label: 'Taunt', glyph: 'Ta', icon: ABILITY_ICONS.taunt, targeting: 'instant', armable: true },
+      { effect: 'mark', label: 'Mark', glyph: 'Mk', icon: ABILITY_ICONS.mark, targeting: 'unit', armable: false },
+      { effect: 'heal', label: 'Heal', glyph: 'He', icon: ABILITY_ICONS.heal, targeting: 'instant', armable: true },
+      {
+        effect: 'pull',
+        label: 'Pull',
+        glyph: 'Pu',
+        icon: ABILITY_ICONS.pull,
+        targeting: 'point',
+        armable: true,
+        intentKind: 'pull',
+      },
     ],
     resources: [{ name: 'heat', label: 'Heat', color: '#e8832a' }],
     statuses: [
-      { id: 'suppressed', label: 'Suppressed', glyph: 'Su', color: '#6aa0ff', harmful: true },
-      { id: 'marked', label: 'Marked', glyph: 'Mk', color: '#e0c030', harmful: true },
-      { id: 'exposed', label: 'Exposed', glyph: 'Ex', color: '#d05050', harmful: true },
-      { id: 'clumped', label: 'Clumped', glyph: 'Cl', color: '#c45fa0', harmful: true },
-      { id: 'taunted', label: 'Taunted', glyph: 'Tn', color: '#c8a050', harmful: true },
-      { id: 'rooted', label: 'Rooted', glyph: 'Rt', color: '#8a7a5a', harmful: true },
+      {
+        id: 'suppressed',
+        label: 'Suppressed',
+        glyph: 'Su',
+        icon: STATUS_ICONS.suppressed,
+        color: '#6aa0ff',
+        harmful: true,
+      },
+      { id: 'marked', label: 'Marked', glyph: 'Mk', icon: STATUS_ICONS.marked, color: '#e0c030', harmful: true },
+      { id: 'exposed', label: 'Exposed', glyph: 'Ex', icon: STATUS_ICONS.exposed, color: '#d05050', harmful: true },
+      { id: 'clumped', label: 'Clumped', glyph: 'Cl', icon: STATUS_ICONS.clumped, color: '#c45fa0', harmful: true },
+      { id: 'taunted', label: 'Taunted', glyph: 'Tn', icon: STATUS_ICONS.taunted, color: '#c8a050', harmful: true },
+      { id: 'rooted', label: 'Rooted', glyph: 'Rt', icon: STATUS_ICONS.rooted, color: '#8a7a5a', harmful: true },
     ],
     heroes: [
       { id: 'gunner', label: 'Gunner', color: '#e8832a' },

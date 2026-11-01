@@ -19,7 +19,15 @@ function withSelected(state: ControlState, slot: number): ControlState {
 
 /** Idle controls with hero slot `selected` selected. */
 export function initialControls(selected: number): ControlState {
-  return { selected, aim: undefined, cursor: undefined, arming: initialArming(), paused: false, hint: undefined };
+  return {
+    selected,
+    aim: undefined,
+    cursor: undefined,
+    arming: initialArming(),
+    paused: false,
+    help: false,
+    hint: undefined,
+  };
 }
 
 function withHint(state: ControlState, ctx: ControlContext, text: string): ControlState {
@@ -158,10 +166,17 @@ function reduceHero(state: ControlState, hero: HeroView, action: UiAction, ctx: 
  * `abilityPresentation(...).targeting`; `primary`/`castAt` confirm an aim (`direction`/`point`: x, y;
  * `unit`: `target` when a unit was picked, else none); `autocast` emits `autocast {on: !current}`
  * using `HeroView.autocast`; `stop`; `hold {on: !current}`; `cancel` returns to idle; `pause`
- * toggles `state.paused`; `restart` is ignored; `hover` stores the cursor. Every emitted command
+ * toggles `state.paused`; `help` toggles `state.help` (Esc closes it before cancelling anything else; it never pauses); `restart` is ignored; `hover` stores the cursor. Every emitted command
  * passes `isValidCommand`. Never switches on hero, kit or effect names.
  */
 export function reduce(state: ControlState, action: UiAction, ctx: ControlContext): ReduceResult {
+  if (action.kind === 'help') {
+    return { state: { ...state, help: !state.help }, commands: [] };
+  }
+  if (action.kind === 'cancel' && state.help) {
+    // Esc closes help first and leaves any aim or arming alone.
+    return { state: { ...state, help: false }, commands: [] };
+  }
   const step = reduceArming(state.arming, action, ctx, state.selected);
   let next: ControlState = { ...state, arming: step.arming };
   if (step.clearAim === true) {
