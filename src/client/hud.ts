@@ -35,7 +35,7 @@ export function gunnerHud(sim: Sim) {
     if (e.kind !== 'hero' || kit?.kind !== 'gunner') {
       continue;
     }
-    const pct = Math.round(kit.heat * 100);
+    const pct = Math.round(kit.heat / 100) // heat is basis points (0..10000);
     const def = sim.game.heroes.find((h) => h.kit === 'gunner');
     const pierce = Math.round((def?.kit === 'gunner' ? def.heat.pierceAbove : 0.6) * 100);
     const flags = [kit.lockTicks > 0 ? 'overheated' : '', kit.furnaceTicks > 0 ? 'furnace' : ''].filter(Boolean);
