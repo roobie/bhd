@@ -1,8 +1,8 @@
-// Browser entry. Placeholder shell until the client waves (DESIGN.md §7, wave 7).
+// Browser entry: the wave-0..6 debug viewer (see app.ts). The real client arrives in wave 7.
 
-import { html, render } from 'lit-html';
+import { mount } from './app.ts';
 
 const app = document.querySelector<HTMLElement>('#app');
 if (app) {
-  render(html`<h1>BHD</h1><p>Bjorn's Hero Defense: nothing playable yet.</p>`, app);
+  mount(app);
 }
