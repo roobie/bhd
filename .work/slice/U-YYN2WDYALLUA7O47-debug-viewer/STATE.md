@@ -1,5 +1,5 @@
 ---
-phase: execute
+phase: finalize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude (agent)
@@ -24,7 +24,7 @@ Out: sending commands, any sim or content change, the real client, new dependenc
 Sim is fixed-tick (TICK_HZ 30), stepped here from requestAnimationFrame with an accumulator. Viewer only reads `sim.entities`, `sim.waves`, `sim.game`, `kit`. Pages deploy runs `npm run build` (tsc + vite build).
 
 ## Now
-Done; all criteria hold. Waiting for the main agent to merge.
+Opus review fixes applied; all criteria hold. Waiting for merge and close.
 
 ## Next
 - Main agent merges the branch; finalize the slice.
@@ -33,7 +33,7 @@ Done; all criteria hold. Waiting for the main agent to merge.
 - `npm run ci`: biome ci clean, tsc clean, knip clean, node 23 files / 356 tests, browser 12 files / 78 tests (chromium, firefox, webkit) all passed.
 - `npm run build`: dist/index.html + one 41.9 kB JS bundle.
 - test/client/helpers.test.ts (node): fitWorld, toScreen, colours, statusLetters, pushEvents.
-- test/client/viewer.browser.test.ts (browser x3): canvas mounts, non-blank pixels, #tick increases, label and Gunner heat HUD present.
+- test/client/viewer.browser.test.ts (browser x3): canvas mounts, non-blank pixels, #tick increases, label and gunner heat meter element present, teardown called.
 
 ## Harvest
 - [ ] learning: the node vitest project globs test/**/*.test.ts, so DOM-only tests need the `.browser.test.ts` suffix (excluded in vite.config.ts) and an entry in BROWSER_TESTS.
@@ -42,3 +42,4 @@ Done; all criteria hold. Waiting for the main agent to merge.
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 executed: viewer built, ci green
+- 2026-11-01 review fixes (teardown, seed validation, end reason, auto-pause on end, palette cache); phase finalize

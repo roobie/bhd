@@ -6,7 +6,7 @@ import { mount } from '../../src/client/app.ts';
 it('viewer renders a canvas and advances ticks', async () => {
   const root = document.createElement('div');
   document.body.append(root);
-  mount(root);
+  const stop = mount(root);
   await expect.poll(() => root.querySelector('canvas') !== null).toBe(true);
   const read = () => Number(root.querySelector('#tick')?.textContent);
   const first = read();
@@ -16,4 +16,7 @@ it('viewer renders a canvas and advances ticks', async () => {
   const data = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
   expect(data?.some((v) => v !== 0)).toBe(true);
   expect(root.textContent).toContain('not the game client');
+  expect(root.querySelector('[aria-label="gunner heat"]')).not.toBeNull();
+  stop();
+  root.remove();
 });

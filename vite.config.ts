@@ -1,5 +1,5 @@
 import { playwright } from '@vitest/browser-playwright';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // Tests that run in browsers too: they must not import node:*.
 const BROWSER_TESTS = [
@@ -20,7 +20,7 @@ export default defineConfig({
           name: 'node',
           include: ['test/**/*.test.ts'],
           // DOM-only tests run in the browser project.
-          exclude: ['**/*.browser.test.ts', '**/node_modules/**'],
+          exclude: [...configDefaults.exclude, '**/*.browser.test.ts'],
           // The sim suites are CPU-bound; leave room for Vite's transforms.
           maxWorkers: '40%',
           isolate: true,

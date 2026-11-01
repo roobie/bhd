@@ -12,10 +12,14 @@ import { ancientText, countsText, gunnerHud } from './hud.ts';
 
 const SPEEDS = [0.5, 1, 2, 4, 8] as const;
 const LOG_LINES = 20;
+/** Frame gaps longer than this (ms, e.g. a background tab) are clamped so the sim does not fast-forward. */
+const MAX_FRAME_MS = 250;
 /** Cap on ticks per frame, so a slow frame cannot snowball. */
-const MAX_STEPS_PER_FRAME = 240;
+const MAX_STEPS_PER_FRAME = 64;
+const UINT32_MAX = 4_294_967_295;
 
-export function mount(root: HTMLElement): void {
+/** Mounts the viewer into `root`; the returned function stops it. */
+export function mount(root: HTMLElement): () => void {
   let seed = 1;
   let sim = new Sim({ seed, game: defaultGame() });
   let names: NameBook = new Map();
@@ -24,15 +28,32 @@ export function mount(root: HTMLElement): void {
   let speed = 1;
   let acc = 0;
   let last: number | undefined;
+  let endText: string | undefined;
+  let raf = 0;
+  let palette = readPalette(root);
+  const scheme = globalThis.matchMedia('(prefers-color-scheme: dark)');
+  const refreshPalette = (): void => {
+    palette = readPalette(root);
+  };
+  scheme.addEventListener('change', refreshPalette);
 
   function stepOnce(): void {
-    pushEvents(log, names, sim.step(), LOG_LINES);
+    const events = sim.step();
+    pushEvents(log, names, events, LOG_LINES);
+    for (const e of events) {
+      if (e.kind === 'end') {
+        endText = `${e.reason} (wave ${e.wave})`;
+        playing = false;
+      }
+    }
   }
 
   function reset(): void {
     sim = new Sim({ seed, game: defaultGame() });
     names = new Map();
     log = [];
+    endText = undefined;
+    playing = true;
     acc = 0;
     // Setup events (spawns) are returned by the first step; run it so names are known.
     stepOnce();
@@ -48,8 +69,14 @@ export function mount(root: HTMLElement): void {
   }
 
   function setSeed(ev: Event): void {
-    seed = Number((ev.target as HTMLInputElement).value) >>> 0;
-    reset();
+    const input = ev.target as HTMLInputElement;
+    const v = Number(input.value);
+    if (input.value.trim() !== '' && Number.isInteger(v) && v >= 0 && v <= UINT32_MAX) {
+      seed = v;
+      reset();
+    } else {
+      input.value = String(seed);
+    }
   }
 
   function speedButton(s: number) {
@@ -60,7 +87,7 @@ export function mount(root: HTMLElement): void {
   }
 
   function view() {
-    const result = sim.ended ? (log.findLast((l) => l.includes('game over')) ?? 'ended') : 'running';
+    const result = endText ?? 'running';
     return html`
       <h1>BHD debug viewer</h1>
       <p class="note">debug viewer — not the game client (wave 7). Read-only.</p>
@@ -85,7 +112,7 @@ export function mount(root: HTMLElement): void {
   }
 
   function advance(now: number): void {
-    const dt = last === undefined ? 0 : Math.min(250, now - last);
+    const dt = last === undefined ? 0 : Math.min(MAX_FRAME_MS, now - last);
     last = now;
     if (!playing) {
       return;
@@ -107,11 +134,15 @@ export function mount(root: HTMLElement): void {
     render(view(), root);
     const canvas = root.querySelector('canvas');
     if (canvas) {
-      drawSim(canvas, sim, readPalette(root));
+      drawSim(canvas, sim, palette);
     }
-    requestAnimationFrame(frame);
+    raf = requestAnimationFrame(frame);
   }
 
   reset();
-  requestAnimationFrame(frame);
+  raf = requestAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(raf);
+    scheme.removeEventListener('change', refreshPalette);
+  };
 }
