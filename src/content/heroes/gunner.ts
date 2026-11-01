@@ -23,7 +23,7 @@ interface SpinDef {
 }
 
 interface HeatDef {
-  /** Heat added per shot (and see Suppressing Fire's cost). */
+  /** Heat added per shot. */
   readonly perShot: number;
   /** Passive loss per second while not engaged (no target to fire at). None while firing. */
   readonly decayPerSecond: number;
@@ -56,14 +56,14 @@ interface VentDef {
   readonly maxDamage: number;
 }
 
-interface SuppressDef {
+interface PaviseDef {
   readonly cooldown: number;
+  /** Farthest the barrier is placed from the Gunner. */
   readonly range: number;
-  readonly coneDegrees: number;
-  /** Low on purpose: the point is the Suppressed slow (duration and strength from the status def). */
-  readonly damage: number;
-  /** Heat added by the cast. */
-  readonly heatCost: number;
+  /** Half the barrier's width (1.5 = a 3-wide barrier). */
+  readonly halfLength: number;
+  /** How long the barrier stands. */
+  readonly seconds: number;
 }
 
 interface FurnaceDef {
@@ -80,7 +80,7 @@ export interface GunnerDef extends UnitDefBase {
   readonly heat: HeatDef;
   readonly brace: BraceDef;
   readonly vent: VentDef;
-  readonly suppress: SuppressDef;
+  readonly pavise: PaviseDef;
   readonly furnace: FurnaceDef;
 }
 
@@ -105,7 +105,7 @@ export function gunnerDef(): GunnerDef {
     },
     brace: { rangeBonus: 0.3, arcDegrees: 90, unbraceSeconds: 1, rootSeconds: 3600 },
     vent: { cooldown: 12, range: 10, coneDegrees: 70, maxDamage: 300 },
-    suppress: { cooldown: 10, range: 11, coneDegrees: 100, damage: 12, heatCost: 0.1 },
+    pavise: { cooldown: 16, range: 6, halfLength: 1.5, seconds: 8 },
     furnace: { cooldown: 90, activeSeconds: 6, ventSeconds: 6 },
   };
 }

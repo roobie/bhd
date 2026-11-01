@@ -23,6 +23,9 @@ function stepToward(e: Entity, tx: number, ty: number, step: number): boolean {
 export function moveSystem(ctx: TickContext): void {
   const { lane } = ctx.game.map;
   for (const e of ctx.entities.values()) {
+    if (e.hp <= 0) {
+      continue; // Downed hero (or about to be removed).
+    }
     const { move: m } = e;
     if (m.mode === 'point') {
       if (stepToward(e, m.tx, m.ty, effectiveSpeed(e))) {

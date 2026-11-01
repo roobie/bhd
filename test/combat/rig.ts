@@ -2,6 +2,7 @@ import { defaultGame } from '../../src/content/index.ts';
 import type { TickContext } from '../../src/sim/context.ts';
 import type { Entity, NewEntity } from '../../src/sim/entities.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
+import { heroHooks } from '../../src/sim/heroes/index.ts';
 import { Sim } from '../../src/sim/sim.ts';
 
 export interface Rig {
@@ -19,7 +20,9 @@ export function rig(): Rig {
   const ctx: TickContext = {
     tick: 10,
     entities: sim.entities,
+    seed: 1,
     rng: sim.rng,
+    hooks: heroHooks,
     emit: (e) => {
       events.push(e);
     },

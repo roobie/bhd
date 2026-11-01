@@ -3,13 +3,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { defaultBotSetup } from '../../src/content/bots.ts';
-import { defaultGame } from '../../src/content/index.ts';
 import type { GameEnd, GameSpec } from '../../src/match/run.ts';
 import { RUN_ABI, runGame } from '../../src/match/run.ts';
 import type { LogHeader } from '../../src/replay/log.ts';
 import { computeMetrics, METRICS } from '../../src/reporter/metrics/registry.ts';
 import type { GameLog, MetricDef } from '../../src/reporter/types.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
+import { legacyGame } from '../legacy.ts';
 
 const SPEC: GameSpec = {
   abi: RUN_ABI,
@@ -33,7 +33,7 @@ function logOf(events: SimEvent[], end: GameEnd = { tick: 1000, wave: 2, reason:
     dirty: false,
     fingerprint: 'x',
     spec: SPEC,
-    resolved: { game: defaultGame(), bots: defaultBotSetup() },
+    resolved: { game: legacyGame(), bots: defaultBotSetup() },
     end,
     ticks: end.tick,
   };

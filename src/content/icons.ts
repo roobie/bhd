@@ -13,8 +13,8 @@ export const ABILITY_ICONS: Readonly<Record<string, string>> = {
   brace: `${SHIELD}M12 6 7.6 7.7v3.4c0 2.9 1.8 5.4 4.4 6.7 2.6-1.3 4.4-3.8 4.4-6.7V7.7z`,
   // A cone of fire opening from the muzzle, with the heat inside.
   vent: 'M12 22 1.5 6.5C5 3.5 8.3 2 12 2s7 1.5 10.5 4.5zM12 17.5 7.6 8.6C9 7.8 10.4 7.5 12 7.5s3 .3 4.4 1.1z',
-  // Three rounds fired in a spread.
-  suppress:
+  // A standing shield plate on a base.
+  pavise:
     'M5.5 3c1.3 1.2 2 2.7 2 4.5V16h-4V7.5C3.5 5.7 4.2 4.2 5.5 3zM12 2c1.3 1.2 2 2.7 2 4.5V16h-4V6.5C10 4.7 10.7 3.2 12 2zM18.5 3c1.3 1.2 2 2.7 2 4.5V16h-4V7.5c0-1.8.7-3.3 2-4.5zM3.5 18h17v3h-17z',
   // A heart with a flame cut out of it.
   furnace:
@@ -24,6 +24,13 @@ export const ABILITY_ICONS: Readonly<Record<string, string>> = {
   mark: CROSSHAIR,
   // A plain cross.
   heal: 'M9 3h6v6h6v6h-6v6H9v-6H3V9h6z',
+  // Step-1 placeholder icons for the new kits (slice F redraws them). Two chain links.
+  chain: 'M8 8h3v2H8a2 2 0 0 0 0 4h3v2H8a4 4 0 0 1 0-8zM16 8h-3v2h3a2 2 0 0 1 0 4h-3v2h3a4 4 0 0 0 0-8zM9 11h6v2H9z',
+  // A flame over a cross.
+  martyrdom:
+    'M12 2c1 3 4 5 4 9a4 4 0 0 1-8 0c0-1.5.6-2.6 1.4-3.6.2 1 .6 1.5 1.1 1.6C10 6.5 10.8 4 12 2zM10 15h4v3h3v3H7v-3h3z',
+  // A spiral drawn inward.
+  lash: 'M12 3a9 9 0 1 0 9 9h-2.5A6.5 6.5 0 1 1 12 5.5V3zM12 8a4 4 0 1 0 4 4h-2.2A1.8 1.8 0 1 1 12 10.2z',
   // Two arrows driving to the middle.
   pull: 'M1 10h5V6l5 6-5 6v-4H1zM23 10h-5V6l-5 6 5 6v-4h5z',
 };

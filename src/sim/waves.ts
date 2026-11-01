@@ -92,6 +92,15 @@ export function startWave(ctx: TickContext, wave: WaveDef): void {
   w.nextAt = ctx.tick + ticks(ctx.game.waves.interval);
 }
 
+/** `callWave` command: the next wave starts this tick (the wave system runs right after the commands). */
+export function callWave(ctx: TickContext): void {
+  const w = ctx.waves;
+  if (w.n >= ctx.game.waves.waves.length || (ctx.master !== undefined && ctx.master.pending.length === 0)) {
+    return;
+  }
+  w.nextAt = Math.min(w.nextAt, ctx.tick);
+}
+
 function isGone(ctx: TickContext, id: number): boolean {
   const e = ctx.entities.get(id);
   return e === undefined || e.hp <= 0;

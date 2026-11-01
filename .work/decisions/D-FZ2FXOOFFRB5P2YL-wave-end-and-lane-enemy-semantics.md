@@ -8,7 +8,7 @@ refs:
   - src/sim/waves.ts#wavesExhausted
   - src/sim/waves.ts#waveSystem
   - src/sim/enemies.ts#enemySystem
-  - src/sim/enemies.ts#LEASH_RANGE
+  - src/content/rules.ts#defaultRules
 ---
 
 # D-FZ2FXOOFFRB5P2YL Wave end and lane-enemy semantics

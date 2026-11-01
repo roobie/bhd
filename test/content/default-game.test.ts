@@ -20,12 +20,12 @@ function runHeadless(seed: number): { events: SimEvent[]; sim: Sim } {
 }
 
 describe('defaultGame', () => {
-  it('has a 4-hero lineup: one gunner and three stand-ins', () => {
+  it('has the w8 solo lineup: Gunner, Penitent, Psyker and a support stand-in', () => {
     const g = defaultGame();
     expect(g.heroes.map((h) => [h.id, h.kit])).toEqual([
       ['gunner', 'gunner'],
-      ['tank', 'standin'],
-      ['ranged', 'standin'],
+      ['penitent', 'penitent'],
+      ['psyker', 'psyker'],
       ['support', 'standin'],
     ]);
   });

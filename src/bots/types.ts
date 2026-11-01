@@ -39,7 +39,7 @@ export interface SeatInfo {
   readonly slot: number;
   /** Hero entity id. */
   readonly hero: number;
-  readonly kit: 'gunner' | 'standin';
+  readonly kit: 'gunner' | 'penitent' | 'psyker' | 'standin';
   /** Where the seat holds by default (`map.heroSpawns[slot]`); the leash is measured from it. */
   readonly post: Point;
 }
@@ -80,5 +80,7 @@ type BotFactory = (seat: SeatInfo) => Bot;
 
 export interface BrainTable {
   readonly gunner: BotFactory;
+  readonly penitent: BotFactory;
+  readonly psyker: BotFactory;
   readonly standin: BotFactory;
 }

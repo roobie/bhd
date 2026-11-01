@@ -53,12 +53,6 @@ export function gunnerWeights(): Record<string, number> {
     'gunner.vent.waitBase': 6,
     'gunner.vent.furnaceCost': 200,
 
-    // ---- gunner.suppress
-    'gunner.suppress.perEnemy': 10,
-    'gunner.suppress.threat': 40,
-    'gunner.suppress.heatPrice': 40,
-    'gunner.suppress.waitBase': 8,
-
     // ---- gunner.furnace (doctrine.ultimate: free / spike / combo)
     'gunner.furnace.perEnemy': 7,
     'gunner.furnace.perEnemyCap': 12,

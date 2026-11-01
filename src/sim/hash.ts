@@ -99,7 +99,7 @@ interface HashedState {
 /**
  * Canonical hash of game state, in a fixed order: tick, ended flag, entity store (next ID, count,
  * then each entity in ID order: id, kind, def, team, x, y, radius, hp, maxHp, armour, speed,
- * statuses, move, attack, kit), wave scheduler, sim RNG state, then the intents board (a presence byte,
+ * statuses, move, attack, kit, prop), wave scheduler, sim RNG state, then the intents board (a presence byte,
  * then the board once used) and the wave master state (a presence byte, then the state). Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
  * move modes through append-only code tables; content ids (def, status) as text. Pending commands
  * are excluded on purpose: in lockstep, future inputs arrive at different times on different peers
@@ -120,6 +120,10 @@ export function stateHash(s: HashedState): string {
     h.bool(e.kit !== undefined);
     if (e.kit !== undefined) {
       hashKit(h, e.kit);
+    }
+    h.bool(e.prop !== undefined);
+    if (e.prop !== undefined) {
+      h.u32(e.prop.owner).f64(e.prop.until).f64(e.prop.ux).f64(e.prop.uy).f64(e.prop.halfLength);
     }
   }
   hashWaves(h, s.waves);

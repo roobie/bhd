@@ -79,11 +79,20 @@ interface ResourceEvent extends EventBase {
   readonly band: number;
 }
 
-/** `killer` is the entity id that took it to 0 hp, 0 if unknown. */
+/**
+ * `killer` is the entity id that took it to 0 hp, 0 if unknown. A hero is not removed: it stays
+ * downed (hp 0) until a `respawn` event; a `death` is emitted once per down.
+ */
 interface DeathEvent extends EventBase {
   readonly kind: 'death';
   readonly id: number;
   readonly killer: number;
+}
+
+/** A downed hero revived at its spawn point with full hp (sim/respawn.ts). `id` is the hero's entity id. */
+interface RespawnEvent extends EventBase {
+  readonly kind: 'respawn';
+  readonly id: number;
 }
 
 /** An enemy reached the Ancient; `livesLost` is the Ancient hp it cost. */
@@ -93,7 +102,7 @@ interface LeakEvent extends EventBase {
   readonly livesLost: number;
 }
 
-export type EndReason = 'ancient-destroyed' | 'victory';
+export type EndReason = 'ancient-destroyed' | 'victory' | 'team-wiped';
 
 /** The game is over: gameplay stops (see Sim). `wave` is the number of waves started. */
 interface EndEvent extends EventBase {
@@ -150,6 +159,7 @@ export type SimEvent =
   | AbilityEvent
   | ResourceEvent
   | DeathEvent
+  | RespawnEvent
   | LeakEvent
   | EndEvent
   | HashEvent

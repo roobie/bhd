@@ -1,5 +1,5 @@
 // Intents board lifecycle (src/intents/board.ts): specced engine behaviour only (D-4E4QRJ7N6LIGZDSD).
-// The rig has four Gunners (ids 2..5) so any hero can poster or reserve; slot 2 (Suppressing Fire) is
+// The rig has four Gunners (ids 2..5) so any hero can poster or reserve; slot 2 (Pavise) is
 // used for casts and its cooldown is the "on cooldown" lever. Whether a cast went through is read
 // from `ability` events, never assumed.
 
@@ -161,7 +161,7 @@ describe('post and fire', () => {
     const r = rig();
     r.post(3, 2, 5);
     r.runTo(4);
-    gunnerKit(r, 2).cdSuppress = 1000;
+    gunnerKit(r, 2).cdPavise = 1000;
     r.runTo(10);
     expect(r.ops()).toEqual([
       [3, 'post', 1, 2],
@@ -272,7 +272,7 @@ describe('reservations', () => {
     r.post(3, 2, 5); // fires 8
     r.reserve(4, 3, 1, 5);
     r.runTo(4);
-    gunnerKit(r, 2).cdSuppress = 1000;
+    gunnerKit(r, 2).cdPavise = 1000;
     r.runTo(9);
     expect(r.ops()).toEqual([
       [3, 'post', 1, 2],
@@ -291,7 +291,7 @@ describe('reservations', () => {
     r.post(3, 2, 5);
     r.reserve(4, 3, 1, 2);
     r.runTo(5);
-    gunnerKit(r, 3).cdSuppress = 1000;
+    gunnerKit(r, 3).cdPavise = 1000;
     r.runTo(20);
     expect(r.ops().slice(-2)).toEqual([
       [8, 'fire', 1, 2],

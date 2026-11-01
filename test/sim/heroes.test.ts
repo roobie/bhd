@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGame } from '../../src/content/index.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { Sim } from '../../src/sim/sim.ts';
 import { ticks } from '../../src/sim/time.ts';
+import { legacyGame } from '../legacy.ts';
 
 const GUNNER = 2;
 const RANGED = 4;
@@ -21,7 +21,7 @@ function stepN(sim: Sim, n: number): SimEvent[] {
 
 describe('hero kit stubs', () => {
   it('auto-attack the nearest hostile in range on their cooldown', () => {
-    const sim = new Sim({ seed: 1, game: defaultGame() });
+    const sim = new Sim({ seed: 1, game: legacyGame() });
     // Gunner spawns at (80, 28), range 12. Two grunts: one close, one in range but farther.
     sim.command(0, { kind: 'spawn', def: 'grunt', x: 76, y: 28 }, 1);
     sim.command(0, { kind: 'spawn', def: 'grunt', x: 70, y: 28 }, 1);
@@ -34,13 +34,13 @@ describe('hero kit stubs', () => {
   });
 
   it('do not attack out of range', () => {
-    const sim = new Sim({ seed: 1, game: defaultGame() });
+    const sim = new Sim({ seed: 1, game: legacyGame() });
     sim.command(0, { kind: 'spawn', def: 'grunt', x: 0, y: 0 }, 1);
     expect(dmgBy(stepN(sim, 30), GUNNER)).toEqual([]);
   });
 
   it('respect hold fire, and resume when it is released', () => {
-    const sim = new Sim({ seed: 1, game: defaultGame() });
+    const sim = new Sim({ seed: 1, game: legacyGame() });
     sim.command(0, { kind: 'spawn', def: 'brute', x: 76, y: 28 }, 1);
     sim.command(0, { kind: 'hold', hero: GUNNER, on: true }, 1);
     sim.command(0, { kind: 'hold', hero: RANGED, on: true }, 1);
@@ -52,7 +52,7 @@ describe('hero kit stubs', () => {
   });
 
   it('a killed enemy gets a death event naming the killer and is removed', () => {
-    const sim = new Sim({ seed: 1, game: defaultGame() });
+    const sim = new Sim({ seed: 1, game: legacyGame() });
     sim.command(0, { kind: 'spawn', def: 'runner', x: 76, y: 28 }, 1);
     const events = stepN(sim, 60);
     expect(events.find((e) => e.kind === 'death')).toMatchObject({ id: 6, killer: GUNNER });

@@ -10,15 +10,14 @@ import {
   statusTemplates,
   unfilled,
 } from '../../../src/content/help.ts';
-import { defaultGame } from '../../../src/content/index.ts';
 import { defaultPerception } from '../../../src/content/perception.ts';
 import { defaultPresentation } from '../../../src/content/presentation.ts';
-
 import { createMemory } from '../../../src/perception/memory.ts';
 import { perceive } from '../../../src/perception/perceive.ts';
 import { Sim } from '../../../src/sim/sim.ts';
+import { rosterGame } from '../../legacy.ts';
 
-const game = defaultGame();
+const game = rosterGame();
 const p = perceive(new Sim({ seed: 1, game }), createMemory(defaultPerception()));
 const PATH = /^M/u;
 const facts = { statuses: game.statuses, heroes: game.heroes };

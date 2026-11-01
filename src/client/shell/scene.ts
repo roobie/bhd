@@ -221,7 +221,13 @@ function body(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
     return;
   }
   const r = floored(e.radius, input.camera.pxPerUnit);
-  const { color, shape } = bodyStyle(input, e);
+  if (e.kind === 'prop') {
+    const half = pxToWorld(3, input.camera.pxPerUnit);
+    emit(out, { shape: SHAPE.segment, x: e.x, y: e.y, hw: r, rot: e.facing, color: PALETTE.ancient, p0: half });
+    return;
+  }
+  const { color: base, shape } = bodyStyle(input, e);
+  const color = e.kind === 'hero' && e.hpFrac <= 0 ? withAlpha(base, 0.25) : base;
   if (shape === 'box') {
     emit(out, { shape: SHAPE.box, x: e.x, y: e.y, hw: r, hh: r, rot: e.facing, color, p0: r * 0.2 });
   } else if (shape === 'triangle') {
@@ -268,6 +274,9 @@ function heroOverlays(input: SceneInput, hero: HeroView, e: EntitySnap, out: Ins
 }
 
 function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
+  if (e.kind === 'prop') {
+    return;
+  }
   const ppu = input.camera.pxPerUnit;
   const r = floored(e.radius, ppu);
   const thick = pxToWorld(3, ppu);
@@ -423,6 +432,26 @@ function effectInstance(input: SceneInput, fx: Effect, out: InstanceBuffer): voi
       break;
     case 'shot':
       shotInstances(input, fx, age, out);
+      break;
+    case 'respawn':
+      emit(out, {
+        shape: SHAPE.ring,
+        x: fx.x,
+        y: fx.y,
+        hw: r * (2 - age),
+        color: withAlpha(PALETTE.selection, 0.9 * fade),
+        p0: pxToWorld(3, ppu),
+      });
+      break;
+    case 'prop':
+      emit(out, {
+        shape: SHAPE.ring,
+        x: fx.x,
+        y: fx.y,
+        hw: r * (1 + age),
+        color: withAlpha(PALETTE.ancient, 0.7 * fade),
+        p0: pxToWorld(2, ppu),
+      });
       break;
     default:
       break;

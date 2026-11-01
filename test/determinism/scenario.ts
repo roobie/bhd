@@ -44,14 +44,15 @@ export interface Scripted {
  */
 function scenarioGame(): GameConfig {
   const base = defaultGame();
-  const [gunner, ...rest] = base.heroes;
-  if (gunner?.kit !== 'gunner') {
+  const [gunner, penitent, psyker, support] = base.heroes;
+  if (gunner?.kit !== 'gunner' || penitent === undefined || psyker === undefined || support === undefined) {
     throw new Error('default lineup changed');
   }
   return {
     ...base,
     map: { ...base.map, lane: base.map.lane.slice(5), ancient: { ...base.map.ancient, maxHp: 8 } },
-    heroes: [{ ...gunner, heat: { ...gunner.heat, perShot: 0.04 } }, ...rest],
+    // A frail support seat, so the run includes a hero going down and coming back.
+    heroes: [{ ...gunner, heat: { ...gunner.heat, perShot: 0.04 } }, penitent, psyker, { ...support, maxHp: 5 }],
     waves: {
       firstDelay: 5,
       interval: 14,
@@ -74,8 +75,8 @@ function scenarioGame(): GameConfig {
   };
 }
 
-// defaultGame() ids: Ancient 1, then the lineup gunner 2, tank 3, ranged 4, support 5; debug spawns
-// below get 6, 7, 8, ... in order. Waves start on their own at tick 150.
+// defaultGame() ids: Ancient 1, then the lineup gunner 2, penitent 3, psyker 4, support 5; debug spawns
+// below get 6, 7, 8, ... in order. Each kit casts at least once (Pavise, Chain, Lash, support heal). Waves start on their own at tick 150.
 /** Several players, some on the same tick, hero commands of every kind, targets near and far. */
 export const SCRIPT: readonly Scripted[] = [
   { tick: 1, player: 0, cmd: { kind: 'spawn', def: 'grunt', x: 70, y: 25 } },
@@ -99,6 +100,7 @@ export const SCRIPT: readonly Scripted[] = [
   { tick: 130, player: 0, cmd: { kind: 'ability', hero: 2, slot: 1, x: 40, y: 28 } },
   { tick: 40, player: 1, cmd: { kind: 'move', hero: 3, x: 70 + 2 / 3, y: 28 - 1 / 7 } },
   { tick: 41, player: 2, cmd: { kind: 'spawn', def: 'grunt', x: 2, y: 2 } },
+  { tick: 62, player: 0, cmd: { kind: 'spawn', def: 'brute', x: 80, y: 28 } },
   { tick: 50, player: 0, cmd: { kind: 'ability', hero: 4, slot: 3, target: 6 } },
   { tick: 55, player: 1, cmd: { kind: 'autocast', hero: 3, slot: 1, on: true } },
   { tick: 55, player: 1, cmd: { kind: 'autocast', hero: 3, slot: 2, on: false } },
@@ -114,7 +116,12 @@ export const SCRIPT: readonly Scripted[] = [
   { tick: 299, player: 1, cmd: { kind: 'hold', hero: 4, on: true } },
   { tick: 600, player: 1, cmd: { kind: 'hold', hero: 4, on: false } },
   { tick: 830, player: 2, cmd: { kind: 'ability', hero: 2, slot: 3 } },
+  { tick: 840, player: 2, cmd: { kind: 'ability', hero: 3, slot: 3 } },
+  { tick: 850, player: 0, cmd: { kind: 'ability', hero: 4, slot: 0, x: 74, y: 30 } },
   // Stand-in abilities (taunt, mark, heal, pull) and a hot Vent, timed to the waves.
+  // The third wave is called early (two players, same tick: one call), then the casts.
+  { tick: 930, player: 1, cmd: { kind: 'callWave' } },
+  { tick: 930, player: 2, cmd: { kind: 'callWave' } },
   { tick: 300, player: 0, cmd: { kind: 'ability', hero: 3, slot: 0 } },
   { tick: 320, player: 1, cmd: { kind: 'ability', hero: 4, slot: 0 } },
   { tick: 330, player: 2, cmd: { kind: 'ability', hero: 5, slot: 1, x: 72, y: 33 } },

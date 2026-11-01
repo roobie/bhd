@@ -44,7 +44,7 @@ function oneSeat(
     kitWeights: {},
   };
   const bot: Bot = { think };
-  const brains: BrainTable = { gunner: () => bot, standin: () => bot };
+  const brains: BrainTable = { gunner: () => bot, penitent: () => bot, psyker: () => bot, standin: () => bot };
   return { seed: SEED, game: defaultMasterGame(), bots, brains };
 }
 
@@ -351,7 +351,10 @@ describe('seats and perception', () => {
   it('seat views carry a copy of the post and the doctrine leash', () => {
     const bot: Bot = { think: () => [] };
     const base = oneSeat(() => [], { thinkSeconds: 0.5, reactionSeconds: 0.1, doctrine: { leash: 7 } });
-    const m = new Match({ ...base, brains: { gunner: () => bot, standin: () => bot } });
+    const m = new Match({
+      ...base,
+      brains: { gunner: () => bot, penitent: () => bot, psyker: () => bot, standin: () => bot },
+    });
     const [seat] = m.seats;
     expect(seat?.leash).toBe(7);
     const [spawn] = m.sim.game.map.heroSpawns;

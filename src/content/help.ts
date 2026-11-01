@@ -11,6 +11,8 @@
 // the sim does today (src/sim/heroes/*, combat.ts, statuses.ts); change both together.
 
 import type { GunnerDef } from './heroes/gunner.ts';
+import type { PenitentDef } from './heroes/penitent.ts';
+import type { PsykerDef } from './heroes/psyker.ts';
 import type { StandinAbilityDef } from './heroes/standins.ts';
 import type { HeroDef } from './index.ts';
 import type { Targeting } from './presentation.ts';
@@ -56,6 +58,14 @@ function gunnerOf(f: AbilityFacts): GunnerDef | undefined {
   return f.def?.kit === 'gunner' ? f.def : undefined;
 }
 
+function penitentOf(f: AbilityFacts): PenitentDef | undefined {
+  return f.def?.kit === 'penitent' ? f.def : undefined;
+}
+
+function psykerOf(f: AbilityFacts): PsykerDef | undefined {
+  return f.def?.kit === 'psyker' ? f.def : undefined;
+}
+
 function standinOf<E extends StandinAbilityDef['effect']>(
   f: AbilityFacts,
   effect: E,
@@ -70,10 +80,6 @@ function standinOf<E extends StandinAbilityDef['effect']>(
 /** A fraction as a percentage, rounded to one decimal so float noise (0.07 * 100) shows as "7". */
 const percent = (fraction: number | undefined): number | undefined =>
   fraction === undefined ? undefined : Math.round(fraction * 1000) / 10;
-
-function statusOf(f: AbilityFacts, id: string): StatusDef | undefined {
-  return f.statuses.find((s) => s.id === id);
-}
 
 const ABILITY_HELP: readonly AbilityHelp[] = [
   {
@@ -99,20 +105,42 @@ const ABILITY_HELP: readonly AbilityHelp[] = [
     },
   },
   {
-    effect: 'suppress',
-    text: 'Fire a {cone} degree cone out to {range} range: {damage} damage to each enemy hit and Suppressed, slowing them by {slow}% for {duration}s. Cannot be used while locked out.',
-    cost: '+{heat}% heat',
+    effect: 'pavise',
+    text: 'Plant a {width} wide barrier up to {range} away for {duration}s. Enemy melee hits across it are blocked and so is your own line of fire. Cannot be used while locked out.',
     values: (f) => {
       const g = gunnerOf(f);
-      const slow = statusOf(f, 'suppressed');
       return {
-        cone: g?.suppress.coneDegrees,
-        range: g?.suppress.range,
-        damage: g?.suppress.damage,
-        heat: percent(g?.suppress.heatCost),
-        slow: percent(slow?.value),
-        duration: slow?.duration,
+        width: g === undefined ? undefined : g.pavise.halfLength * 2,
+        range: g?.pavise.range,
+        duration: g?.pavise.seconds,
       };
+    },
+  },
+  // Step-1 placeholder wording for the new kits (slice F rewrites it once A and B land their behaviour).
+  {
+    effect: 'chain',
+    text: 'Taunt every enemy within {radius} for {duration}s and leave them Exposed.',
+    values: (f) => ({ radius: penitentOf(f)?.chain.radius, duration: penitentOf(f)?.chain.tauntSeconds }),
+  },
+  {
+    effect: 'martyrdom',
+    text: 'For {duration}s taunt everything within {radius}, taking {loss}% of the damage while still banking all of it as Pain. It ends in a nova, then he is Spent for {spent}s.',
+    values: (f) => {
+      const m = penitentOf(f)?.martyrdom;
+      return {
+        duration: m?.seconds,
+        radius: m?.tauntRadius,
+        loss: percent(m?.hpLossMult),
+        spent: m?.spentSeconds,
+      };
+    },
+  },
+  {
+    effect: 'lash',
+    text: 'Pull enemies within {radius} of the aimed point up to {distance} toward it and leave them Clumped for {duration}s. Adds {warp} Warp.',
+    values: (f) => {
+      const l = psykerOf(f)?.lash;
+      return { radius: l?.radius, distance: l?.distance, duration: l?.clumpedSeconds, warp: l?.warpGain };
     },
   },
   {

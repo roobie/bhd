@@ -9,6 +9,7 @@ import type { Effect, EntitySnap, Snapshot } from './types.ts';
 const HIT_MS = 120;
 const CAST_MS = 250;
 const DEATH_MS = 150;
+const RESPAWN_MS = 600;
 /** Centre distance (world units) beyond which a damaging hit counts as ranged and gets a tracer. */
 const RANGED_MIN_DIST = 3;
 /** Tracer speed (world units per second) and its flight-time clamp (ms). */
@@ -60,7 +61,7 @@ export function takeSnapshot(sim: Sim, prev: Snapshot | undefined): Snapshot {
   }
   const entities: EntitySnap[] = [];
   for (const e of sim.entities.values()) {
-    if (e.hp <= 0) {
+    if (e.hp <= 0 && e.kind !== 'hero') {
       continue;
     }
     entities.push({
@@ -70,9 +71,9 @@ export function takeSnapshot(sim: Sim, prev: Snapshot | undefined): Snapshot {
       team: e.team,
       x: e.x,
       y: e.y,
-      radius: e.radius,
+      radius: e.prop === undefined ? e.radius : e.prop.halfLength,
       hpFrac: e.maxHp > 0 ? Math.min(Math.max(e.hp / e.maxHp, 0), 1) : 0,
-      facing: facingOf(sim, e, before.get(e.id)),
+      facing: e.prop === undefined ? facingOf(sim, e, before.get(e.id)) : Math.atan2(e.prop.uy, e.prop.ux),
       statuses: activeStatuses(e, sim.tick),
     });
   }
@@ -171,6 +172,8 @@ function applyEvent(run: Run, ev: SimEvent): void {
     push(run, run.byId.get(ev.hero), { kind: 'cast', delay: 0, ms: CAST_MS });
   } else if (ev.kind === 'death') {
     push(run, run.byId.get(ev.id), { kind: 'death', delay: run.landing.get(ev.id) ?? 0, ms: DEATH_MS });
+  } else if (ev.kind === 'respawn') {
+    push(run, run.byId.get(ev.id), { kind: 'respawn', delay: 0, ms: RESPAWN_MS });
   }
 }
 

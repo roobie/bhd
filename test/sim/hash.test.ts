@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGame, defaultMasterGame } from '../../src/content/index.ts';
+import { deriveRng } from '../../src/detmath/index.ts';
 import type { Entity, HeroKitState } from '../../src/sim/entities.ts';
 import { stateHash } from '../../src/sim/hash.ts';
 import { initGunner } from '../../src/sim/heroes/gunner.ts';
+import { initPenitent } from '../../src/sim/heroes/penitent.ts';
+import { initPsyker } from '../../src/sim/heroes/psyker.ts';
 import { initStandin } from '../../src/sim/heroes/standins.ts';
 import { Sim } from '../../src/sim/sim.ts';
 
 type Tree = Record<string, unknown>;
 
 const GUNNER = 2;
-const TANK = 3;
+const PENITENT = 3;
+const PSYKER = 4;
+const SUPPORT = 5;
+const HEROES = [GUNNER, PENITENT, PSYKER, SUPPORT];
 const REPLACEMENTS: Record<string, string> = {
   kind: 'enemy',
   'move.mode': 'point',
@@ -17,7 +23,7 @@ const REPLACEMENTS: Record<string, string> = {
 
 function fixture(game = defaultGame()): Sim {
   const sim = new Sim({ seed: 3, game });
-  for (const id of [GUNNER, TANK]) {
+  for (const id of HEROES) {
     const h = sim.entities.get(id);
     if (h === undefined) {
       throw new Error('no hero');
@@ -27,6 +33,19 @@ function fixture(game = defaultGame()): Sim {
     h.attack = { cooldown: 1.5, target: 5 };
   }
   sim.waves.queue.push({ at: 9, def: 'grunt', wave: 1 });
+  // A prop (Pavise), so every prop leaf exists to perturb.
+  sim.entities.add({
+    kind: 'prop',
+    def: 'pavise',
+    team: 0,
+    x: 5,
+    y: 6,
+    radius: 0,
+    maxHp: 1,
+    armour: 0,
+    speed: 0,
+    prop: { owner: GUNNER, until: 50, ux: 0, uy: 1, halfLength: 1.5 },
+  });
   // Board and master state, built by hand so every leaf (incl. a reservation) exists to perturb.
   sim.intents.nextId = 3;
   sim.intents.live.push({
@@ -38,7 +57,7 @@ function fixture(game = defaultGame()): Sim {
     y: 5,
     fireTick: 60,
     fired: false,
-    reservations: [{ hero: TANK, slot: 0, offset: 6 }],
+    reservations: [{ hero: SUPPORT, slot: 0, offset: 6 }],
   });
   if (sim.master !== undefined) {
     sim.master.budget = 7;
@@ -75,15 +94,33 @@ function leafPaths(node: unknown, prefix: string[], out: string[][]): void {
   }
 }
 
-/** A real kit of the other kind, swapped in to perturb `kit.kind` (each hash branch reads its own fields). */
+/** A real kit of another kind, swapped in to perturb `kit.kind`: gunner -> stand-in -> penitent -> psyker -> gunner (each hash branch reads its own fields). */
 function otherKit(hero: Entity): HeroKitState {
   const game = defaultGame();
   const standin = game.heroes.find((h) => h.kit === 'standin');
   const gunner = game.heroes.find((h) => h.kit === 'gunner');
-  if (standin?.kit !== 'standin' || gunner?.kit !== 'gunner') {
+  const penitent = game.heroes.find((h) => h.kit === 'penitent');
+  const psyker = game.heroes.find((h) => h.kit === 'psyker');
+  if (
+    standin?.kit !== 'standin' ||
+    gunner?.kit !== 'gunner' ||
+    penitent?.kit !== 'penitent' ||
+    psyker?.kit !== 'psyker'
+  ) {
     throw new Error('default lineup changed');
   }
-  return hero.kit?.kind === 'gunner' ? initStandin(standin) : initGunner(gunner);
+  switch (hero.kit?.kind) {
+    case 'gunner':
+      return initStandin(standin);
+    case 'standin':
+      return initPenitent(penitent);
+    case 'penitent':
+      return initPsyker(psyker, deriveRng(1, 'kit:test'));
+    case 'psyker':
+      return initGunner(gunner);
+    default:
+      throw new Error('hero without a kit');
+  }
 }
 
 function perturb(root: Tree, path: string[], alt?: HeroKitState): void {
@@ -112,7 +149,9 @@ describe('state hash covers every field', () => {
 
   it.each([
     ['gunner', GUNNER, ['kit.spin', 'kit.heat', 'kit.cdFurnace']],
-    ['stand-in', TANK, ['kit.cooldowns.0', 'kit.cooldowns.3']],
+    ['penitent', PENITENT, ['kit.pain', 'kit.cdChain', 'kit.martyrdomTicks', 'kit.spentTicks', 'kit.respawnAt']],
+    ['psyker', PSYKER, ['kit.warp', 'kit.cdLash', 'kit.rng.state.0', 'kit.rng.state.3', 'kit.respawnAt']],
+    ['stand-in', SUPPORT, ['kit.cooldowns.0', 'kit.cooldowns.3']],
   ])('changes when any leaf of the %s hero entity (incl. nested and kit) changes', (_name, id, kitLeaves) => {
     const paths: string[][] = [];
     const probe = fixture().entities.get(id);
@@ -137,6 +176,24 @@ describe('state hash covers every field', () => {
         throw new Error('no hero');
       }
       perturb(hero as unknown as Tree, path, otherKit(hero));
+      expect(hashOf(sim), path.join('.')).not.toBe(base);
+    }
+  });
+
+  it('changes when any prop field changes', () => {
+    const paths: string[][] = [];
+    const prop = [...fixture().entities.values()].find((e) => e.kind === 'prop');
+    leafPaths(prop, [], paths);
+    expect(paths.map((p) => p.join('.'))).toEqual(
+      expect.arrayContaining(['prop.owner', 'prop.until', 'prop.ux', 'prop.uy', 'prop.halfLength']),
+    );
+    for (const path of paths) {
+      const sim = fixture();
+      const target = [...sim.entities.values()].find((e) => e.kind === 'prop');
+      if (target === undefined) {
+        throw new Error('no prop');
+      }
+      perturb(target as unknown as Tree, path);
       expect(hashOf(sim), path.join('.')).not.toBe(base);
     }
   });

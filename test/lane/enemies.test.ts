@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGame } from '../../src/content/index.ts';
+import { defaultRules } from '../../src/content/rules.ts';
 import { findById } from '../../src/content/types.ts';
-import { AGGRO_RANGE, LEASH_RANGE } from '../../src/sim/enemies.ts';
+import { AGGRO_RANGE } from '../../src/sim/enemies.ts';
 import { ticks } from '../../src/sim/time.ts';
 import { firstEnemy, heldSim, oneWave, place, RANGED, SUPPORT, stepUntil, TANK, unit } from './rig.ts';
+
+const LEASH_RANGE = defaultRules().leashRange;
 
 const FAR_Y = 40;
 

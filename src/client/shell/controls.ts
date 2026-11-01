@@ -197,6 +197,8 @@ function reduceOpen(state: ControlState, action: UiAction, ctx: ControlContext):
     return { state: next, commands: step.commands };
   }
   switch (action.kind) {
+    case 'callWave':
+      return { state: next, commands: [{ kind: 'callWave' }] };
     case 'select':
       if (action.slot < 0 || action.slot > 3 || !Number.isInteger(action.slot)) {
         return { state: next, commands: [] };

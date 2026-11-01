@@ -25,7 +25,7 @@ export interface ResourceView {
 
 export interface AbilityView {
   readonly slot: number;
-  /** Effect label: gunner `brace | vent | suppress | furnace`; stand-ins `taunt | mark | heal | pull`. */
+  /** Effect label: gunner `brace | vent | pavise | furnace`; penitent `chain | martyrdom`; psyker `lash`; stand-ins `taunt | mark | heal | pull`. */
   readonly effect: string;
   /** Ready to cast now (cooldown over and not locked out). */
   readonly ready: boolean;
@@ -57,19 +57,19 @@ export interface GunnerView {
   readonly arcCos: number;
   /** Cosine of the half angle of the Vent cone. */
   readonly ventCos: number;
-  /** Cosine of the half angle of the Suppressing Fire cone. */
-  readonly suppressCos: number;
   /** Half the width of the overpenetration line. */
   readonly lineHalfWidth: number;
-  /** Heat the Suppressing Fire cast adds (0..1). */
-  readonly suppressHeat: number;
+  /** Farthest the Pavise is placed from the Gunner. */
+  readonly paviseRange: number;
+  /** Half the Pavise's width. */
+  readonly paviseHalfLength: number;
   /** Above this heat, rounds pierce armour (0..1). */
   readonly pierceAbove: number;
   /** Above this heat, rounds overpenetrate into allies (0..1). */
   readonly overpenAbove: number;
 }
 
-type HeroRole = 'gunner' | 'tank' | 'ranged' | 'support';
+type HeroRole = 'gunner' | 'penitent' | 'psyker' | 'tank' | 'ranged' | 'support';
 
 export interface HeroView {
   /** Entity id. */
@@ -77,7 +77,7 @@ export interface HeroView {
   /** Lineup index 0-3. */
   readonly slot: number;
   readonly def: string;
-  readonly kit: 'gunner' | 'standin';
+  readonly kit: 'gunner' | 'penitent' | 'psyker' | 'standin';
   readonly role: HeroRole;
   readonly x: number;
   readonly y: number;
@@ -107,6 +107,15 @@ export interface HeroView {
    */
   readonly lineAllies: readonly number[];
   readonly gunner?: GunnerView;
+}
+
+/** A hero that is down, waiting to respawn (it is not in `Perception.heroes`). */
+export interface FallenView {
+  readonly id: number;
+  readonly slot: number;
+  readonly def: string;
+  /** Ticks until it respawns. */
+  readonly respawnTicks: number;
 }
 
 export interface EnemyView {
@@ -207,6 +216,8 @@ export interface Perception {
   readonly tick: number;
   /** Ascending by slot. */
   readonly heroes: readonly HeroView[];
+  /** Heroes that are down (hp 0, waiting to respawn), ascending by slot. Not in `heroes`. */
+  readonly fallen: readonly FallenView[];
   /** Ascending by id. */
   readonly enemies: readonly EnemyView[];
   readonly clumps: readonly Clump[];

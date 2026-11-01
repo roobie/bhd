@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultGame, validateGame } from '../../src/content/index.ts';
 import { heal } from '../../src/sim/combat.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
+import { heroHooks } from '../../src/sim/heroes/index.ts';
 import { Sim } from '../../src/sim/sim.ts';
 import { effectiveSpeed, removeStatus } from '../../src/sim/statuses.ts';
 
@@ -20,7 +21,9 @@ function rig(): { sim: Sim; events: SimEvent[]; ctx: Ctx } {
   const ctx: Ctx = {
     tick: 10,
     entities: sim.entities,
+    seed: 1,
     rng: sim.rng,
+    hooks: heroHooks,
     emit: (e) => {
       events.push(e);
     },

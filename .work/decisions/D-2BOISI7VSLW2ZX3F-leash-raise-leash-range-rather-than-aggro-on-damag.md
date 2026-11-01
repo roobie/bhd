@@ -4,7 +4,7 @@ date: 2026-11-01
 read_if:
   - tuning enemy aggro or leash
 refs:
-  - src/sim/enemies.ts#LEASH_RANGE
+  - src/content/rules.ts#defaultRules
 ---
 
 # D-2BOISI7VSLW2ZX3F Leash: raise LEASH_RANGE rather than aggro on damage

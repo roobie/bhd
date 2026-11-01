@@ -151,6 +151,8 @@ function channelOf(cmd: Command): string | undefined {
     case 'send':
     case 'spawn':
       return cmd.kind;
+    case 'callWave':
+      return 'wave';
     default: {
       const unknown: never = cmd;
       throw new Error(`unhandled command ${JSON.stringify(unknown)}`);

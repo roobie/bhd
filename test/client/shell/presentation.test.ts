@@ -2,7 +2,6 @@
 // and the fallbacks for an id it has no entry for. No gameplay numbers.
 
 import { describe, expect, it } from 'vitest';
-import { defaultGame } from '../../../src/content/index.ts';
 import { defaultPerception } from '../../../src/content/perception.ts';
 import {
   abilityPresentation,
@@ -20,13 +19,14 @@ import { defaultStatuses } from '../../../src/content/statuses.ts';
 import { createMemory } from '../../../src/perception/memory.ts';
 import { perceive } from '../../../src/perception/perceive.ts';
 import { Sim } from '../../../src/sim/sim.ts';
+import { rosterGame } from '../../legacy.ts';
 
 const HEX = /^#[0-9a-f]{6}$/u;
 const EMPTY: Presentation = { abilities: [], resources: [], statuses: [], heroes: [], enemies: [] };
 
 describe('shipped presentation covers the shipped content', () => {
   const ui = defaultPresentation();
-  const game = defaultGame();
+  const game = rosterGame();
   const p = perceive(new Sim({ seed: 1, game }), createMemory(defaultPerception()));
 
   it('has an entry for every ability effect and resource perception can report', () => {

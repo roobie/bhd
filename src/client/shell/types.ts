@@ -149,8 +149,9 @@ export interface EntitySnap {
   readonly team: Team;
   readonly x: number;
   readonly y: number;
+  /** For a `prop` the half length of its barrier segment. */
   readonly radius: number;
-  /** 0..1. */
+  /** 0..1 (0 for a downed hero). */
   readonly hpFrac: number;
   /**
    * Radians. The movement direction since the previous snapshot, else the direction to the attack
@@ -172,9 +173,10 @@ export interface Snapshot {
 export interface Effect {
   /**
    * `hit`: tint the target; `cast`: pulse a ring on the caster; `death`: fade a ghost ring; `shot`: a
+   * `respawn`: a ring where a downed hero returns; `prop`: a pulse where a prop was placed; a
    * tracer from (`x`, `y`) to (`toX`, `toY`) coloured by the source (`srcKind`, `srcDef`); `id` is the source.
    */
-  readonly kind: 'hit' | 'cast' | 'death' | 'shot';
+  readonly kind: 'hit' | 'cast' | 'death' | 'shot' | 'respawn' | 'prop';
   /** Entity the effect belongs to. */
   readonly id: number;
   readonly x: number;
@@ -289,6 +291,8 @@ export type UiAction =
   | { readonly kind: 'cancel' }
   /** Local pause toggle (no command). */
   | { readonly kind: 'pause' }
+  /** Call the next wave now (emits a `callWave` command; needs no driven hero). */
+  | { readonly kind: 'callWave' }
   /** Toggle the help overlay (H, the top bar "?"). Never emits a command and never pauses. */
   | { readonly kind: 'help' }
   /** Restart the match (handled by the app, ignored by the reducer). */
@@ -601,7 +605,9 @@ export interface HudInput {
   /** The game config, the source of help numbers (hero and status defs); without it help shows `?` for them. */
   readonly game?: GameConfig;
   /** Set once the match has ended. */
-  readonly end: { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks'; readonly wave: number } | undefined;
+  readonly end:
+    | { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks' | 'team-wiped'; readonly wave: number }
+    | undefined;
 }
 
 /** What the HUD needs from the shell. */

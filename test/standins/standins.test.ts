@@ -7,6 +7,7 @@ import type { TickContext } from '../../src/sim/context.ts';
 import type { Entity } from '../../src/sim/entities.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { stateHash } from '../../src/sim/hash.ts';
+import { heroHooks } from '../../src/sim/heroes/index.ts';
 import type { Sim } from '../../src/sim/sim.ts';
 import { hasStatus, statusValue } from '../../src/sim/statuses.ts';
 import { ticks } from '../../src/sim/time.ts';
@@ -49,7 +50,9 @@ function ctxOf(sim: Sim): TickContext {
   return {
     tick: sim.tick,
     entities: sim.entities,
+    seed: 1,
     rng: sim.rng,
+    hooks: heroHooks,
     emit: () => undefined,
     game: sim.game,
     waves: sim.waves,
@@ -79,7 +82,7 @@ describe('tank: taunt', () => {
     expect(e.attack.target).toBe(TANK);
     expect(e.statuses).toEqual([{ status: 'taunted', src: TANK, until: sim.tick + ticks(3), value: 0 }]);
     // Even when the tank is moved far away, the taunt holds until it ends.
-    place(sim, TANK, e.x + 20, 0);
+    place(sim, TANK, e.x + 30, 0); // beyond the leash even after the taunted enemy walked 9 units toward it
     stepN(sim, ticks(3) - 2);
     expect(e.attack.target).toBe(TANK);
     stepN(sim, 2);
