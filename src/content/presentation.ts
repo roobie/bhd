@@ -136,6 +136,7 @@ export function defaultPresentation(): Presentation {
       { name: 'heat', label: 'Heat', color: '#e8832a' },
       { name: 'pain', label: 'Pain', color: '#b3263a' },
       { name: 'warp', label: 'Warp', color: '#8f5fd6' },
+      { name: 'backlash', label: 'Backlash', color: '#c2418f' },
     ],
     statuses: [
       {

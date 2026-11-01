@@ -21,6 +21,7 @@ a field says so. Hero and enemy `def` strings are content ids.
 | `status` | `dst`, `status`, `on`, `src` | A status turned on or off. |
 | `ability` | `hero`, `slot`, `target`, `value` | A cast. `target` is an entity id or 0; `value` is filled when known, else 0. |
 | `resource` | `hero`, `resource`, `band` | Band crossings only (e.g. heat 60/85/100). |
+| `backlash` | `hero`, `warp`, `damage` | The Psyker's Discharge backlash fired. `warp` is his Warp when rolled, `damage` the per-target hit (`60 + warp`); the `dmg` events (tags `ff`, `splash`) follow it. |
 | `death` | `id`, `killer` | `killer` is the entity that took it to 0 hp, 0 if unknown. |
 | `leak` | `id`, `livesLost` | An enemy reached the Ancient; `livesLost` is the Ancient hp it cost. |
 | `end` | `wave`, `reason` | The game is over (`ancient-destroyed`\|`victory`); `wave` is the number of waves started. Gameplay stops after it. |
