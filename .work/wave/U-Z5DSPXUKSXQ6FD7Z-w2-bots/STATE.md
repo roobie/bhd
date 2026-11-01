@@ -49,3 +49,4 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 review fixes (reserve vs seat delay, silent first choice, support pull intent, gunner geometry from perception, dead config, viewer expired/overpen/log, unlockWave in MasterView.costs)
 - 2026-11-01 wave-2 tuning pass: content numbers only (see Evidence); no logic changes
+- 2026-11-01 lead: gunner reserve no longer races its own vent (holdsReservation counts in-flight and about-to-reserve) and skips vent reserves above `gunner.reserve.ventMaxHeat`; seeds 1–10: pull fulfils 1–5/game (was 0–3), 3 victory / 7 defeat.

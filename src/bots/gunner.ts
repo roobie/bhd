@@ -349,9 +349,16 @@ function fireDecision(f: Frame): Decision | undefined {
   };
 }
 
-/** A reservation of mine is live: the ability I reserved stays unspent until it resolves. */
+/**
+ * A reservation of mine is live, in flight, or about to be made this think: the ability stays
+ * unspent until it resolves (otherwise the vent decision spends what the reserve decision books).
+ */
 function holdsReservation(f: Frame): boolean {
-  return f.ctx.p.intents.some((i) => i.reservers.includes(f.me.id));
+  return (
+    f.ctx.p.intents.some((i) => i.reservers.includes(f.me.id)) ||
+    pending(f, (c) => c.kind === 'intent' && c.op === 'reserve') ||
+    pullToReserve(f) !== undefined
+  );
 }
 
 // ---------------------------------------------------------------- gunner.vent
@@ -530,7 +537,12 @@ function reserveDecision(f: Frame): Decision | undefined {
   const furnaceAb = abilityOf(me, SLOT.furnace);
   const ventAb = abilityOf(me, SLOT.vent);
   const furnaceOk = furnaceAb !== undefined && furnaceAb.cooldownLeft <= left;
-  const ventOk = ventAb !== undefined && ventAb.cooldownLeft <= left && f.heat >= w('gunner.vent.minHeat');
+  const ventOk =
+    ventAb !== undefined &&
+    ventAb.cooldownLeft <= left &&
+    f.heat >= w('gunner.vent.minHeat') &&
+    // Heat keeps rising while she waits; a reserved vent fails if she locks first.
+    f.heat < w('gunner.reserve.ventMaxHeat');
   return {
     id: 'gunner.reserve',
     options: [

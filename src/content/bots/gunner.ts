@@ -74,6 +74,7 @@ export function gunnerWeights(): Record<string, number> {
     // ---- gunner.reserve (against a 'pull' intent)
     'gunner.reserve.furnace': 90,
     'gunner.reserve.vent': 90,
+    'gunner.reserve.ventMaxHeat': 0.6,
     'gunner.reserve.reach': 14,
     'gunner.reserve.offsetSeconds': 0.6,
     'gunner.reserve.marginSeconds': 0.8,
