@@ -258,6 +258,48 @@ describe('damageTaken hook output', () => {
   });
 });
 
+describe('callWave in master mode', () => {
+  function startTicks(sim: Sim): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      for (const e of sim.step()) {
+        if (e.kind === 'wave' && e.phase === 'start') {
+          out.push(e.tick);
+        }
+      }
+    }
+    return out;
+  }
+
+  it('starts the Director pending wave now once the send and call throttles are satisfied', () => {
+    const base = defaultMasterGame();
+    const game = { ...base, waves: { ...base.waves, firstDelay: 1000 } };
+    const sim = new Sim({ seed: 1, game });
+    const wait = ticks(Math.max(game.master?.minIntervalSeconds ?? 0, game.rules.callWaveMinSeconds));
+    expect(sim.waves.nextAt).toBeGreaterThan(wait + 100);
+    while (sim.tick < wait) {
+      sim.step();
+    }
+    sim.command(4, { kind: 'summon', def: game.master?.costs[0]?.def ?? '', count: 1 });
+    sim.step();
+    expect(sim.master?.pending.length).toBe(1);
+    sim.command(0, { kind: 'callWave' });
+    expect(startTicks(sim).length).toBe(1);
+    expect(sim.master?.pending).toEqual([]);
+  });
+
+  it('is refused with nothing pending, and while the master send interval has not passed', () => {
+    const game = defaultMasterGame();
+    const sim = new Sim({ seed: 1, game });
+    sim.command(0, { kind: 'callWave' });
+    expect(startTicks(sim).length).toBe(0);
+    const early = new Sim({ seed: 1, game });
+    early.command(4, { kind: 'summon', def: game.master?.costs[0]?.def ?? '', count: 1 });
+    early.command(0, { kind: 'callWave' });
+    expect(startTicks(early).length).toBe(0);
+  });
+});
+
 describe('callWave throttle', () => {
   function called(sim: Sim): boolean {
     const before = sim.waves.nextAt;

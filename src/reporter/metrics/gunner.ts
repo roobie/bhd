@@ -50,25 +50,31 @@ const PAVISE_SLOT = 2;
 
 /**
  * Metric 7b: Pavise casts (`ability` events of the gunner in the Pavise slot) and blocks (`block`
- * events: Pavise stopped an enemy hit or the Gunner's line).
+ * events). `blocked` is the headline: an enemy's hit stopped (the source is not a hero). `selfBlocks`
+ * counts the team's own lines clipped (the source is a hero).
  */
 export const gunnerPavise: MetricDef = {
   id: 'gunner.pavise',
-  title: 'Pavise casts and blocked hits',
+  title: 'Pavise casts, enemy hits blocked, own lines clipped',
   unit: 'count',
   areas: ['gunner.pavise'],
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
     let casts = 0;
-    let blocks = 0;
+    let blocked = 0;
+    let selfBlocks = 0;
     for (const e of log.events) {
       if (e.kind === 'ability' && e.slot === PAVISE_SLOT && ix.entities.get(e.hero)?.def === 'gunner') {
         casts += 1;
       } else if (e.kind === 'block') {
-        blocks += 1;
+        if (ix.entities.get(e.src)?.isHero === true) {
+          selfBlocks += 1;
+        } else {
+          blocked += 1;
+        }
       }
     }
-    return { casts, blocks };
+    return { casts, blocked, selfBlocks };
   },
 };

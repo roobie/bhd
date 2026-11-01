@@ -10,6 +10,7 @@ import type { Entity } from '../sim/entities.ts';
 import { isDowned, respawnLeft } from '../sim/respawn.ts';
 import type { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
+import { canCallWave } from '../sim/waves.ts';
 import { buildClumps } from './clumps.ts';
 import { findComboWindows } from './combos.ts';
 import { gunnerParts } from './kits/gunner.ts';
@@ -221,6 +222,7 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
       n: sim.waves.n,
       total: sim.game.waves.waves.length,
       nextAt: sim.waves.nextAt,
+      canCall: canCallWave(sim),
       preview: sim.master === undefined ? (next?.spawns ?? []).map((g) => ({ def: g.def, count: g.count })) : [],
     },
     intents: intentViews(sim),

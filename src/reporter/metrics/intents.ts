@@ -44,9 +44,19 @@ export const comboPayoffs: MetricDef = {
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
+    // Events are in tick order: binary search for the last event at or before `tick`.
     const waveAt = (tick: number): number => {
-      const i = log.events.findLastIndex((e) => e.tick <= tick);
-      return i < 0 ? 0 : (ix.wave[i] ?? 0);
+      let lo = 0;
+      let hi = log.events.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((log.events[mid]?.tick ?? 0) <= tick) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      return lo === 0 ? 0 : (ix.wave[lo - 1] ?? 0);
     };
     const out: Record<string, number> = {};
     for (const p of foldPayoffs(log.events)) {

@@ -10,6 +10,8 @@
 //   the same def). Unknown def, a def not unlocked yet for the wave being
 //   bought (`MasterDef.costs[].unlockWave`), over budget or no wave left to buy: a logged no-op (the
 //   `cmd` event is logged, nothing changes).
+// - `callWave {}` (a human's early call, see waves.ts) starts the pending wave through the same path
+//   as `send`, subject to both throttles.
 // - `send {}`: starts the pending wave now, only if at least `minIntervalSeconds` have passed since
 //   the last wave started, pending is non-empty and waves remain. Otherwise a logged no-op. The next
 //   wave's clock restarts from now (see waves.ts `startWave`).
@@ -101,22 +103,27 @@ export function takePending(ctx: TickContext): WaveDef {
   return { spawns: taken.map((g) => ({ def: g.def, count: g.count, gap: def.gap })) };
 }
 
+/** The fields a send check reads: a `TickContext` or a `Sim` both fit. */
+export type WaveGate = Pick<TickContext, 'tick' | 'game' | 'waves' | 'master'>;
+
 /**
- * `send` command handler: the wave to start now, if the send is allowed. Allowed once
- * `minIntervalSeconds` have passed since the previous wave started (`lastStart` is 0 at game
- * start), so wave 1 can start by `send` after `minIntervalSeconds`, before `waves.firstDelay` when
- * that is longer.
+ * Whether a `send` would start the pending wave now: master mode, something pending, waves remain,
+ * and `minIntervalSeconds` have passed since the previous wave started (`lastStart` is 0 at game
+ * start, so wave 1 can start by `send` after `minIntervalSeconds`, before `waves.firstDelay` when
+ * that is longer).
  */
-export function sendWave(ctx: TickContext): WaveDef | undefined {
-  const { master } = ctx;
-  const def = ctx.game.master;
+export function canSend(s: WaveGate): boolean {
+  const { master } = s;
+  const def = s.game.master;
   if (master === undefined || def === undefined || master.pending.length === 0) {
-    return undefined;
+    return false;
   }
-  if (ctx.waves.n >= ctx.game.waves.waves.length || ctx.tick - master.lastStart < ticks(def.minIntervalSeconds)) {
-    return undefined;
-  }
-  return takePending(ctx);
+  return s.waves.n < s.game.waves.waves.length && s.tick - master.lastStart >= ticks(def.minIntervalSeconds);
+}
+
+/** `send` command handler: the wave to start now, if the send is allowed (see `canSend`). */
+export function sendWave(ctx: TickContext): WaveDef | undefined {
+  return canSend(ctx) ? takePending(ctx) : undefined;
 }
 
 /** Composition of wave `n` for its `wave end` event, forgetting it. Empty if unknown. */

@@ -199,6 +199,8 @@ interface WaveView {
   readonly total: number;
   /** Tick the next wave's clock fires at. */
   readonly nextAt: number;
+  /** Whether a `callWave` command would start a wave now (the sim's own predicate: spawning, throttle, master `send` rules). */
+  readonly canCall: boolean;
   /** Next wave's composition as the schedule lists it; empty in wave master mode (nobody sees the queue). */
   readonly preview: readonly WaveGroupView[];
 }

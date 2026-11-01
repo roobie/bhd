@@ -85,4 +85,11 @@ describe('determinism (node)', () => {
     const starts = events.filter((e) => e.kind === 'wave' && e.phase === 'start');
     expect(starts.length).toBeGreaterThan(0);
   });
+
+  it("the master-mode script's callWave starts the pending wave on the tick it is applied", () => {
+    const events = runMasterSim(SEED, MASTER_TICKS);
+    const call = events.find((e) => e.kind === 'cmd' && e.cmd.kind === 'callWave');
+    expect(call).toBeDefined();
+    expect(events.some((e) => e.kind === 'wave' && e.phase === 'start' && e.tick === call?.tick)).toBe(true);
+  });
 });

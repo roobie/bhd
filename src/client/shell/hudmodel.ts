@@ -73,7 +73,7 @@ function topBar(input: HudInput): TopBarModel {
     wave: p.wave.n,
     total: p.wave.total,
     nextInSeconds,
-    canCallWave: nextInSeconds > 0,
+    canCallWave: p.wave.canCall,
     preview,
     previewHidden: preview.length === 0 && pending,
     ancientFrac: clamp01(p.ancient.hpFrac),

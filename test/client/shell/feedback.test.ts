@@ -39,6 +39,28 @@ describe('feedback', () => {
     expect(fb.visualTime(1000 + HITSTOP_WOMBO_MS / 2)).toBeLessThan(1000 + HITSTOP_WOMBO_MS / 2);
   });
 
+  it('same-kind callouts close in space and time merge into one with a count', () => {
+    const fb = createFeedback();
+    fb.onStep(womboAt(1), snap, 1000);
+    const first = fb.callouts(1050)[0]?.count ?? 0;
+    fb.onStep(womboAt(2), snap, 1100);
+    const c = fb.callouts(1150);
+    expect(c).toHaveLength(1);
+    expect(c[0]?.count).toBe(first * 2);
+    expect(c[0]?.text).toContain(`x${first * 2}`);
+  });
+
+  it('far-apart callouts stay separate, and only a few are visible at once', () => {
+    const fb = createFeedback();
+    for (let i = 0; i < 12; i++) {
+      const far: Snapshot = { tick: 1, entities: [ent(1, 'hero', i * 50), ent(2, 'hero', i * 50 + 2)] };
+      fb.onStep(womboAt(i + 1), far, 1000 + i);
+    }
+    const n = fb.callouts(1100).length;
+    expect(n).toBeGreaterThan(1);
+    expect(n).toBeLessThanOrEqual(6);
+  });
+
   it('visual time is monotonic, never ahead of real time, and catches up after a hitstop', () => {
     const fb = createFeedback();
     let last = Number.NEGATIVE_INFINITY;

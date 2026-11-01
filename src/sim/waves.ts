@@ -12,7 +12,7 @@ import { findById } from '../content/types.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import type { StateHasher } from './hash.ts';
-import { endedComposition, takePending } from './master.ts';
+import { canSend, endedComposition, sendWave, takePending, type WaveGate } from './master.ts';
 import { ticks } from './time.ts';
 
 interface SpawnJob {
@@ -96,21 +96,40 @@ export function startWave(ctx: TickContext, wave: WaveDef): void {
 }
 
 /**
- * `callWave` command: the next wave starts this tick (the wave system runs right after the commands).
- * Refused (a silent no-op) when: the waves are spent; the current wave is still spawning
- * (`queue` not empty); fewer than `rules.callWaveMinSeconds` have passed since the last wave started
- * (the first wave can be called at once); or in master mode, where the schedule is only a clock and
- * the `send` command (with its own `minIntervalSeconds` check) is the only way to start a wave early.
+ * Whether `callWave` would start a wave now. The sim and the HUD (via Perception) both use this one
+ * predicate. False when: the waves are spent; the current wave is still spawning (`queue` not empty);
+ * fewer than `rules.callWaveMinSeconds` have passed since the last wave started (the first wave can
+ * be called at once); or, in master mode, `send` would be refused (nothing pending, or
+ * `minIntervalSeconds` since the last start not yet passed).
+ */
+export function canCallWave(s: WaveGate): boolean {
+  const w = s.waves;
+  if (w.n >= s.game.waves.waves.length || w.queue.length > 0) {
+    return false;
+  }
+  if (w.n > 0 && s.tick - w.lastStart < ticks(s.game.rules.callWaveMinSeconds)) {
+    return false;
+  }
+  return s.master === undefined || canSend(s);
+}
+
+/**
+ * `callWave` command: the next wave starts this tick if `canCallWave`, else a silent no-op. In
+ * schedule mode the clock is pulled forward (the wave system runs right after the commands). In
+ * master mode the Director's pending wave starts now, exactly as `send` would start it.
  */
 export function callWave(ctx: TickContext): void {
-  const w = ctx.waves;
-  if (w.n >= ctx.game.waves.waves.length || ctx.master !== undefined || w.queue.length > 0) {
+  if (!canCallWave(ctx)) {
     return;
   }
-  if (w.n > 0 && ctx.tick - w.lastStart < ticks(ctx.game.rules.callWaveMinSeconds)) {
+  if (ctx.master === undefined) {
+    ctx.waves.nextAt = Math.min(ctx.waves.nextAt, ctx.tick);
     return;
   }
-  w.nextAt = Math.min(w.nextAt, ctx.tick);
+  const wave = sendWave(ctx);
+  if (wave !== undefined) {
+    startWave(ctx, wave);
+  }
 }
 
 function isGone(ctx: TickContext, id: number): boolean {

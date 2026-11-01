@@ -43,10 +43,11 @@ Step 3 integration done and green: cross-runtime check, step-1 review fixes, wir
 - 2026-11-02 all-bot games, 12 seeds each (scratchpad w8-int/evidence.ts, not asserted in tests): director mode 88 pull posts, 26 reservations, 18 fulfils, 2 wombos (seeds 2 and 9) by foldPayoffs, 517 cash-ins; 10 of 12 lost at wave 14-15, seeds 3 and 11 won. schedule mode (hold-the-line): 72 posts, 12 to 36 reservations, 0 fulfils, 0 wombos, all lost at wave 12. schedule (greedy): 168 posts, 24 reservations, 0 fulfils.
 - 2026-11-02 schedule-mode wombo shortfall diagnosed, no clear bot bug: first pull's Lash finds the clump gone after its 4.5 s lead; later pulls fire but Martyrdom is on cooldown and the Gunner's reserved Furnace overheats first (a heat gate on the reservation only removed reservations, so it was reverted)
 - 2026-11-02 screenshots at 390x844 and 1280x720 in scratchpad w8-int/: normal game at 90 s, callout, help for Penitent and Psyker, downed countdown; no clipping found
+- 2026-11-02 review fixes: master callWave proven by a node spec (engine-hooks) and the master scenario script (callWave at its tick starts the pending wave); full CI and screenshots in scratchpad w8-fix/
 
 ## Harvest
 - [x] decision: determinism spec is cross-runtime equality at test time, no committed golden (D-V4TA7WE5J4QC24D3, supersedes D-NMSA2YZXKCODLCC2)
-- [x] decision: D-3F64ED62IYC4SCZH: a blocked enemy swing costs a full attack period (block event = one blocked hit); callWave refused in master mode and throttled by rules.callWaveMinSeconds
+- [x] decision: D-ZMXSYC2O7WQ5PHZO (supersedes D-3F64ED62IYC4SCZH): callWave starts the Director's pending wave in master mode under both throttles; shared canCallWave predicate drives sim and HUD; a blocked swing still costs a full attack period
 - [ ] decision: B (2026-11-01): Psyker basic-attack hits add Warp (about +4); Martyrdom nova hits enemies only (PLAN §3 Q1, Q2)
 
 ## Log
@@ -57,3 +58,4 @@ Step 3 integration done and green: cross-runtime check, step-1 review fixes, wir
 - 2026-11-02 step 3: golden.ts/regen.ts/npm run golden removed; browser project gets a Node-computed reference via globalSetup + inject (D-V4TA7WE5J4QC24D3)
 - 2026-11-02 step 3: step-1 review fixes (downGunner, callWave throttle, block/despawn events, fallen in team totals, intent drop on down, respawn first, damageTaken clamp)
 - 2026-11-02 step 3: feedback mounted in main (overlay layer + camera projection), help gains Resources and Rules, dead cards use respawnText/UI_TEXT, reporter gains combo.payoffs; all-bot evidence and screenshots recorded
+- 2026-11-02 review fixes: H1 master callWave starts the pending wave (shared canCallWave/canSend), M1 HUD reads wave.canCall, L1 gunner.pavise split blocked/selfBlocks, L2 combo.payoffs binary search, L3 browser reference guards, UI callouts merge (x N) and cap at 4

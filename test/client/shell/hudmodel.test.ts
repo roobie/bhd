@@ -299,11 +299,14 @@ describe('respawn countdown and call wave', () => {
   });
 
   it('shows the time to the next wave and only offers the call while one is pending', () => {
-    const pending: Perception = { ...base, wave: { ...base.wave, n: 0, total: 5, nextAt: base.tick + 3 * TICK_HZ } };
+    const pending: Perception = {
+      ...base,
+      wave: { ...base.wave, n: 0, total: 5, nextAt: base.tick + 3 * TICK_HZ, canCall: true },
+    };
     const { top } = buildHudModel(input({ p: pending }));
     expect(top.nextInSeconds).toBe(3);
     expect(top.canCallWave).toBe(true);
-    const spent: Perception = { ...base, wave: { ...base.wave, n: 5, total: 5 } };
+    const spent: Perception = { ...base, wave: { ...base.wave, n: 5, total: 5, canCall: false } };
     expect(buildHudModel(input({ p: spent })).top.canCallWave).toBe(false);
   });
 });

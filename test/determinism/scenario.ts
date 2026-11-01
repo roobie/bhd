@@ -146,7 +146,9 @@ export const SCRIPT: readonly Scripted[] = [
 
 /** The scenario game in master mode (wave master seat 4, default budget and costs). */
 function masterScenarioGame(): GameConfig {
-  return { ...scenarioGame(), master: defaultMaster() };
+  // Interval 20 s (the shipped one): longer than the master's send interval, so an early call has a window.
+  const base = scenarioGame();
+  return { ...base, waves: { ...base.waves, interval: 20 }, master: defaultMaster() };
 }
 
 /**
@@ -186,8 +188,9 @@ const MASTER_SCRIPT: readonly Scripted[] = [
   { tick: 310, player: 4, cmd: { kind: 'send' } },
   { tick: 320, player: 4, cmd: { kind: 'summon', def: 'runner', count: 4 } },
   { tick: 330, player: 4, cmd: { kind: 'summon', def: 'runner', count: 2 } },
-  // Master mode ignores callWave (a logged no-op): only `send` starts a wave early.
-  { tick: 650, player: 0, cmd: { kind: 'callWave' } },
+  // Master mode: callWave starts the pending wave now, like `send` (both throttles permitting).
+  { tick: 590, player: 4, cmd: { kind: 'summon', def: 'runner', count: 3 } },
+  { tick: 600, player: 0, cmd: { kind: 'callWave' } },
   { tick: 700, player: 4, cmd: { kind: 'send' } },
   { tick: 701, player: 4, cmd: { kind: 'summon', def: 'grunt', count: 2 } },
   { tick: 1100, player: 4, cmd: { kind: 'send' } },
