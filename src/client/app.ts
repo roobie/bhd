@@ -2,28 +2,52 @@
 // speed, draws it, and shows a HUD. Sends no commands. NOT the game client (wave 7).
 
 import { html, render } from 'lit-html';
-import { defaultGame } from '../content/index.ts';
-import { Sim } from '../sim/sim.ts';
+import type { Match } from '../match/match.ts';
 import { TICK_HZ } from '../sim/time.ts';
+import type { Mode, ViewerConfig } from './config.ts';
+import {
+  DOCTRINE_IDS,
+  MODES,
+  parseHash,
+  parseMode,
+  parseSeconds,
+  parseSeed,
+  REACTION_RANGE,
+  serialiseHash,
+  THINK_RANGE,
+} from './config.ts';
 import { drawSim, readPalette } from './draw.ts';
-import type { NameBook } from './eventlog.ts';
-import { pushEvents } from './eventlog.ts';
+import type { LogFilters, LogLine, NameBook } from './eventlog.ts';
+import { pushEvents, visibleLines } from './eventlog.ts';
 import { ancientText, countsText, gunnerHud } from './hud.ts';
+import type { OverlayKey, RecentMove } from './overlay.ts';
+import { allOverlays, OVERLAY_KEYS, OVERLAY_LABELS } from './overlay.ts';
+import { pushSample } from './panelmath.ts';
+import { botPanel, directorPanel } from './panels.ts';
+import { buildMatch } from './setup.ts';
 
 const SPEEDS = [0.5, 1, 2, 4, 8] as const;
-const LOG_LINES = 20;
+/** Events kept for the log, and lines shown after filtering. */
+const LOG_KEPT = 400;
+const LOG_SHOWN = 24;
+/** Tension is sampled every this many ticks, up to SPARK_SAMPLES samples. */
+const SPARK_EVERY = TICK_HZ / 2;
+const SPARK_SAMPLES = 120;
 /** Frame gaps longer than this (ms, e.g. a background tab) are clamped so the sim does not fast-forward. */
 const MAX_FRAME_MS = 250;
 /** Cap on ticks per frame, so a slow frame cannot snowball. */
 const MAX_STEPS_PER_FRAME = 64;
-const UINT32_MAX = 4_294_967_295;
 
 /** Mounts the viewer into `root`; the returned function stops it. */
 export function mount(root: HTMLElement): () => void {
-  let seed = 1;
-  let sim = new Sim({ seed, game: defaultGame() });
+  let cfg: ViewerConfig = parseHash(globalThis.location.hash);
+  let match: Match = buildMatch(cfg);
   let names: NameBook = new Map();
-  let log: string[] = [];
+  let log: LogLine[] = [];
+  let moves = new Map<number, RecentMove>();
+  let tension: number[] = [];
+  let overlays = allOverlays(true);
+  let filters: LogFilters = { cmd: false, choice: true, intent: true };
   let playing = true;
   let speed = 1;
   let acc = 0;
@@ -38,26 +62,47 @@ export function mount(root: HTMLElement): () => void {
   scheme.addEventListener('change', refreshPalette);
 
   function stepOnce(): void {
-    const events = sim.step();
-    pushEvents(log, names, events, LOG_LINES);
+    const events = match.step();
+    pushEvents(log, names, events, LOG_KEPT);
     for (const e of events) {
       if (e.kind === 'end') {
         endText = `${e.reason} (wave ${e.wave})`;
         playing = false;
+      } else if (e.kind === 'cmd' && e.cmd.kind === 'move') {
+        moves.set(e.cmd.hero, { x: e.cmd.x, y: e.cmd.y, tick: e.tick });
       }
+    }
+    const status = match.directorStatus;
+    if (status !== undefined && match.tick % SPARK_EVERY === 0) {
+      pushSample(tension, status.tension, SPARK_SAMPLES);
     }
   }
 
   function reset(): void {
-    sim = new Sim({ seed, game: defaultGame() });
+    match = buildMatch(cfg);
     names = new Map();
     log = [];
+    moves = new Map();
+    tension = [];
     endText = undefined;
     playing = true;
     acc = 0;
     // Setup events (spawns) are returned by the first step; run it so names are known.
     stepOnce();
   }
+
+  /** Applies a changed config: share it in the URL hash, then restart the game. */
+  function apply(next: ViewerConfig): void {
+    cfg = next;
+    globalThis.history.replaceState(null, '', serialiseHash(cfg));
+    reset();
+  }
+
+  const onHashChange = (): void => {
+    cfg = parseHash(globalThis.location.hash);
+    reset();
+  };
+  globalThis.addEventListener('hashchange', onHashChange);
 
   function togglePlay(): void {
     playing = !playing;
@@ -68,15 +113,47 @@ export function mount(root: HTMLElement): () => void {
     stepOnce();
   }
 
-  function setSeed(ev: Event): void {
+  function onSeed(ev: Event): void {
     const input = ev.target as HTMLInputElement;
-    const v = Number(input.value);
-    if (input.value.trim() !== '' && Number.isInteger(v) && v >= 0 && v <= UINT32_MAX) {
-      seed = v;
-      reset();
+    const v = parseSeed(input.value);
+    if (v === undefined) {
+      input.value = String(cfg.seed);
     } else {
-      input.value = String(seed);
+      apply({ ...cfg, seed: v });
     }
+  }
+
+  function onMode(ev: Event): void {
+    const input = ev.target as HTMLSelectElement;
+    const v = parseMode(input.value);
+    if (v === undefined) {
+      input.value = cfg.mode;
+    } else {
+      apply({ ...cfg, mode: v });
+    }
+  }
+
+  function onDoctrine(slot: number) {
+    return (ev: Event): void => {
+      const input = ev.target as HTMLSelectElement;
+      if (DOCTRINE_IDS.includes(input.value)) {
+        apply({ ...cfg, doctrines: cfg.doctrines.map((d, i) => (i === slot ? input.value : d)) });
+      } else {
+        input.value = cfg.doctrines[slot] ?? '';
+      }
+    };
+  }
+
+  function onSeconds(key: 'reactionSeconds' | 'thinkSeconds') {
+    return (ev: Event): void => {
+      const input = ev.target as HTMLInputElement;
+      const v = parseSeconds(input.value, key === 'reactionSeconds' ? REACTION_RANGE : THINK_RANGE);
+      if (v === undefined) {
+        input.value = String(cfg[key]);
+      } else {
+        apply({ ...cfg, [key]: v });
+      }
+    };
   }
 
   function speedButton(s: number) {
@@ -86,18 +163,52 @@ export function mount(root: HTMLElement): () => void {
     return html`<button type="button" class=${s === speed ? 'on' : ''} aria-pressed=${s === speed} @click=${pick}>${s}×</button>`;
   }
 
+  function overlayToggle(key: OverlayKey) {
+    const toggle = (ev: Event): void => {
+      overlays = { ...overlays, [key]: (ev.target as HTMLInputElement).checked };
+    };
+    return html`<label class="chk"><input type="checkbox" data-overlay=${key} .checked=${overlays[key]} @change=${toggle} />${OVERLAY_LABELS[key]}</label>`;
+  }
+
+  function filterToggle(key: keyof LogFilters) {
+    const toggle = (ev: Event): void => {
+      filters = { ...filters, [key]: (ev.target as HTMLInputElement).checked };
+    };
+    return html`<label class="chk"><input type="checkbox" data-filter=${key} .checked=${filters[key]} @change=${toggle} />${key}</label>`;
+  }
+
+  function modeOption(m: Mode) {
+    return html`<option value=${m} ?selected=${m === cfg.mode}>${m}</option>`;
+  }
+
+  function doctrineSelect(slot: number) {
+    const hero = match.sim.game.heroes[slot]?.id ?? `slot ${slot}`;
+    return html`<label>${hero}
+      <select data-doctrine=${slot} @change=${onDoctrine(slot)}>
+        ${DOCTRINE_IDS.map((id) => html`<option value=${id} ?selected=${id === cfg.doctrines[slot]}>${id}</option>`)}
+      </select></label>`;
+  }
+
   function view() {
+    const { sim } = match;
     const result = endText ?? 'running';
     return html`
       <h1>BHD debug viewer</h1>
-      <p class="note">debug viewer — not the game client (wave 7). Read-only.</p>
+      <p class="note">debug viewer — not the game client (wave 7). Read-only: bots play, you watch.</p>
       <div class="controls">
         <button type="button" @click=${togglePlay}>${playing ? 'Pause' : 'Play'}</button>
         <button type="button" @click=${stepButton}>Step</button>
         ${SPEEDS.map(speedButton)}
         <button type="button" @click=${reset}>Reset</button>
-        <label>seed <input type="number" min="0" step="1" .value=${String(seed)} @change=${setSeed} /></label>
       </div>
+      <div class="controls config">
+        <label>seed <input type="number" min="0" step="1" .value=${String(cfg.seed)} @change=${onSeed} /></label>
+        <label>mode <select @change=${onMode}>${MODES.map(modeOption)}</select></label>
+        <label>reaction s <input type="number" min=${REACTION_RANGE.min} max=${REACTION_RANGE.max} step="0.1" .value=${String(cfg.reactionSeconds)} @change=${onSeconds('reactionSeconds')} /></label>
+        <label>think s <input type="number" min=${THINK_RANGE.min} max=${THINK_RANGE.max} step="0.1" .value=${String(cfg.thinkSeconds)} @change=${onSeconds('thinkSeconds')} /></label>
+      </div>
+      <div class="controls doctrines">${[0, 1, 2, 3].map(doctrineSelect)}</div>
+      <div class="controls overlays" aria-label="overlays">${OVERLAY_KEYS.map(overlayToggle)}</div>
       <canvas aria-label="top-down map"></canvas>
       <div class="hud">
         <div>tick <b id="tick">${sim.tick}</b> · wave ${sim.waves.n} · ${speed}×${playing ? '' : ' (paused)'}</div>
@@ -106,8 +217,10 @@ export function mount(root: HTMLElement): () => void {
         <div>game: ${result}</div>
         ${gunnerHud(sim)}
       </div>
+      <div class="panels">${botPanel(match)}${directorPanel(match, tension)}</div>
       <h2>events</h2>
-      <ol class="log">${log.map((l) => html`<li>${l}</li>`)}</ol>
+      <div class="controls filters" aria-label="event filters">${(['cmd', 'choice', 'intent'] as const).map(filterToggle)}</div>
+      <ol class="log">${visibleLines(log, filters, LOG_SHOWN).map((l) => html`<li class=${l.cat}>${l.text}</li>`)}</ol>
     `;
   }
 
@@ -134,7 +247,7 @@ export function mount(root: HTMLElement): () => void {
     render(view(), root);
     const canvas = root.querySelector('canvas');
     if (canvas) {
-      drawSim(canvas, sim, palette);
+      drawSim(canvas, match, palette, { flags: overlays, moves });
     }
     raf = requestAnimationFrame(frame);
   }
@@ -144,5 +257,6 @@ export function mount(root: HTMLElement): () => void {
   return () => {
     cancelAnimationFrame(raf);
     scheme.removeEventListener('change', refreshPalette);
+    globalThis.removeEventListener('hashchange', onHashChange);
   };
 }
