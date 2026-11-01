@@ -10,6 +10,7 @@ const DUP_UNIT_RE = /duplicate unit id 'gunner'/u;
 const DUP_STATUS_RE = /duplicate status/u;
 const GUNNER = 2;
 const TANK = 3;
+const RANGED = 4;
 
 type Ctx = Parameters<typeof heal>[0];
 
@@ -170,7 +171,7 @@ describe('dead actors', () => {
     });
     sim.command(0, { kind: 'spawn', def: 'grunt', x: 76, y: 28 }, 1);
     sim.step();
-    expect(hero(sim, GUNNER).attack.cooldown).toBe(0);
+    expect(hero(sim, RANGED).attack.cooldown).toBe(0);
   });
 });
 
