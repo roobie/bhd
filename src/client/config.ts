@@ -2,8 +2,9 @@
 // a bad or missing hash field falls back to the default, so a shared link never throws.
 
 import { defaultBotSetup } from '../content/bots.ts';
+import type { Mode } from '../match/run.ts';
 
-export type Mode = 'director' | 'schedule';
+export type { Mode } from '../match/run.ts';
 
 export const MODES: readonly Mode[] = ['director', 'schedule'];
 const SEATS = 4;

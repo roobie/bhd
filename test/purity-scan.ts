@@ -4,7 +4,7 @@
 import { posix } from 'node:path';
 
 /** Folders under src/ that must stay deterministic. */
-export const PURE_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'content'];
+export const PURE_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'content', 'replay'];
 
 /** Relative imports may only resolve into these (prefixes, repo-root relative). Packages are never allowed. */
 const ALLOWED_IMPORT_PREFIXES = PURE_DIRS.map((d) => `src/${d}/`);

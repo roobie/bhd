@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PURE_DIRS, scan } from './purity-scan.ts';
 
 // Must exist and hold code, so a typo or a move can't turn the scan vacuous. The others (content) may be absent.
-const REQUIRED_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match'];
+const REQUIRED_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'replay'];
 const OPTIONAL_DIRS = PURE_DIRS.filter((d) => !REQUIRED_DIRS.includes(d));
 
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/u;

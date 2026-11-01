@@ -48,7 +48,7 @@ function holdTheLine(): Doctrine {
     risk: 0.3,
     leash: 6,
     ultimate: 'spike',
-    noise: 0,
+    noise: 0.05,
     stickiness: 0.2,
   };
 }
@@ -60,7 +60,7 @@ export function greedy(): Doctrine {
     risk: 0.7,
     leash: 14,
     ultimate: 'free',
-    noise: 0,
+    noise: 0.05,
     stickiness: 0.2,
   };
 }
