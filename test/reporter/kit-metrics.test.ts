@@ -226,17 +226,25 @@ describe('psyker metrics', () => {
   });
 });
 
+/** `block` is not in `SimEvent` until integration; synthetic ones are cast in. */
+function blocks(raw: readonly object[]): SimEvent[] {
+  return raw as unknown as SimEvent[];
+}
+
 describe('gunner pavise', () => {
-  it('counts casts in the pavise slot and hits tagged blocked', () => {
+  it('counts casts in the pavise slot and `block` events', () => {
     const l = logOf([
       ...SPAWNS,
       { tick: 50, kind: 'ability', hero: 2, slot: 2, target: 0, value: 0 },
       { tick: 60, kind: 'ability', hero: 2, slot: 1, target: 0, value: 0 },
       { tick: 70, kind: 'ability', hero: 3, slot: 2, target: 0, value: 0 },
-      { tick: 80, kind: 'dmg', src: 10, dst: 2, amount: 0, tags: ['blocked'] },
+      ...blocks([
+        { tick: 80, kind: 'block', src: 10, dst: 2, prop: 20 },
+        { tick: 85, kind: 'block', src: 11, prop: 20 },
+      ]),
       { tick: 90, kind: 'dmg', src: 10, dst: 2, amount: 5, tags: ['melee'] },
     ]);
-    expect(metric('gunner.pavise').compute(l)).toEqual({ casts: 1, blocks: 1 });
+    expect(metric('gunner.pavise').compute(l)).toEqual({ casts: 1, blocks: 2 });
   });
 });
 
