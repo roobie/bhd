@@ -203,6 +203,11 @@ function pickTarget(run: GunnerRun): Unit | undefined {
   return best;
 }
 
+/** `{dst}` when there is one, else nothing (the `block` event leaves `dst` out rather than set it undefined). */
+function optDst(dst: number | undefined): { dst?: number } {
+  return dst === undefined ? {} : { dst };
+}
+
 function fireLine(run: GunnerRun, target: Unit, tags: readonly string[]): void {
   const { ctx, hero, kit, def } = run;
   const dx = target.x - hero.x;
@@ -217,8 +222,14 @@ function fireLine(run: GunnerRun, target: Unit, tags: readonly string[]): void {
   let to = { x: hero.x + ux * range, y: hero.y + uy * range };
   // A prop barrier (Pavise) stops the line: nothing past it is hit.
   const blocked = firstBarrier(ctx.entities, from, to);
+  const full = to;
   if (blocked !== undefined) {
-    to = { x: from.x + (to.x - from.x) * blocked, y: from.y + (to.y - from.y) * blocked };
+    to = { x: from.x + (to.x - from.x) * blocked.t, y: from.y + (to.y - from.y) * blocked.t };
+    // The first unit the line would have hit behind the prop (muzzle-side hits are not "behind").
+    const behind = unitsOnSegment(ctx.entities, from, full, def.heat.lineHalfWidth).find(
+      (h) => h.t > blocked.t && h.unit.id !== hero.id && h.unit.kind !== 'ancient',
+    );
+    ctx.emit({ tick: ctx.tick, kind: 'block', src: hero.id, prop: blocked.prop, ...optDst(behind?.unit.id) });
   }
   kit.facing = angleTo(hero, target.x, target.y);
   for (const hit of unitsOnSegment(ctx.entities, from, to, def.heat.lineHalfWidth)) {
@@ -497,6 +508,27 @@ export function commandGunner(run: GunnerRun, cmd: HeroCommand): void {
       return;
     default:
   }
+}
+
+/** Going down (deaths system, once per down): back to a free stance with no lock, furnace or spin, and no heat. */
+export function downGunner(run: GunnerRun): void {
+  const { hero, kit } = run;
+  kit.stance = STANCE.free;
+  kit.unbraceTicks = 0;
+  kit.lockTicks = 0;
+  kit.ventStep = 0;
+  kit.furnaceTicks = 0;
+  kit.spin = 0;
+  kit.heat = 0;
+  kit.shot = 0;
+  hero.attack.cooldown = 0;
+  syncBand(run);
+}
+
+/** Revived at a new position: forget the old one so the first tick does not count as movement. */
+export function respawnGunner(run: GunnerRun): void {
+  run.kit.lastX = run.hero.x;
+  run.kit.lastY = run.hero.y;
 }
 
 /** Hashes the kit's own fields; hold and autocast are hashed by the dispatcher. */

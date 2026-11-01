@@ -41,15 +41,17 @@ export interface WaveState {
   queue: SpawnJob[];
   /** Started waves that have not ended, ascending by number. */
   open: OpenWave[];
+  /** Tick the latest wave started at (0 before the first); `callWave` is throttled against it. */
+  lastStart: number;
 }
 
 export function createWaveState(firstAt: number): WaveState {
-  return { n: 0, nextAt: firstAt, queue: [], open: [] };
+  return { n: 0, nextAt: firstAt, queue: [], open: [], lastStart: 0 };
 }
 
 /** Every field of the state, in fixed order. */
 export function hashWaves(h: StateHasher, w: WaveState): void {
-  h.u32(w.n).f64(w.nextAt).u32(w.queue.length);
+  h.u32(w.n).f64(w.nextAt).f64(w.lastStart).u32(w.queue.length);
   for (const job of w.queue) {
     h.f64(job.at).str(job.def).u32(job.wave);
   }
@@ -72,6 +74,7 @@ export function wavesExhausted(ctx: TickContext): boolean {
 export function startWave(ctx: TickContext, wave: WaveDef): void {
   const w = ctx.waves;
   w.n += 1;
+  w.lastStart = ctx.tick;
   ctx.emit({
     tick: ctx.tick,
     kind: 'wave',
@@ -92,10 +95,19 @@ export function startWave(ctx: TickContext, wave: WaveDef): void {
   w.nextAt = ctx.tick + ticks(ctx.game.waves.interval);
 }
 
-/** `callWave` command: the next wave starts this tick (the wave system runs right after the commands). */
+/**
+ * `callWave` command: the next wave starts this tick (the wave system runs right after the commands).
+ * Refused (a silent no-op) when: the waves are spent; the current wave is still spawning
+ * (`queue` not empty); fewer than `rules.callWaveMinSeconds` have passed since the last wave started
+ * (the first wave can be called at once); or in master mode, where the schedule is only a clock and
+ * the `send` command (with its own `minIntervalSeconds` check) is the only way to start a wave early.
+ */
 export function callWave(ctx: TickContext): void {
   const w = ctx.waves;
-  if (w.n >= ctx.game.waves.waves.length || (ctx.master !== undefined && ctx.master.pending.length === 0)) {
+  if (w.n >= ctx.game.waves.waves.length || ctx.master !== undefined || w.queue.length > 0) {
+    return;
+  }
+  if (w.n > 0 && ctx.tick - w.lastStart < ticks(ctx.game.rules.callWaveMinSeconds)) {
     return;
   }
   w.nextAt = Math.min(w.nextAt, ctx.tick);

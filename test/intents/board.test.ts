@@ -171,7 +171,7 @@ describe('post and fire', () => {
     expect(r.sim.intents.live).toEqual([]);
   });
 
-  it('expires when the poster dies before the fire tick', () => {
+  it('cancels when the poster dies before the fire tick', () => {
     const r = rig();
     r.post(3, 2, 10);
     r.runTo(6);
@@ -181,11 +181,13 @@ describe('post and fire', () => {
     }
     hero.hp = 0;
     r.runTo(20);
+    // Going down cancels the pending post at once (the deaths system runs the tick after hp hit 0).
     const ops = r.ops();
-    expect(ops).toEqual([
-      [3, 'post', 1, 2],
-      [13, 'expire', 1, 2],
+    expect(ops.map((o) => o.slice(1))).toEqual([
+      ['post', 1, 2],
+      ['cancel', 1, 2],
     ]);
+    expect(ops[1]?.[0]).toBeLessThan(13);
     expect(r.casts(2)).toEqual([]);
     expect(r.sim.intents.live).toEqual([]);
   });
@@ -300,7 +302,7 @@ describe('reservations', () => {
     expect(r.casts(3)).toEqual([]);
   });
 
-  it('expires when the reserver is dead at its cast tick', () => {
+  it('withdraws the reservation when the reserver goes down before its cast tick', () => {
     const r = rig();
     r.post(3, 2, 5);
     r.reserve(4, 3, 1, 2);
@@ -311,7 +313,11 @@ describe('reservations', () => {
     }
     hero.hp = 0;
     r.runTo(20);
-    expect(r.ops().at(-1)).toEqual([10, 'expire', 1, 3]);
+    // Going down withdraws its reservation (`cancel` by the reserver) before it comes due.
+    const ops = r.ops();
+    const cancel = ops.find((o) => o[1] === 'cancel');
+    expect(cancel?.slice(1)).toEqual(['cancel', 1, 3]);
+    expect(ops.some((o) => o[1] === 'expire' || o[1] === 'fulfil')).toBe(false);
     expect(r.casts(3)).toEqual([]);
     expect(r.sim.intents.live).toEqual([]);
   });

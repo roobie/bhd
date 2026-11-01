@@ -84,17 +84,23 @@ export function unitsOnSegment(entities: EntityView, from: Point, to: Point, hal
   return out.sort((a, b) => a.t - b.t);
 }
 
+/** Where a segment first crosses a prop: fraction `t` in [0, 1] (0 = the start) and the prop's entity id. */
+export interface BarrierHit {
+  readonly t: number;
+  readonly prop: number;
+}
+
 /**
- * Where the segment `from`-`to` first crosses a prop barrier: the fraction t in [0, 1] (0 = `from`),
- * or undefined when nothing blocks it. With `team` given, only props of the OTHER team block (the
+ * Where the segment `from`-`to` first crosses a prop barrier (see `BarrierHit`), or undefined when
+ * nothing blocks it. With `team` given, only props of the OTHER team block (the
  * shooter's own barriers let its shots through: enemy attacks use this); without it every prop
  * blocks (the Gunner's line stops at her own Pavise). Parallel and degenerate segments never
  * cross. Plain + - * / only (no trig), so it is bit-identical everywhere.
  */
-export function firstBarrier(entities: EntityView, from: Point, to: Point, team?: Team): number | undefined {
+export function firstBarrier(entities: EntityView, from: Point, to: Point, team?: Team): BarrierHit | undefined {
   const rx = to.x - from.x;
   const ry = to.y - from.y;
-  let best: number | undefined;
+  let best: BarrierHit | undefined;
   for (const e of entities.values()) {
     const { prop } = e;
     if (e.kind !== 'prop' || prop === undefined || (team !== undefined && e.team === team)) {
@@ -110,8 +116,8 @@ export function firstBarrier(entities: EntityView, from: Point, to: Point, team?
     const qy = e.y - prop.uy * prop.halfLength - from.y;
     const t = (qx * sy - qy * sx) / denom;
     const u = (qx * ry - qy * rx) / denom;
-    if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && (best === undefined || t < best)) {
-      best = t;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1 && (best === undefined || t < best.t)) {
+      best = { t, prop: e.id };
     }
   }
   return best;

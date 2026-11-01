@@ -32,7 +32,7 @@ Out: full kits (B-7YXA5H4O3R2J4NG2), Rift (B-C4AZ5S2JPOP24OUM), bargains (wave 9
 Decisions D-IL3SV332IUGDBPFW, D-ENVNBTY5YVUM7NAN, D-4TKP7DQRMLBK6K7W, D-XVHJGA432FCOHEEU, D-EVOB2RC2MXQWJYBE, D-MFT4K7D4HC3TOYPH, D-2BOISI7VSLW2ZX3F, D-ZAQVH22UMUMFOQBV, D-IYLBKMAIQNR7GE3R, D-H2FHQUWM3IJDUPCU, D-ZQ7UANKFTPZIMMZW. No gameplay pinning (D-4E4QRJ7N6LIGZDSD). Sonnet implements in worktrees; Opus reviews; only the lead pushes and regenerates golden.
 
 ## Now
-Step 1 merged (contract in CONTRACT.md). Step 2 slices A–G running in parallel; Opus review of step 1 running alongside.
+Step 3 integration in progress: golden replaced by cross-runtime check, step-1 review fixes, wiring, evidence runs.
 
 ## Next
 - Step 2 slices A–G in parallel after step 1 integrates.
@@ -41,6 +41,8 @@ Step 1 merged (contract in CONTRACT.md). Step 2 slices A–G running in parallel
 ## Evidence
 
 ## Harvest
+- [x] decision: determinism spec is cross-runtime equality at test time, no committed golden (D-V4TA7WE5J4QC24D3, supersedes D-NMSA2YZXKCODLCC2)
+- [ ] decision: a blocked enemy swing costs a full attack period (block event = one blocked hit); callWave refused in master mode and throttled by rules.callWaveMinSeconds
 - [ ] decision: B (2026-11-01): Psyker basic-attack hits add Warp (about +4); Martyrdom nova hits enemies only (PLAN §3 Q1, Q2)
 
 ## Log
@@ -48,3 +50,5 @@ Step 1 merged (contract in CONTRACT.md). Step 2 slices A–G running in parallel
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 B answered PLAN §3 Q1/Q2 (Warp from basic attacks; nova enemies only), matching the step-1 knob defaults
 - 2026-11-02 step 1 engine prep merged; golden regenerated once; step 2 slices opened
+- 2026-11-02 step 3: golden.ts/regen.ts/npm run golden removed; browser project gets a Node-computed reference via globalSetup + inject (D-V4TA7WE5J4QC24D3)
+- 2026-11-02 step 3: step-1 review fixes (downGunner, callWave throttle, block/despawn events, fallen in team totals, intent drop on down, respawn first, damageTaken clamp)

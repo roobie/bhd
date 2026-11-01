@@ -13,10 +13,10 @@ a field says so. Hero and enemy `def` strings are content ids.
 
 | kind | fields | notes |
 |---|---|---|
-| `cmd` | `player`, `cmd` | A command applied at the start of `tick`, exactly as submitted (canonical form). `cmd` is a `Command` (see `src/sim/commands.ts`). `callWave` (call the next wave early) is a command like any other, so it shows up here; its effect is the next `wave` `start`. |
+| `cmd` | `player`, `cmd` | A command applied at the start of `tick`, exactly as submitted (canonical form). `cmd` is a `Command` (see `src/sim/commands.ts`). `callWave` (call the next wave early) is a command like any other, so it shows up here; its effect is the next `wave` `start`. The call is refused silently (the command is still logged) while the current wave is still spawning, within `rules.callWaveMinSeconds` of the last wave start, once the waves are spent, and always in master mode (use `send` there). |
 | `wave` | `n`, `phase` (`start`\|`end`), `composition[{def,count}]` | `n` is the 1-based wave number. |
-| `spawn` | `id`, `def`, `team` | An entity appeared. A prop (a placed barrier such as the Gunner's `pavise`) spawns like any entity, with the placer's team; it is never targeted or damaged and is gone silently when it expires (no `death`). |
-| `dmg` | `src`, `dst`, `amount`, `tags[]` | `tags` e.g. `ff`, `overpen`, `pierce`, `splash`, `ability:<id>`. Friendly fire needs the `ff` tag. `amount` is the hp actually lost after a kit's hooks (halving, the hp floor). `amount` can exceed what the target had left; clamp at its hp when summing. |
+| `spawn` | `id`, `def`, `team` | An entity appeared. A prop (a placed barrier such as the Gunner's `pavise`) spawns like any entity, with the placer's team; it is never targeted or damaged and is removed when it expires (`despawn`, no `death`). |
+| `dmg` | `src`, `dst`, `amount`, `tags[]` | `tags` e.g. `ff`, `overpen`, `pierce`, `splash`, `ability:<id>`. Friendly fire needs the `ff` tag. `amount` is the hp actually lost after a kit's hooks (halving, the hp floor); a hook's output is clamped to finite and >= 0. Overkill is not trimmed: `amount` is the whole hit even when the target had less left (unless a floor applied), so clamp at its hp when summing. |
 | `heal` | `src`, `dst`, `amount` | `amount` is what was actually restored (capped at max hp). No tags yet. |
 | `status` | `dst`, `status`, `on`, `src` | A status turned on or off. |
 | `ability` | `hero`, `slot`, `target`, `value` | A cast. `target` is an entity id or 0; `value` is filled when known, else 0. |
@@ -24,13 +24,15 @@ a field says so. Hero and enemy `def` strings are content ids.
 | `backlash` | `hero`, `warp`, `damage` | The Psyker's Discharge backlash fired. `warp` is his Warp when rolled, `damage` the per-target hit (`60 + warp`); the `dmg` events (tags `ff`, `splash`) follow it. |
 | `death` | `id`, `killer` | `killer` is the entity that took it to 0 hp, 0 if unknown. An enemy is gone for good. A hero stays downed (hp 0, not targeted) until its `respawn`; one `death` per down. |
 | `respawn` | `id` | A downed hero is revived at its spawn point with full hp (`src/sim/respawn.ts`; the delay is `rules.respawn`). |
+| `block` | `src`, `dst?`, `prop` | A prop (Pavise) stopped a hit. Enemy melee: `src` the enemy, `dst` the unit it aimed at (the blocked swing costs the enemy a full attack period, so a block is one blocked hit). The Gunner's overpenetrating line: `src` the Gunner, `dst` the first unit behind the prop the line would have hit, absent if none. `prop` is the prop's entity id. |
+| `despawn` | `id` | A prop's lifetime ended and it was removed (no `death`); `id` is the prop id its `spawn` named. |
 | `leak` | `id`, `livesLost` | An enemy reached the Ancient; `livesLost` is the Ancient hp it cost. |
 | `end` | `wave`, `reason` | The game is over (`ancient-destroyed`\|`victory`\|`team-wiped`, the last only when `rules.wipeLoses`); `wave` is the number of waves started. Gameplay stops after it. |
 | `hash` | `stateHash` | State hash after `tick` completed, every `hashEvery` ticks. Replays compare these. |
 | `intent` | `id`, `op`, `by`, `intentKind` | Intents board lifecycle. `op` is `post`\|`reserve`\|`fire`\|`fulfil`\|`expire`\|`cancel`; `by` is the hero the op concerns. |
 | `choice` | `hero`, `decision`, `options[{id,score}]`, `picked` | A bot decision between 2 or more options, emitted when first evaluated and whenever its pick changes. `options` are in the decision's fixed order; `picked` is one of their ids. Ids are the options' labels (`Option.label`, default the id): options that share a label (one per target) are one entry with the best score, so the log holds a category (`mark`), not an entity id. |
 
-`combo` events arrive with the combo waves (6 and 8). Planned at integration: `block {src, dst?, prop}` (a Pavise stopped a hit) and `despawn {id}` (a prop expired). Pain amounts and backlash rolls have no event of their own yet; see the assumptions in `docs/METRICS.md`.
+`combo` events arrive with the combo waves (6 and 8). Pain amounts and backlash rolls have no event of their own yet; see the assumptions in `docs/METRICS.md`.
 
 ## Log format (`bhd-log` v1)
 

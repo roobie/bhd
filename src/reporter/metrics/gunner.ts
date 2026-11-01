@@ -49,24 +49,8 @@ export const gunnerHeatBand: MetricDef = {
 const PAVISE_SLOT = 2;
 
 /**
- * A `block` event as the lead will add it at integration (not in `SimEvent` yet): `src` the attacker,
- * `dst` the protected target (may be omitted), `prop` the barrier entity id. Read structurally so
- * this compiles before the event type exists.
- */
-interface BlockLike {
-  readonly kind: 'block';
-  readonly src: number;
-  readonly dst?: number;
-  readonly prop: number;
-}
-
-function isBlock(e: { readonly kind: string }): e is BlockLike {
-  return e.kind === 'block';
-}
-
-/**
  * Metric 7b: Pavise casts (`ability` events of the gunner in the Pavise slot) and blocks (`block`
- * events). `blocks` reads 0 until the sim emits `block`; assumption recorded in docs/METRICS.md.
+ * events: Pavise stopped an enemy hit or the Gunner's line).
  */
 export const gunnerPavise: MetricDef = {
   id: 'gunner.pavise',
@@ -81,7 +65,7 @@ export const gunnerPavise: MetricDef = {
     for (const e of log.events) {
       if (e.kind === 'ability' && e.slot === PAVISE_SLOT && ix.entities.get(e.hero)?.def === 'gunner') {
         casts += 1;
-      } else if (isBlock(e)) {
+      } else if (e.kind === 'block') {
         blocks += 1;
       }
     }

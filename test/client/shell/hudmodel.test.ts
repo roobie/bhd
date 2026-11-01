@@ -257,7 +257,7 @@ describe('respawn countdown and call wave', () => {
   const fallen = (ticks: number): Perception => ({
     ...base,
     heroes: base.heroes.filter((h) => h.slot !== 1),
-    fallen: [{ id: 99, slot: 1, def: (base.heroes[1] as HeroView).def, respawnTicks: ticks }],
+    fallen: [{ id: 99, slot: 1, def: (base.heroes[1] as HeroView).def, respawnTicks: ticks, maxHp: 100 }],
   });
 
   it('a downed hero is a dead card that counts down whole seconds from Perception.fallen', () => {

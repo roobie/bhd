@@ -15,7 +15,7 @@ import type { Entity, HeroKitState } from '../entities.ts';
 import type { StateHasher } from '../hash.ts';
 import { hasStatus } from '../statuses.ts';
 import { perTick } from '../time.ts';
-import { commandGunner, hashGunner, initGunner, tickGunner } from './gunner.ts';
+import { commandGunner, downGunner, hashGunner, initGunner, respawnGunner, tickGunner } from './gunner.ts';
 import {
   commandPenitent,
   damageTakenPenitent,
@@ -133,10 +133,21 @@ function tickKit(ctx: TickContext, hero: Entity, kit: HeroKitState, def: HeroDef
 /** Kit reaction to going down (deaths system, once per down): resets its resource. */
 export function downKit(ctx: TickContext, hero: Entity): void {
   runKit(ctx, hero, (kit, def) => {
-    if (kit.kind === 'penitent' && def.kit === 'penitent') {
+    if (kit.kind === 'gunner' && def.kit === 'gunner') {
+      downGunner({ ctx, hero, kit, def });
+    } else if (kit.kind === 'penitent' && def.kit === 'penitent') {
       downPenitent({ ctx, hero, kit, def });
     } else if (kit.kind === 'psyker' && def.kit === 'psyker') {
       downPsyker({ ctx, hero, kit, def });
+    }
+  });
+}
+
+/** Kit reaction to being revived at its spawn point (respawn system, after the hero is moved). */
+export function respawnKit(ctx: TickContext, hero: Entity): void {
+  runKit(ctx, hero, (kit, def) => {
+    if (kit.kind === 'gunner' && def.kit === 'gunner') {
+      respawnGunner({ ctx, hero, kit, def });
     }
   });
 }

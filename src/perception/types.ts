@@ -130,6 +130,8 @@ export interface FallenView {
   readonly def: string;
   /** Ticks until it respawns. */
   readonly respawnTicks: number;
+  /** Its max hp (it counts in the team totals at 0 hp). */
+  readonly maxHp: number;
 }
 
 export interface EnemyView {

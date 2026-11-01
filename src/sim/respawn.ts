@@ -5,9 +5,10 @@
 // Timer (ticks) = ticks(min(rules.respawn.max, rules.respawn.base + rules.respawn.perWave * wave)),
 // where wave = waves started so far. `rules.wipeLoses` (default false) ends the game when no hero is up.
 
+import { dropHeroIntents } from '../intents/board.ts';
 import type { TickContext } from './context.ts';
 import type { Entity } from './entities.ts';
-import { downKit } from './heroes/index.ts';
+import { downKit, respawnKit } from './heroes/index.ts';
 import { removeStatus } from './statuses.ts';
 import { ticks } from './time.ts';
 
@@ -42,10 +43,11 @@ export function downHero(ctx: TickContext, hero: Entity): void {
   hero.move.ty = hero.y;
   hero.attack.target = 0;
   hero.attack.cooldown = 0;
+  dropHeroIntents(ctx, hero.id);
   downKit(ctx, hero);
 }
 
-/** Revives due heroes at `heroSpawns[slot]` with full hp and emits `respawn`. Runs right after the props. */
+/** Revives due heroes at `heroSpawns[slot]` with full hp and emits `respawn`. Runs first in the tick, before the commands. */
 export function respawnSystem(ctx: TickContext): void {
   const spawns = ctx.game.map.heroSpawns;
   for (const hero of ctx.entities.values()) {
@@ -64,6 +66,7 @@ export function respawnSystem(ctx: TickContext): void {
     hero.move.mode = 'idle';
     hero.move.tx = at.x;
     hero.move.ty = at.y;
+    respawnKit(ctx, hero);
     ctx.emit({ tick: ctx.tick, kind: 'respawn', id: hero.id });
   }
 }

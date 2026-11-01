@@ -108,7 +108,9 @@ function modify(ctx: TickContext, spec: DamageSpec, victim: Entity): number {
  *    amount = max(amount - effective, amount * 0.2): armour never removes more than 80% of a hit.
  * 6. Props are never damaged. The `damageTaken` hook (kit of the victim) then sets the final amount
  *    and a `minHp` floor that applies to same-team (`ff`) hits only; the `dmg` event carries the hp
- *    actually lost. Leak damage skips the hook.
+ *    actually lost. Leak damage skips the hook. Its output is clamped to finite and >= 0.
+ *    Overkill is not trimmed: without a floor the `dmg` amount is the full hit even when it exceeds
+ *    the victim's remaining hp (hp itself may go below 0; the deaths system acts on hp <= 0).
  */
 export function dealDamage(ctx: TickContext, spec: DamageSpec): number {
   const victim = ctx.entities.get(spec.dst);
@@ -123,8 +125,9 @@ export function dealDamage(ctx: TickContext, spec: DamageSpec): number {
   let floor = 0;
   if (!leak) {
     const taken = ctx.hooks.damageTaken(ctx, { victim, spec, raw: amount, amount });
-    ({ amount } = taken);
-    floor = isFriendly(ctx, spec, victim) ? taken.minHp : 0;
+    // A kit hook must not be able to poison hp: non-finite or negative output counts as 0.
+    amount = Number.isFinite(taken.amount) ? Math.max(0, taken.amount) : 0;
+    floor = isFriendly(ctx, spec, victim) && Number.isFinite(taken.minHp) ? Math.max(0, taken.minHp) : 0;
   }
   const before = victim.hp;
   victim.hp = Math.max(before - amount, Math.min(before, floor));

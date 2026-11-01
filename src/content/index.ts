@@ -109,6 +109,9 @@ export function validateGame(game: GameConfig): void {
   if (!(respawn.base >= 0 && respawn.perWave >= 0 && respawn.max >= 0 && game.rules.leashRange > 0)) {
     throw new Error('game config: rules.respawn values must be >= 0 and rules.leashRange > 0');
   }
+  if (!(game.rules.callWaveMinSeconds >= 0)) {
+    throw new Error('game config: rules.callWaveMinSeconds must be >= 0');
+  }
   const { master } = game;
   if (master !== undefined) {
     for (const c of master.costs) {

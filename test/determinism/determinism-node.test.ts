@@ -1,4 +1,4 @@
-// Node only: the browser project runs determinism.test.ts. Replay and seed checks are engine-independent.
+// Node only: the browser project runs determinism.browser.test.ts. Replay and seed checks are engine-independent.
 
 import { describe, expect, it } from 'vitest';
 import type { Scripted } from './scenario.ts';
@@ -54,6 +54,13 @@ describe('determinism (node)', () => {
     });
     expect(swapped).not.toEqual(SCRIPT);
     expect(hashesOf(runSim(SEED, swapped, TICKS))).not.toEqual(hashesOf(runSim(SEED, SCRIPT, TICKS)));
+  });
+
+  it('the scenario run exercises the Pavise: a block event, a despawn, a respawn (coverage invariant)', () => {
+    const kinds = new Set<string>(runSim(SEED, SCRIPT, TICKS).map((e) => e.kind));
+    for (const kind of ['block', 'despawn', 'respawn']) {
+      expect(kinds.has(kind)).toBe(true);
+    }
   });
 
   it('hashes the last tick', () => {

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-01
 read_if:
   - adding hashed sim state that only some game modes use
-  - golden hashes change for every scenario
+  - state hashes change for every scenario
 refs:
   - src/intents/board.ts#hashIntents
   - src/sim/master.ts#hashMaster
