@@ -169,4 +169,72 @@ describe('gunner brain', () => {
       expect(reissued).toEqual([]);
     }
   });
+
+  describe('pavise decision', () => {
+    /** A ctx where the Pavise is ready, the line is live, a Penitent stands in it and a push closes in. */
+    function staged(): { ctx: BotCtx; seat: Sample['seat'] } | undefined {
+      const s = samples.find((x) => x.ctx.me.gunner !== undefined && x.ctx.p.enemies.length > 0);
+      if (s?.ctx.me.gunner === undefined) {
+        return undefined;
+      }
+      const ctx = structuredClone(s.ctx);
+      const { me } = ctx;
+      const g = me.gunner;
+      if (g === undefined) {
+        return undefined;
+      }
+      const [proto] = ctx.p.enemies;
+      if (proto === undefined) {
+        return undefined;
+      }
+      const enemies = [4, 5, 6, 9].map((d, i) => ({ ...proto, id: 900 + i, x: me.x + d, y: me.y + 0.1 * i }));
+      const penitent = { ...me, id: 777, role: 'penitent' as const, kit: 'penitent' as const, x: me.x + 3, y: me.y };
+      const abilities = me.abilities.map((a) => (a.slot === 2 ? { ...a, ready: true, cooldownLeft: 0 } : a));
+      const out: BotCtx = {
+        ...ctx,
+        inFlight: [],
+        me: { ...me, abilities, lineAllies: [777], gunner: { ...g, heat: 0.95, locked: false, pavise: undefined } },
+        p: { ...ctx.p, enemies, heroes: [...ctx.p.heroes.filter((h) => h.id !== 777), penitent] },
+      };
+      return { ctx: out, seat: s.seat };
+    }
+
+    it('offers wait / shield / block with finite costs and legal, in-range casts', () => {
+      const st = staged();
+      expect(st).toBeDefined();
+      if (st === undefined) {
+        return;
+      }
+      const out = createBot(gunnerBrain, st.seat).think(st.ctx);
+      const d = out.find((x) => x.id === 'gunner.pavise');
+      expect(d?.options.map((o) => o.id)).toEqual(['wait', 'shield', 'block']);
+      const range = st.ctx.me.gunner?.paviseRange ?? 0;
+      const options = d?.options ?? [];
+      expect(options.every((o) => Number.isFinite(o.value) && Number.isFinite(o.cost))).toBe(true);
+      const cmds = options.flatMap((o) => o.commands);
+      expect(cmds.every((c) => isValidCommand(c) && c.kind === 'ability' && c.slot === 2)).toBe(true);
+      const reaches = cmds.flatMap((c) =>
+        c.kind === 'ability' && c.x !== undefined && c.y !== undefined
+          ? [Math.hypot(c.x - st.ctx.me.x, c.y - st.ctx.me.y)]
+          : [],
+      );
+      expect(reaches.length).toBeGreaterThan(0);
+      expect(reaches.every((r) => r <= range + 1e-9)).toBe(true);
+      expect(d?.options.find((o) => o.id === 'shield')?.commands).toHaveLength(1);
+    });
+
+    it('does not decide while the ability is not ready or a cast is in flight', () => {
+      const st = staged();
+      if (st === undefined) {
+        return;
+      }
+      const bot = createBot(gunnerBrain, st.seat);
+      const abilities = st.ctx.me.abilities.map((a) => (a.slot === 2 ? { ...a, ready: false, cooldownLeft: 50 } : a));
+      const cooling = bot.think({ ...st.ctx, me: { ...st.ctx.me, abilities } });
+      expect(cooling.some((x) => x.id === 'gunner.pavise')).toBe(false);
+      const cast = { kind: 'ability', hero: st.ctx.me.id, slot: 2 } as const;
+      const busy = bot.think({ ...st.ctx, inFlight: [{ cmd: cast, at: st.ctx.tick + 3 }] });
+      expect(busy.some((x) => x.id === 'gunner.pavise')).toBe(false);
+    });
+  });
 });

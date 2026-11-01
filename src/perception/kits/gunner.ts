@@ -8,7 +8,7 @@ import { STANCE } from '../../sim/heroes/gunner.ts';
 import { unitsOnSegment } from '../../sim/query.ts';
 import type { Sim } from '../../sim/sim.ts';
 import { ticks } from '../../sim/time.ts';
-import type { AbilityView } from '../types.ts';
+import type { AbilityView, PaviseView } from '../types.ts';
 import type { HeroParts } from './parts.ts';
 
 function gunnerAbilities(def: GunnerDef, kit: GunnerState): AbilityView[] {
@@ -65,6 +65,17 @@ function lineAlliesOf(sim: Sim, hero: Readonly<Entity>, range: number, halfWidth
     .sort((a, b) => a - b);
 }
 
+/** The hero's own standing Pavise, if any. */
+function paviseOf(sim: Sim, owner: number): PaviseView | undefined {
+  for (const p of sim.entities.values()) {
+    if (p.kind === 'prop' && p.prop?.owner === owner && p.prop.until > sim.tick) {
+      const { ux, uy, halfLength, until } = p.prop;
+      return { x: p.x, y: p.y, ux, uy, halfLength, ticksLeft: until - sim.tick };
+    }
+  }
+  return undefined;
+}
+
 export function gunnerParts(sim: Sim, e: Readonly<Entity>, def: GunnerDef, kit: GunnerState): HeroParts {
   const heat = kit.heat / 10_000;
   return {
@@ -93,6 +104,7 @@ export function gunnerParts(sim: Sim, e: Readonly<Entity>, def: GunnerDef, kit: 
       lineHalfWidth: def.heat.lineHalfWidth,
       paviseRange: def.pavise.range,
       paviseHalfLength: def.pavise.halfLength,
+      pavise: paviseOf(sim, e.id),
       pierceAbove: def.heat.pierceAbove,
       overpenAbove: def.heat.overpenAbove,
     },

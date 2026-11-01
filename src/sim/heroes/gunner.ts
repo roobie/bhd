@@ -417,37 +417,46 @@ function castVent(run: GunnerRun, cmd: AbilityCmd): void {
 }
 
 /**
- * Pavise (slot 2): places a barrier prop `min(range, distance to the aim)` away along the aim, its
- * long axis across the aim. Refused while locked out or on cooldown. The Gunner's own overpen line
- * stops at it (`fireLine`), and so do enemy melee hits across it (enemies.ts).
+ * Pavise's aim as a unit vector plus how far away the aim point is (Infinity when there is no point).
+ * The aim point is the command's x/y (also while braced), else its target, else the facing (braced: the
+ * brace facing).
+ */
+function paviseAim(run: GunnerRun, cmd: AbilityCmd): { ux: number; uy: number; dist: number } {
+  const { ctx, hero, kit } = run;
+  const target = cmd.target === undefined ? undefined : ctx.entities.get(cmd.target);
+  const at = cmd.x !== undefined && cmd.y !== undefined ? { x: cmd.x, y: cmd.y } : target;
+  if (at !== undefined) {
+    const dx = at.x - hero.x;
+    const dy = at.y - hero.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d > 0) {
+      return { ux: dx / d, uy: dy / d, dist: d };
+    }
+  }
+  const angle = kit.stance === STANCE.braced ? kit.braceFacing : kit.facing;
+  return { ux: cos(angle), uy: sin(angle), dist: Number.POSITIVE_INFINITY };
+}
+
+/**
+ * Pavise (slot 2): a targeted cast. The barrier stands `min(range, distance to the aim point)` away
+ * along the Gunner->point direction, its long axis perpendicular to it (unit vector, no atan2).
+ * Refused while locked out or on cooldown. Her own overpen line stops at it (`fireLine`), and so do
+ * enemy melee hits across it (enemies.ts).
  */
 function castPavise(run: GunnerRun, cmd: AbilityCmd): void {
   const { ctx, hero, kit, def } = run;
   if (kit.lockTicks > 0 || kit.cdPavise > 0) {
     return;
   }
-  const aim = aimAngle(run, cmd);
-  const target = cmd.x !== undefined && cmd.y !== undefined ? { x: cmd.x, y: cmd.y } : undefined;
-  let dx = cos(aim);
-  let dy = sin(aim);
-  let reach = def.pavise.range;
-  if (target !== undefined) {
-    const tx = target.x - hero.x;
-    const ty = target.y - hero.y;
-    const d = Math.sqrt(tx * tx + ty * ty);
-    if (d > 0) {
-      dx = tx / d;
-      dy = ty / d;
-      reach = Math.min(reach, d);
-    }
-  }
+  const { ux, uy, dist } = paviseAim(run, cmd);
+  const reach = Math.min(def.pavise.range, dist);
   const prop = spawnProp(ctx, {
     def: 'pavise',
     owner: hero.id,
-    x: hero.x + dx * reach,
-    y: hero.y + dy * reach,
-    ux: -dy,
-    uy: dx,
+    x: hero.x + ux * reach,
+    y: hero.y + uy * reach,
+    ux: -uy,
+    uy: ux,
     halfLength: def.pavise.halfLength,
     durationTicks: Math.max(1, ticks(def.pavise.seconds)),
   });

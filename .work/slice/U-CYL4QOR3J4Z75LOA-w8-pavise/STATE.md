@@ -1,34 +1,35 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-DF7K3YRYWDWAAWOY
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - Pavise (3 wide, range 6, 8 s, 16 s cooldown) is aimed by point, perpendicular to Gunner->point, and clips her overpen line while it stands
+  - Gunner bot has a gunner.pavise decision (wait | shield | block) with explicit cooldown and reach-loss costs
+  - Perception exposes her standing Pavise (GunnerView.pavise); invariant tests pass; CI exits 0
 ---
 
 # slice/w8-pavise
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Finish the Gunner's Pavise (decision D-XVHJGA432FCOHEEU): aimed cast, barrier clipping, bot decision, perception.
 
 ## Scope
-In: TODO
-Out: TODO
+In: gunner sim/content/perception/bot and their tests; the Gunner entry of kit weights.
+Out: enemies.ts, shared engine, UI.
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+Step 1 landed a basic Pavise; enemies.ts melee already checks firstBarrier with the enemy team.
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Finalize.
 
 ## Next
-- TODO
+- Integrator: regenerate golden.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+Tests: test/gunner and test/bots/gunner.test.ts pass; CI log w8-C-ci.log.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -37,6 +38,11 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] decision: Pavise accepts its aim point while braced (cones still use the brace facing).
+- [ ] backlog: the `suppressed` slow status and its combo/colour entries are now unused by any kit.
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-02 executed
+- 2026-11-01 phase initialize → execute
+- 2026-11-01 phase execute → finalize

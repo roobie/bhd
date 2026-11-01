@@ -11,6 +11,7 @@ export function gunnerWeights(): Record<string, number> {
     'gunner.geo.flankRange': 8,
     'gunner.geo.view': 22,
     'gunner.geo.allyRadius': 0.6,
+    'gunner.geo.enemyRadius': 0.5,
     'gunner.lowHp': 0.35,
 
     // ---- gunner.post: post / advance / hold
@@ -52,6 +53,24 @@ export function gunnerWeights(): Record<string, number> {
     'gunner.vent.spinCost': 25,
     'gunner.vent.waitBase': 6,
     'gunner.vent.furnaceCost': 200,
+
+    // ---- gunner.pavise: wait / shield / block. Costs: its cooldown, and the reach lost past the barrier
+    // (enemies on her line behind it, weighted by how live the overpen line is, never below reachFloor).
+    'gunner.pavise.waitBase': 6,
+    'gunner.pavise.shield': 60,
+    'gunner.pavise.penitentBonus': 1,
+    'gunner.pavise.gap': 0.8,
+    'gunner.pavise.minReach': 1.5,
+    'gunner.pavise.cooldown': 25,
+    'gunner.pavise.reachLoss': 30,
+    'gunner.pavise.reachFloor': 0.3,
+    'gunner.pavise.pushRange': 8,
+    'gunner.pavise.minEnemies': 3,
+    'gunner.pavise.blockPush': 14,
+    'gunner.pavise.blockCap': 6,
+    'gunner.pavise.blockThreat': 100,
+    'gunner.pavise.blockLowHp': 30,
+    'gunner.pavise.blockGap': 1.6,
 
     // ---- gunner.furnace (doctrine.ultimate: free / spike / combo)
     'gunner.furnace.perEnemy': 7,
