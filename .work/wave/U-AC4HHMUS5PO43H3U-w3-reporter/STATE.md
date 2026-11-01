@@ -24,13 +24,17 @@ Out: WebGL replay renderer (wave 7), the "adapted" column, canonical JSON for go
 See DESIGN.md. Determinism §6.1; Node code only in `src/reporter/`; no gameplay-pinning tests (D-4E4QRJ7N6LIGZDSD).
 
 ## Now
-Step 1: contracts slice.
+Step 3: Opus review of the integrated wave, then fixes.
 
 ## Next
-- Step 2: parallel slices runner, metrics, stats+report, cli, replay.
-- Step 3: lead integration and the heat-tweak demo.
+- Fix review findings plus: ranged stand-in logs mark options by entity id (`mark.<id>`), which floods movers; `bhd run` plays its side twice; `PURE_DIRS` duplicated in sides.ts.
+- Close slices and wave; close M1.
 
 ## Evidence
+- All five step-2 slices merged to main; CI green (657 node, 87 browser tests).
+- `report --base HEAD --cand HEAD --games 20`: 438 series, 0 moved (null check holds).
+- `report --base main --cand demo/heat-overpen-080 --tag gunner.heat` (100 pairs, ~10 s): HTML at `.bhd/reports/e0e1baaa750a/index.html` and a table; `gunner.heat.band[b85]` +37%, b60 −16%; 25 movers flagged `← outside change` (e.g. `outcome.leaks[w14]` −66%, `combo.rate[pull:w15:payoff]` +165%).
+- `bhd view .bhd/runs/1f5c758fd1eb/base/1-5.ndjson.gz --tick 2038` resolves the base snapshot and serves the viewer at tick 2038.
 
 ## Harvest
 
