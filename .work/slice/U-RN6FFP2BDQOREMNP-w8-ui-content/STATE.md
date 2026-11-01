@@ -1,34 +1,37 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-DF7K3YRYWDWAAWOY
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - Every ability, resource and kit state of the default lineup has presentation, icon and help with no NaN/undefined/?; test/content/ui-content.test.ts passes
+  - Help-open screenshots at 390x844 and 1280x720 for all four heroes look right
+  - npm run ci exits 0
 ---
 
 # slice/w8-ui-content
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Real names, colours, icons and generated help for the Penitent, Psyker and Pavise content, replacing step-1 placeholders.
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/content/{presentation,icons,help}.ts and tests.
+Out: shell wiring of the new UI strings (slice D / integrator).
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Numbers come only from content defs; no gameplay pinning.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; finalize.
 
 ## Next
-- TODO
+- Integrator wires UI_TEXT, describeCallWave, describeFallen, describeResource, respawnText into the shell.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
+- npm run ci exit 0 (log scratchpad/w8-F-ci.log); screenshots in scratchpad/w8-F/
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -37,6 +40,9 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] backlog: help shows the kit-state rows (Spent, Martyrdom, Discharge) in every hero's legend; a per-kit filter would need hudmodel.
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 phase initialize → execute
+- 2026-11-01 phase execute → finalize
