@@ -22,6 +22,17 @@ export function newFrameClock(): FrameClock {
   return { lastMs: undefined, accMs: 0 };
 }
 
-export function planFrame(clock: FrameClock, _nowMs: number, _opts: FrameOptions): FramePlan {
-  return { steps: 0, alpha: 0, clock };
+export function planFrame(clock: FrameClock, nowMs: number, opts: FrameOptions): FramePlan {
+  const { tickMs } = opts;
+  if (clock.lastMs === undefined) {
+    return { steps: 0, alpha: 0, clock: { lastMs: nowMs, accMs: 0 } };
+  }
+  const gap = Math.min(Math.max(nowMs - clock.lastMs, 0), opts.maxGapMs);
+  const gained = opts.paused ? 0 : gap * Math.max(opts.speed, 0);
+  const acc = clock.accMs + gained;
+  const due = Math.floor(acc / tickMs);
+  const steps = Math.min(opts.maxSteps, due);
+  // Whatever the cap refuses to run is dropped, not carried: only the sub-tick remainder stays.
+  const accMs = Math.max(acc - due * tickMs, 0);
+  return { steps, alpha: Math.min(accMs / tickMs, 1 - Number.EPSILON), clock: { lastMs: nowMs, accMs } };
 }
