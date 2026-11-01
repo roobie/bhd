@@ -2,7 +2,12 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 // Tests that run in browsers too: they must not import node:*.
-const BROWSER_TESTS = ['test/determinism/determinism.test.ts', 'test/detmath-rng.test.ts', 'test/detmath-trig.test.ts'];
+const BROWSER_TESTS = [
+  'test/determinism/determinism.test.ts',
+  'test/detmath-rng.test.ts',
+  'test/detmath-trig.test.ts',
+  'test/client/viewer.browser.test.ts',
+];
 
 export default defineConfig({
   base: './',
@@ -14,6 +19,8 @@ export default defineConfig({
         test: {
           name: 'node',
           include: ['test/**/*.test.ts'],
+          // DOM-only tests run in the browser project.
+          exclude: ['**/*.browser.test.ts', '**/node_modules/**'],
           // The sim suites are CPU-bound; leave room for Vite's transforms.
           maxWorkers: '40%',
           isolate: true,
