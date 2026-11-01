@@ -306,6 +306,37 @@ function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
   });
 }
 
+function shotColor(input: SceneInput, fx: Effect): Rgba {
+  if (fx.srcKind === 'hero') {
+    return parseHex(heroPresentation(input.ui, fx.srcDef ?? '').color);
+  }
+  if (fx.srcKind === 'enemy') {
+    return parseHex(enemyPresentation(input.ui, fx.srcDef ?? '').color);
+  }
+  return PALETTE.ancient;
+}
+
+/** Tracer: a short capsule trailing a bright head, flying from the source to the target. */
+function shotInstances(input: SceneInput, fx: Effect, age: number, out: InstanceBuffer): void {
+  const ppu = input.camera.pxPerUnit;
+  const x1 = fin(fx.toX ?? fx.x, fx.x);
+  const y1 = fin(fx.toY ?? fx.y, fx.y);
+  const at = (t: number): { x: number; y: number } => ({ x: fx.x + (x1 - fx.x) * t, y: fx.y + (y1 - fx.y) * t });
+  const head = at(age);
+  const tail = at(Math.max(0, age - 0.5));
+  const color = shotColor(input, fx);
+  emit(out, {
+    shape: SHAPE.segment,
+    x: (head.x + tail.x) / 2,
+    y: (head.y + tail.y) / 2,
+    hw: Math.hypot(head.x - tail.x, head.y - tail.y) / 2,
+    rot: Math.atan2(y1 - fx.y, x1 - fx.x),
+    color: withAlpha(color, 0.7),
+    p0: pxToWorld(2.5, ppu),
+  });
+  emit(out, { shape: SHAPE.circle, x: head.x, y: head.y, hw: pxToWorld(4, ppu), color: withAlpha(color, 1) });
+}
+
 function effectInstance(input: SceneInput, fx: Effect, out: InstanceBuffer): void {
   const age = (input.nowMs - fx.startMs) / Math.max(1, fx.durationMs);
   if (!(age >= 0 && age <= 1)) {
@@ -343,6 +374,9 @@ function effectInstance(input: SceneInput, fx: Effect, out: InstanceBuffer): voi
         color: withAlpha(PALETTE.hitFlash, 0.6 * fade),
         p0: pxToWorld(3, ppu),
       });
+      break;
+    case 'shot':
+      shotInstances(input, fx, age, out);
       break;
     default:
       break;

@@ -9,6 +9,14 @@ import type { Effect, EntitySnap, Snapshot } from './types.ts';
 const HIT_MS = 120;
 const CAST_MS = 250;
 const DEATH_MS = 150;
+/** Centre distance (world units) beyond which a damaging hit counts as ranged and gets a tracer. */
+const RANGED_MIN_DIST = 3;
+/** Tracer speed (world units per second) and its flight-time clamp (ms). */
+const SHOT_SPEED = 70;
+const SHOT_MIN_MS = 80;
+const SHOT_MAX_MS = 200;
+/** Live tracers allowed at once, so a big wave cannot flood the instance buffer. */
+const MAX_SHOTS = 48;
 /** Squared distance below which an entity counts as not having moved. */
 const MOVED_EPS2 = 1e-12;
 
@@ -79,7 +87,8 @@ function effectFor(kind: Effect['kind'], who: EntitySnap, nowMs: number, duratio
 /**
  * Advances the effect list: drops finished effects (`nowMs >= startMs + durationMs`), then adds one
  * per relevant event in `events` (`dmg` -> hit on the target, 120 ms; `ability` -> cast on the
- * caster, 250 ms; `death` -> death ghost at the entity's position in `snap`, 150 ms). Events naming
+ * caster, 250 ms; `death` -> death ghost at the entity's position in `snap`, 150 ms; a `dmg` across a gap over
+ * `RANGED_MIN_DIST` also -> one `shot` tracer per source per call, 80-200 ms, at most `MAX_SHOTS` live). Events naming
  * an entity that is not in `snap` are skipped.
  *
  * Dead entities are removed from the sim in the tick they die, so `snap` must be the snapshot taken
@@ -97,6 +106,8 @@ export function advanceEffects(
   for (const e of snap.entities) {
     byId.set(e.id, e);
   }
+  let shots = out.filter((f) => f.kind === 'shot').length;
+  const shooters = new Set<number>();
   for (const ev of events) {
     let who: EntitySnap | undefined;
     let kind: Effect['kind'] | undefined;
@@ -123,6 +134,32 @@ export function advanceEffects(
     if (who !== undefined && kind !== undefined) {
       out.push(effectFor(kind, who, nowMs, ms));
     }
+    if (ev.kind === 'dmg') {
+      const shot = shotFor(byId.get(ev.src), byId.get(ev.dst), nowMs);
+      if (shot !== undefined && !shooters.has(ev.src) && shots < MAX_SHOTS) {
+        shooters.add(ev.src);
+        shots += 1;
+        out.push(shot);
+      }
+    }
   }
   return out;
+}
+
+/** A tracer for a hit across a gap wider than melee, else undefined. */
+function shotFor(from: EntitySnap | undefined, to: EntitySnap | undefined, nowMs: number): Effect | undefined {
+  if (from === undefined || to === undefined || from.id === to.id) {
+    return undefined;
+  }
+  const dist = Math.hypot(to.x - from.x, to.y - from.y);
+  if (!(dist > RANGED_MIN_DIST)) {
+    return undefined;
+  }
+  return {
+    ...effectFor('shot', from, nowMs, Math.min(SHOT_MAX_MS, Math.max(SHOT_MIN_MS, (dist / SHOT_SPEED) * 1000))),
+    toX: to.x,
+    toY: to.y,
+    srcKind: from.kind,
+    srcDef: from.def,
+  };
 }
