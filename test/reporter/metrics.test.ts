@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { defaultBotSetup } from '../../src/content/bots.ts';
+import { defaultGame } from '../../src/content/index.ts';
 import type { GameEnd, GameSpec } from '../../src/match/run.ts';
 import { RUN_ABI, runGame } from '../../src/match/run.ts';
 import type { LogHeader } from '../../src/replay/log.ts';
@@ -272,7 +273,12 @@ describe('every metric is finite', () => {
 
   it('on one real full runGame log', () => {
     const game = runGame({ ...SPEC, maxTicks: 30_000 });
-    const log = logOf(game.events, game.end);
+    // runGame plays the shipping lineup, so the header must resolve to it, not the legacy one.
+    const base = logOf(game.events, game.end);
+    const log: GameLog = {
+      ...base,
+      header: { ...base.header, resolved: { game: defaultGame(), bots: defaultBotSetup() } },
+    };
     expect(nonFinite(log)).toEqual([]);
     expect(Object.keys(computeMetrics(log)).length).toBeGreaterThan(0);
   });

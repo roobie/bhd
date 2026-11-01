@@ -1,10 +1,16 @@
-// Metrics 4, 5, 6, 8, 13: per-hero deaths, damage share, friendly fire, ability use, ultimates.
+// Metrics 4, 5, 6, 8, 13: per-hero deaths, damage share, friendly fire, ability use, ultimates; and
+// the respawn accounting (downtime, respawns).
 
 import type { GameLog, MetricDef } from '../types.ts';
 import { buildIndex, defOf, heroAreas } from './gameindex.ts';
 
-/** Ultimate slot per kit (the gunner's Furnace Heart is slot 3); other heroes use their highest slot. */
-const ULT_SLOT: Readonly<Record<string, number>> = { gunner: 3 };
+/**
+ * Ultimate slot per hero def. Content carries no slot table for the kit heroes (the slots live in
+ * the kits and the perception parts), so it is listed here: the gunner's Furnace Heart and the
+ * penitent's Martyrdom are slot 3 (`ability` command: 3 = ultimate); the psyker's reduced kit is
+ * Gravitic Lash alone, slot 0, so its "ultimate" is the Lash. Other heroes use their highest slot.
+ */
+const ULT_SLOT: Readonly<Record<string, number>> = { gunner: 3, penitent: 3, psyker: 0 };
 
 /** The ultimate slot of a hero def: the kit table, else the highest ability slot it has, else 0. */
 function ultSlot(game: GameLog['header']['resolved']['game'], def: string): number {
@@ -37,6 +43,40 @@ export const heroDeaths: MetricDef = {
         const def = defOf(ix, e.id);
         out[def] = (out[def] ?? 0) + 1;
       }
+    }
+    return out;
+  },
+};
+
+export const heroDowntime: MetricDef = {
+  id: 'hero.downtime',
+  title: 'Ticks a hero spent down (an unfinished down counts to the end of the game)',
+  unit: 'ticks',
+  areas: [],
+  areasOf: heroAreas(''),
+  missing: 'zero',
+  compute: (log) => {
+    const ix = buildIndex(log);
+    const out: Record<string, number> = {};
+    for (const h of ix.heroes) {
+      out[h.def] = (out[h.def] ?? 0) + h.downs.reduce((sum, d) => sum + Math.max(0, (d.to ?? ix.endTick) - d.from), 0);
+    }
+    return out;
+  },
+};
+
+export const heroRespawns: MetricDef = {
+  id: 'hero.respawns',
+  title: 'Respawns per hero',
+  unit: 'count',
+  areas: [],
+  areasOf: heroAreas(''),
+  missing: 'zero',
+  compute: (log) => {
+    const ix = buildIndex(log);
+    const out: Record<string, number> = {};
+    for (const h of ix.heroes) {
+      out[h.def] = (out[h.def] ?? 0) + h.downs.filter((d) => d.to !== undefined).length;
     }
     return out;
   },
