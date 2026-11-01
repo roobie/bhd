@@ -216,14 +216,39 @@ function bodyStyle(input: SceneInput, e: EntitySnap): { color: Rgba; shape: 'cir
   return { color: PALETTE.ancient, shape: 'circle' };
 }
 
+/** The Pavise look: a soft glow slab, a bright core wall and two end posts. */
+function propBody(input: SceneInput, e: EntitySnap, r: number, out: InstanceBuffer): void {
+  const ppu = input.camera.pxPerUnit;
+  const pulse = 0.5 + 0.5 * Math.sin(fin(input.nowMs, 0) / 260);
+  const glow = withAlpha(mix(PALETTE.ancient, WHITE, 0.3), 0.16 + 0.08 * pulse);
+  emit(out, { shape: SHAPE.segment, x: e.x, y: e.y, hw: r, rot: e.facing, color: glow, p0: pxToWorld(9, ppu) });
+  emit(out, {
+    shape: SHAPE.segment,
+    x: e.x,
+    y: e.y,
+    hw: r,
+    rot: e.facing,
+    color: mix(PALETTE.ancient, WHITE, 0.55),
+    p0: pxToWorld(3, ppu),
+  });
+  for (const sign of [-1, 1]) {
+    emit(out, {
+      shape: SHAPE.circle,
+      x: e.x + Math.cos(e.facing) * r * sign,
+      y: e.y + Math.sin(e.facing) * r * sign,
+      hw: pxToWorld(3.5, ppu),
+      color: mix(PALETTE.ancient, WHITE, 0.8),
+    });
+  }
+}
+
 function body(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
   if (e.kind === 'ancient') {
     return;
   }
   const r = floored(e.radius, input.camera.pxPerUnit);
   if (e.kind === 'prop') {
-    const half = pxToWorld(3, input.camera.pxPerUnit);
-    emit(out, { shape: SHAPE.segment, x: e.x, y: e.y, hw: r, rot: e.facing, color: PALETTE.ancient, p0: half });
+    propBody(input, e, r, out);
     return;
   }
   const { color: base, shape } = bodyStyle(input, e);
@@ -273,6 +298,78 @@ function heroOverlays(input: SceneInput, hero: HeroView, e: EntitySnap, out: Ins
   }
 }
 
+const WHITE: Rgba = [1, 1, 1, 1];
+
+type StatusLook = 'tint' | 'ring' | 'pulse' | 'chain' | 'crosshair';
+
+/** How each combo status reads on the body; statuses not listed keep only their pip. */
+const STATUS_LOOK: Readonly<Record<string, StatusLook>> = {
+  exposed: 'pulse',
+  clumped: 'tint',
+  taunted: 'ring',
+  rooted: 'chain',
+  marked: 'crosshair',
+  suppressed: 'tint',
+};
+
+function statusVisuals(input: SceneInput, e: EntitySnap, ids: readonly string[], out: InstanceBuffer): void {
+  const ppu = input.camera.pxPerUnit;
+  const r = floored(e.radius, ppu);
+  const beat = 0.5 + 0.5 * Math.sin(fin(input.nowMs, 0) / 140);
+  for (const id of ids) {
+    const look = STATUS_LOOK[id];
+    if (look === undefined) {
+      continue;
+    }
+    const color = parseHex(statusPresentation(input.ui, id).color);
+    const at = { x: e.x, y: e.y };
+    switch (look) {
+      case 'tint':
+        emit(out, { shape: SHAPE.circle, ...at, hw: r * 1.7, color: withAlpha(color, 0.22) });
+        break;
+      case 'ring':
+        emit(out, { shape: SHAPE.ring, ...at, hw: r * 1.9, color: withAlpha(color, 0.9), p0: pxToWorld(2.5, ppu) });
+        break;
+      case 'pulse':
+        emit(out, {
+          shape: SHAPE.ring,
+          ...at,
+          hw: r * (1.6 + 0.35 * beat),
+          color: withAlpha(color, 0.5 + 0.4 * beat),
+          p0: pxToWorld(2, ppu),
+        });
+        break;
+      case 'chain':
+        for (const rot of [Math.PI / 4, -Math.PI / 4]) {
+          emit(out, {
+            shape: SHAPE.segment,
+            ...at,
+            hw: r * 1.5,
+            rot,
+            color: withAlpha(color, 0.9),
+            p0: pxToWorld(1.5, ppu),
+          });
+        }
+        break;
+      case 'crosshair':
+        emit(out, { shape: SHAPE.ring, ...at, hw: r * 1.8, color: withAlpha(color, 0.85), p0: pxToWorld(1.5, ppu) });
+        for (const rot of [0, Math.PI / 2]) {
+          emit(out, {
+            shape: SHAPE.segment,
+            ...at,
+            hw: r * 2.4,
+            rot,
+            color: withAlpha(color, 0.8),
+            p0: pxToWorld(1, ppu),
+          });
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
   if (e.kind === 'prop') {
     return;
@@ -301,7 +398,9 @@ function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
       color: withAlpha(PALETTE.selection, 0.6),
     });
   }
-  const pips = statusesOf(input.p, e).slice(0, MAX_PIPS);
+  const all = statusesOf(input.p, e);
+  statusVisuals(input, e, all, out);
+  const pips = all.slice(0, MAX_PIPS);
   const pr = pxToWorld(MIN_BODY_PX / 2, ppu);
   pips.forEach((id, i) => {
     const s = statusPresentation(input.ui, id);
@@ -314,8 +413,6 @@ function overlays(input: SceneInput, e: EntitySnap, out: InstanceBuffer): void {
     });
   });
 }
-
-const WHITE: Rgba = [1, 1, 1, 1];
 
 function mix(a: Rgba, b: Rgba, t: number): Rgba {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, 1];
@@ -441,6 +538,27 @@ function effectInstance(input: SceneInput, fx: Effect, out: InstanceBuffer): voi
         hw: r * (2 - age),
         color: withAlpha(PALETTE.selection, 0.9 * fade),
         p0: pxToWorld(3, ppu),
+      });
+      break;
+    case 'backlash':
+      emit(out, { shape: SHAPE.circle, x: fx.x, y: fx.y, hw: r * (1.2 + age), color: withAlpha(WHITE, 0.55 * fade) });
+      emit(out, {
+        shape: SHAPE.ring,
+        x: fx.x,
+        y: fx.y,
+        hw: r * (1.5 + 1.5 * age),
+        color: withAlpha([1, 0.45, 0.2, 1], 0.9 * fade),
+        p0: pxToWorld(3, ppu),
+      });
+      break;
+    case 'nova':
+      emit(out, {
+        shape: SHAPE.ring,
+        x: fx.x,
+        y: fx.y,
+        hw: Math.max(pxToWorld(MIN_BODY_PX, ppu), fx.radius * age),
+        color: withAlpha([1, 0.85, 0.5, 1], 0.9 * fade),
+        p0: pxToWorld(4, ppu) * fade + pxToWorld(1, ppu),
       });
       break;
     case 'prop':

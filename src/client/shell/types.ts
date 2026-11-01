@@ -173,10 +173,11 @@ export interface Snapshot {
 export interface Effect {
   /**
    * `hit`: tint the target; `cast`: pulse a ring on the caster; `death`: fade a ghost ring; `shot`: a
+   * `backlash`: a flash on the discharging hero; `nova`: an expanding ring around the caster;
    * `respawn`: a ring where a downed hero returns; `prop`: a pulse where a prop was placed; a
    * tracer from (`x`, `y`) to (`toX`, `toY`) coloured by the source (`srcKind`, `srcDef`); `id` is the source.
    */
-  readonly kind: 'hit' | 'cast' | 'death' | 'shot' | 'respawn' | 'prop';
+  readonly kind: 'hit' | 'cast' | 'death' | 'shot' | 'respawn' | 'prop' | 'backlash' | 'nova';
   /** Entity the effect belongs to. */
   readonly id: number;
   readonly x: number;

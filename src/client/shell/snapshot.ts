@@ -10,6 +10,10 @@ const HIT_MS = 120;
 const CAST_MS = 250;
 const DEATH_MS = 150;
 const RESPAWN_MS = 600;
+const BACKLASH_MS = 350;
+const NOVA_MS = 500;
+/** Final radius (world units) the nova ring grows to when the sim names no radius. */
+const NOVA_REACH = 6;
 /** Centre distance (world units) beyond which a damaging hit counts as ranged and gets a tracer. */
 const RANGED_MIN_DIST = 3;
 /** Tracer speed (world units per second) and its flight-time clamp (ms). */
@@ -130,6 +134,7 @@ export function advanceEffects(
     frameShooters,
     shots: out.filter((f) => f.kind === 'shot').length,
     landing: new Map(),
+    generic: new Set(),
   };
   for (const ev of events) {
     applyEvent(run, ev);
@@ -146,6 +151,8 @@ interface Run {
   shots: number;
   /** Target id -> ms until its tracer lands, for the hit and death effects. */
   readonly landing: Map<number, number>;
+  /** `<family>:<entity>` pairs that already got a generic flash this call (one per source per frame). */
+  readonly generic: Set<string>;
 }
 
 function push(run: Run, who: EntitySnap | undefined, spec: { kind: Effect['kind']; delay: number; ms: number }): void {
@@ -174,6 +181,66 @@ function applyEvent(run: Run, ev: SimEvent): void {
     push(run, run.byId.get(ev.id), { kind: 'death', delay: run.landing.get(ev.id) ?? 0, ms: DEATH_MS });
   } else if (ev.kind === 'respawn') {
     push(run, run.byId.get(ev.id), { kind: 'respawn', delay: 0, ms: RESPAWN_MS });
+  }
+  genericEffect(run, ev);
+}
+
+/** Visual families recognised from event kinds or `dmg` tags, before the sim has dedicated events. */
+export type GenericFx = 'backlash' | 'nova';
+
+const BACKLASH_NAMES: readonly string[] = ['backlash', 'discharge'];
+const NOVA_NAMES: readonly string[] = ['nova', 'martyrdom'];
+
+function familyOf(name: string): GenericFx | undefined {
+  const n = name.toLowerCase();
+  if (BACKLASH_NAMES.some((k) => n.includes(k))) {
+    return 'backlash';
+  }
+  return NOVA_NAMES.some((k) => n.includes(k)) ? 'nova' : undefined;
+}
+
+/**
+ * Which generic flash an event asks for: an event whose `kind` names it (a future `backlash` or `nova`
+ * event) or a `dmg` whose tags do (`backlash`, `discharge`, `nova`, `ability:martyrdom`). Undefined
+ * for every event that exists today, so unknown kinds fall through silently.
+ */
+export function genericFx(ev: SimEvent): GenericFx | undefined {
+  const byKind = familyOf(ev.kind);
+  if (byKind !== undefined || ev.kind !== 'dmg') {
+    return byKind;
+  }
+  for (const t of ev.tags) {
+    const f = familyOf(t);
+    if (f !== undefined) {
+      return f;
+    }
+  }
+  return undefined;
+}
+
+/** Entity a generic event is about: the source of a dmg, else the first of hero / id / src. */
+function subjectOf(ev: SimEvent): number | undefined {
+  const rec = ev as unknown as Record<string, unknown>;
+  const id = ev.kind === 'dmg' ? ev.src : (rec.hero ?? rec.id ?? rec.src);
+  return typeof id === 'number' ? id : undefined;
+}
+
+function genericEffect(run: Run, ev: SimEvent): void {
+  const fx = genericFx(ev);
+  const subject = subjectOf(ev);
+  const who = subject === undefined ? undefined : run.byId.get(subject);
+  if (fx === undefined || who === undefined) {
+    return;
+  }
+  const key = `${fx}:${who.id}`;
+  if (run.generic.has(key)) {
+    return;
+  }
+  run.generic.add(key);
+  if (fx === 'nova') {
+    run.out.push({ ...effectFor('nova', who, run.nowMs, NOVA_MS), radius: NOVA_REACH });
+  } else {
+    push(run, who, { kind: fx, delay: 0, ms: BACKLASH_MS });
   }
 }
 
