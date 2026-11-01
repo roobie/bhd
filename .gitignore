@@ -2,5 +2,8 @@ node_modules/
 dist/
 test-results/
 
+# Reporter output: snapshots, run logs, reports.
+.bhd/
+
 # Host-local mise settings (tokens, env).
 mise.local.toml

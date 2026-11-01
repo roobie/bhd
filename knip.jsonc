@@ -1,5 +1,16 @@
 {
   "$schema": "./node_modules/knip/schema.json",
-  "entry": ["index.html!"],
-  "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"]
+  "entry": ["index.html!", "src/reporter/worker.ts!"],
+  "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
+  // Wave w3-reporter contracts: the stubs and the shared types have no importers until the step-2
+  // slices wire them into worker.ts and cli.ts. Remove each line as its slice lands.
+  "ignore": [
+    "src/reporter/pool.ts",
+    "src/reporter/stats.ts",
+    "src/reporter/html.ts",
+    "src/reporter/table.ts",
+    "src/reporter/view.ts",
+    "src/reporter/metrics/registry.ts"
+  ],
+  "ignoreIssues": { "src/reporter/types.ts": ["exports", "types"] }
 }
