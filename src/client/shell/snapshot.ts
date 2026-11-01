@@ -13,8 +13,8 @@ const DEATH_MS = 150;
 const RANGED_MIN_DIST = 3;
 /** Tracer speed (world units per second) and its flight-time clamp (ms). */
 const SHOT_SPEED = 70;
-const SHOT_MIN_MS = 80;
-const SHOT_MAX_MS = 200;
+const SHOT_MIN_MS = 100;
+const SHOT_MAX_MS = 220;
 /** Live tracers allowed at once, so a big wave cannot flood the instance buffer. */
 const MAX_SHOTS = 48;
 /** Squared distance below which an entity counts as not having moved. */
@@ -84,12 +84,22 @@ function effectFor(kind: Effect['kind'], who: EntitySnap, nowMs: number, duratio
   return { kind, id: who.id, x: who.x, y: who.y, radius: who.radius, startMs: nowMs, durationMs };
 }
 
+/** `dmg` tags that mark a hit as something other than a basic autoattack: no tracer for these. */
+const NOT_AUTOATTACK_TAGS: readonly string[] = ['melee', 'leak', 'cone'];
+
+/** True for a `dmg` that came from a basic ranged autoattack (not melee, leak, cone or an ability). */
+function isAutoattack(tags: readonly string[]): boolean {
+  return !tags.some((t) => NOT_AUTOATTACK_TAGS.includes(t) || t.startsWith('ability:'));
+}
+
 /**
  * Advances the effect list: drops finished effects (`nowMs >= startMs + durationMs`), then adds one
  * per relevant event in `events` (`dmg` -> hit on the target, 120 ms; `ability` -> cast on the
- * caster, 250 ms; `death` -> death ghost at the entity's position in `snap`, 150 ms; a `dmg` across a gap over
- * `RANGED_MIN_DIST` also -> one `shot` tracer per source per call, 80-200 ms, at most `MAX_SHOTS` live). Events naming
- * an entity that is not in `snap` are skipped.
+ * caster, 250 ms; `death` -> death ghost at the entity's position in `snap`, 150 ms). A `dmg` that is a
+ * basic ranged autoattack (no `melee`, `leak`, `cone` or `ability:*` tag, across a gap over
+ * `RANGED_MIN_DIST`) also adds one `shot` tracer per source per frame (calls sharing `nowMs` count as one
+ * frame), 100-220 ms, at most `MAX_SHOTS` live; its hit and the target's death start when the tracer
+ * lands. Events naming an entity that is not in `snap` are skipped.
  *
  * Dead entities are removed from the sim in the tick they die, so `snap` must be the snapshot taken
  * BEFORE the step that produced `events` (the predecessor), where the entity was last seen; the
@@ -106,48 +116,71 @@ export function advanceEffects(
   for (const e of snap.entities) {
     byId.set(e.id, e);
   }
-  let shots = out.filter((f) => f.kind === 'shot').length;
-  const shooters = new Set<number>();
+  const frameShooters = new Set<number>();
+  for (const f of out) {
+    if (f.kind === 'shot' && f.startMs === nowMs) {
+      frameShooters.add(f.id);
+    }
+  }
+  const run: Run = {
+    out,
+    byId,
+    nowMs,
+    frameShooters,
+    shots: out.filter((f) => f.kind === 'shot').length,
+    landing: new Map(),
+  };
   for (const ev of events) {
-    let who: EntitySnap | undefined;
-    let kind: Effect['kind'] | undefined;
-    let ms = 0;
-    switch (ev.kind) {
-      case 'dmg':
-        who = byId.get(ev.dst);
-        kind = 'hit';
-        ms = HIT_MS;
-        break;
-      case 'ability':
-        who = byId.get(ev.hero);
-        kind = 'cast';
-        ms = CAST_MS;
-        break;
-      case 'death':
-        who = byId.get(ev.id);
-        kind = 'death';
-        ms = DEATH_MS;
-        break;
-      default:
-        break;
-    }
-    if (who !== undefined && kind !== undefined) {
-      out.push(effectFor(kind, who, nowMs, ms));
-    }
-    if (ev.kind === 'dmg') {
-      const shot = shotFor(byId.get(ev.src), byId.get(ev.dst), nowMs);
-      if (shot !== undefined && !shooters.has(ev.src) && shots < MAX_SHOTS) {
-        shooters.add(ev.src);
-        shots += 1;
-        out.push(shot);
-      }
-    }
+    applyEvent(run, ev);
   }
   return out;
 }
 
+interface Run {
+  readonly out: Effect[];
+  readonly byId: ReadonlyMap<number, EntitySnap>;
+  readonly nowMs: number;
+  /** Sources that already have a tracer this frame. */
+  readonly frameShooters: Set<number>;
+  shots: number;
+  /** Target id -> ms until its tracer lands, for the hit and death effects. */
+  readonly landing: Map<number, number>;
+}
+
+function push(run: Run, who: EntitySnap | undefined, spec: { kind: Effect['kind']; delay: number; ms: number }): void {
+  if (who !== undefined) {
+    run.out.push(effectFor(spec.kind, who, run.nowMs + spec.delay, spec.ms));
+  }
+}
+
+function applyEvent(run: Run, ev: SimEvent): void {
+  if (ev.kind === 'dmg') {
+    const shot = isAutoattack(ev.tags)
+      ? shotFor(run.byId.get(ev.src), run.byId.get(ev.dst), ev.dst, run.nowMs)
+      : undefined;
+    if (shot !== undefined) {
+      run.landing.set(ev.dst, shot.durationMs);
+      if (!run.frameShooters.has(ev.src) && run.shots < MAX_SHOTS) {
+        run.frameShooters.add(ev.src);
+        run.shots += 1;
+        run.out.push(shot);
+      }
+    }
+    push(run, run.byId.get(ev.dst), { kind: 'hit', delay: shot?.durationMs ?? 0, ms: HIT_MS });
+  } else if (ev.kind === 'ability') {
+    push(run, run.byId.get(ev.hero), { kind: 'cast', delay: 0, ms: CAST_MS });
+  } else if (ev.kind === 'death') {
+    push(run, run.byId.get(ev.id), { kind: 'death', delay: run.landing.get(ev.id) ?? 0, ms: DEATH_MS });
+  }
+}
+
 /** A tracer for a hit across a gap wider than melee, else undefined. */
-function shotFor(from: EntitySnap | undefined, to: EntitySnap | undefined, nowMs: number): Effect | undefined {
+function shotFor(
+  from: EntitySnap | undefined,
+  to: EntitySnap | undefined,
+  toId: number,
+  nowMs: number,
+): Effect | undefined {
   if (from === undefined || to === undefined || from.id === to.id) {
     return undefined;
   }
@@ -159,6 +192,7 @@ function shotFor(from: EntitySnap | undefined, to: EntitySnap | undefined, nowMs
     ...effectFor('shot', from, nowMs, Math.min(SHOT_MAX_MS, Math.max(SHOT_MIN_MS, (dist / SHOT_SPEED) * 1000))),
     toX: to.x,
     toY: to.y,
+    toId,
     srcKind: from.kind,
     srcDef: from.def,
   };

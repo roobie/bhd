@@ -185,6 +185,8 @@ export interface Effect {
   /** `shot` only: where it ends. */
   readonly toX?: number;
   readonly toY?: number;
+  /** `shot` only: the target entity, so the tracer can follow its drawn position. */
+  readonly toId?: number;
   /** `shot` only: the source's kind and content id, for its colour. */
   readonly srcKind?: EntitySnap['kind'];
   readonly srcDef?: string;

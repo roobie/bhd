@@ -9,6 +9,9 @@ import type { ControlContext, ControlState, ReduceResult, UiAction } from './typ
 /** Ticks a hint stays up (2 s at 30 Hz). */
 const HINT_TICKS = 60;
 
+/** Actions that close the help overlay on their way through the reducer. */
+const CLOSES_HELP: ReadonlySet<UiAction['kind']> = new Set(['cast', 'castAt', 'armToggle']);
+
 /** Selects `slot`; changing hero drops any pending aim and arming. */
 function withSelected(state: ControlState, slot: number): ControlState {
   if (slot === state.selected) {
@@ -166,10 +169,15 @@ function reduceHero(state: ControlState, hero: HeroView, action: UiAction, ctx: 
  * `abilityPresentation(...).targeting`; `primary`/`castAt` confirm an aim (`direction`/`point`: x, y;
  * `unit`: `target` when a unit was picked, else none); `autocast` emits `autocast {on: !current}`
  * using `HeroView.autocast`; `stop`; `hold {on: !current}`; `cancel` returns to idle; `pause`
- * toggles `state.paused`; `help` toggles `state.help` (Esc closes it before cancelling anything else; it never pauses); `restart` is ignored; `hover` stores the cursor. Every emitted command
+ * toggles `state.paused`; `help` toggles `state.help` (`cast`, `castAt` and `armToggle` close it; Esc closes it before cancelling anything else; it never pauses); `restart` is ignored; `hover` stores the cursor. Every emitted command
  * passes `isValidCommand`. Never switches on hero, kit or effect names.
  */
 export function reduce(state: ControlState, action: UiAction, ctx: ControlContext): ReduceResult {
+  // Casting, aiming or arming means the player is back in the game: help gets out of the way.
+  return reduceOpen(state.help && CLOSES_HELP.has(action.kind) ? { ...state, help: false } : state, action, ctx);
+}
+
+function reduceOpen(state: ControlState, action: UiAction, ctx: ControlContext): ReduceResult {
   if (action.kind === 'help') {
     return { state: { ...state, help: !state.help }, commands: [] };
   }

@@ -9,6 +9,24 @@ import type { Camera, ControlState, EntitySnap, UiAction, Vec2 } from './types.t
 /** Ability hotkeys by slot: Q W E R. */
 const ABILITY_KEYS: readonly string[] = ['q', 'w', 'e', 'r'];
 
+/** Keys of the non-ability buttons. */
+export const KEY_STOP = 'S';
+export const KEY_HOLD = 'F';
+
+/** Non-ability keys for the help panel's "Keys" row, in the order they read. Keep in step with `keyAction`. */
+export const KEY_HELP: readonly { readonly keys: string; readonly does: string }[] = [
+  { keys: '1-4', does: 'select hero' },
+  { keys: KEY_STOP, does: 'stop' },
+  { keys: KEY_HOLD, does: 'hold fire' },
+  { keys: 'Alt+Q/W/E/R', does: 'arm ability' },
+  { keys: 'Ctrl+Q/W/E/R', does: 'autocast' },
+  { keys: 'Enter', does: 'confirm arm' },
+  { keys: '+ -', does: 'fire time' },
+  { keys: 'P, Space', does: 'pause' },
+  { keys: 'H', does: 'help' },
+  { keys: 'Esc', does: 'cancel' },
+];
+
 /** The parts of a KeyboardEvent the keymap reads. */
 export interface KeyInput {
   /** `KeyboardEvent.key`, any case. */
@@ -150,6 +168,10 @@ export function attachInput(deps: InputDeps): () => void {
   const onKey = (e: KeyboardEvent): void => {
     const target = e.target as { tagName?: string } | null;
     if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
+      return;
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && (target?.tagName === 'BUTTON' || target?.tagName === 'A')) {
+      // A focused button or link takes Enter and Space itself.
       return;
     }
     const action = keyAction({ key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey }, deps.state());

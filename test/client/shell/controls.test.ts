@@ -227,6 +227,26 @@ describe('help toggle', () => {
   });
 });
 
+describe('help closes when the player acts', () => {
+  const ctx = ctxWith([0]);
+  const open = { ...initialControls(0), help: true };
+
+  it('on cast, castAt and armToggle', () => {
+    for (const action of [
+      { kind: 'cast', slot: 0 },
+      { kind: 'castAt', slot: 0, x: 1, y: 1 },
+      { kind: 'armToggle' },
+    ] as const) {
+      expect(reduce(open, action, ctx).state.help, action.kind).toBe(false);
+    }
+  });
+
+  it('but not on hover or select', () => {
+    expect(reduce(open, { kind: 'hover', x: 1, y: 1 }, ctx).state.help).toBe(true);
+    expect(reduce(open, { kind: 'select', slot: 1 }, ctx).state.help).toBe(true);
+  });
+});
+
 describe('keyAction', () => {
   const s = initialControls(0);
   const k = (key: string, mods: { ctrl?: boolean; alt?: boolean } = {}) =>
