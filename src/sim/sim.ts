@@ -5,7 +5,7 @@
 import type { Rng } from '../detmath/index.ts';
 import { deriveRng } from '../detmath/index.ts';
 import type { Command } from './commands.ts';
-import { applyCommand, isValidCommand } from './commands.ts';
+import { applyCommand, canonicalCommand, isValidCommand } from './commands.ts';
 import type { TickContext } from './context.ts';
 import type { EntityView } from './entities.ts';
 import { ENTITY_TYPE_CODE, EntityStore } from './entities.ts';
@@ -39,7 +39,11 @@ interface Pending {
   readonly cmd: Command;
 }
 
-function byPlayerThenSeq(a: Pending, b: Pending): number {
+/** Order commands apply in within one tick. */
+export function byPlayerThenSeq(
+  a: { readonly player: number; readonly seq: number },
+  b: { readonly player: number; readonly seq: number },
+): number {
   return a.player - b.player || a.seq - b.seq;
 }
 
@@ -97,8 +101,9 @@ export class Sim implements SimView {
     }
     const seq = this.#seq.get(player) ?? 0;
     this.#seq.set(player, seq + 1);
-    // Own copy: later mutation by the caller must not change what runs or what is logged.
-    const entry: Pending = { player, seq, cmd: structuredClone(cmd) };
+    // Own, -0-free copy: later mutation by the caller must not change what runs or what is
+    // logged, and the logged JSON must replay to the same bits.
+    const entry: Pending = { player: player + 0, seq, cmd: canonicalCommand(cmd) };
     const list = this.#pending.get(tick);
     if (list === undefined) {
       this.#pending.set(tick, [entry]);

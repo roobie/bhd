@@ -10,11 +10,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc",
-    "test": "vitest run",
+    "test": "vitest run --project node",
+    "test:browser": "vitest run --project browser",
+    "golden": "node test/determinism/regen.ts && biome format --write test/determinism/golden.ts",
     "check": "biome check",
     "fix": "biome check --write",
     "knip": "knip",
-    "ci": "biome ci && tsc && knip && vitest run",
+    "ci": "biome ci && tsc && knip && npm test && npm run test:browser",
     "bhd": "node src/reporter/cli.ts"
   },
   "dependencies": {
@@ -23,7 +25,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
     "@types/node": "26.6.6",
+    "@vitest/browser-playwright": "5.0.5",
     "knip": "6.44.1",
+    "playwright": "1.63.0",
     "typescript": "7.0.2",
     "vite": "8.3.5",
     "vitest": "5.0.5"

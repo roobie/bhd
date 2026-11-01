@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Command } from '../src/sim/commands.ts';
 import type { SimEvent } from '../src/sim/events.ts';
-import { Sim, TICK_HZ } from '../src/sim/sim.ts';
+import { byPlayerThenSeq, Sim, TICK_HZ } from '../src/sim/sim.ts';
 
 interface Scripted {
   readonly tick: number;
@@ -186,10 +186,39 @@ describe('Sim determinism', () => {
   it('hash sees exact float bits', () => {
     const a = new Sim({ seed: 1 });
     const b = new Sim({ seed: 1 });
-    a.command(0, { kind: 'spawn', type: 'dummy', x: 0, y: 0 });
-    b.command(0, { kind: 'spawn', type: 'dummy', x: -0, y: 0 });
-    a.step();
-    b.step();
+    a.entities.add('dummy', 0, 0);
+    b.entities.add('dummy', -0, 0);
     expect(a.hash()).not.toBe(b.hash());
+  });
+
+  it('command() normalises -0, so logged commands survive JSON', () => {
+    const a = new Sim({ seed: 1 });
+    const b = new Sim({ seed: 1 });
+    a.command(0, { kind: 'spawn', type: 'dummy', x: 0, y: 0 });
+    b.command(0, { kind: 'spawn', type: 'dummy', x: -0, y: -0 });
+    expect(b.step()).toEqual(a.step());
+    expect(b.hash()).toBe(a.hash());
+  });
+});
+
+describe('byPlayerThenSeq', () => {
+  it('orders by player, then by seq, whatever the input order', () => {
+    const input = [
+      { player: 2, seq: 0 },
+      { player: 0, seq: 2 },
+      { player: 1, seq: 1 },
+      { player: 0, seq: 0 },
+      { player: 1, seq: 0 },
+      { player: 0, seq: 1 },
+    ];
+    expect([...input].sort(byPlayerThenSeq)).toEqual([
+      { player: 0, seq: 0 },
+      { player: 0, seq: 1 },
+      { player: 0, seq: 2 },
+      { player: 1, seq: 0 },
+      { player: 1, seq: 1 },
+      { player: 2, seq: 0 },
+    ]);
+    expect([...input].reverse().sort(byPlayerThenSeq)).toEqual([...input].sort(byPlayerThenSeq));
   });
 });

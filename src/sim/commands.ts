@@ -35,6 +35,24 @@ export function isValidCommand(cmd: Command): boolean {
   }
 }
 
+/**
+ * Own copy of `cmd` with -0 turned into 0 in every numeric field. JSON writes -0 as "0", so a
+ * logged or networked command would otherwise replay as a different float than the one that ran
+ * (the state hash compares exact bits). This is the one place that makes commands wire-safe.
+ */
+export function canonicalCommand(cmd: Command): Command {
+  switch (cmd.kind) {
+    case 'spawn':
+      return { kind: 'spawn', type: cmd.type, x: cmd.x + 0, y: cmd.y + 0 };
+    case 'move':
+      return { kind: 'move', entity: cmd.entity + 0, x: cmd.x + 0, y: cmd.y + 0 };
+    default: {
+      const unknown: never = cmd;
+      throw new Error(`unhandled command ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
 /** Applies one command. Commands that target missing entities are no-ops (still logged as `cmd`). */
 export function applyCommand(ctx: TickContext, cmd: Command): void {
   switch (cmd.kind) {

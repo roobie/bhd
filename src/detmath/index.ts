@@ -98,7 +98,8 @@ export function nextInt(rng: Rng, n: number): number {
 // beyond that, reduction error grows with |a| but results stay deterministic and in [-1, 1].
 // atan2: fdlibm's atan (table breakpoints + 11-term polynomial), < 1 ulp; max abs error ≤ 2^-50 (8.9e-16).
 
-export const { PI } = Math;
+// biome-ignore lint/style/useDestructuring: destructuring `Math` is banned by the purity scan (test/purity-scan.ts)
+export const PI = Math.PI;
 export const TAU = 2 * Math.PI;
 const HALF_PI = Math.PI / 2;
 const TWO_OVER_PI = 0.636_619_772_367_581_4;
