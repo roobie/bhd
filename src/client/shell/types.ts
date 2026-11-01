@@ -484,6 +484,10 @@ export interface HeroCardModel {
   readonly dead: boolean;
   /** Whole seconds until a downed hero respawns; undefined while it is up. */
   readonly respawnSeconds: number | undefined;
+  /** The card's countdown line for a downed hero (`respawnText`); undefined while it is up. */
+  readonly respawnLabel: string | undefined;
+  /** The fallen-state label (`UI_TEXT.fallen`); empty while it is up. */
+  readonly fallenLabel: string;
 }
 
 export interface AbilityButtonModel {
@@ -546,11 +550,22 @@ export interface HelpStatusModel {
   readonly text: string;
 }
 
-/** The help overlay: the selected hero's ability cards and the status legend. */
+/** One resource bar's help line in the overlay. */
+export interface HelpResourceModel {
+  readonly label: string;
+  readonly color: string;
+  readonly text: string;
+}
+
+/** The help overlay: the selected hero's ability cards, its resources, game-wide notes and the status legend. */
 export interface HelpModel {
   /** The selected hero's label; empty when it is dead. */
   readonly hero: string;
   readonly abilities: readonly HelpAbilityModel[];
+  /** Only resources help can describe. */
+  readonly resources: readonly HelpResourceModel[];
+  /** Call-next-wave and fallen/respawn rules, as `[title, text]`. */
+  readonly notes: readonly (readonly [string, string])[];
   readonly statuses: readonly HelpStatusModel[];
 }
 

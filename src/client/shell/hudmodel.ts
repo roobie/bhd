@@ -1,7 +1,14 @@
 // Pure: Perception + presentation + controls -> HudModel. Owner: w7-hud.
 // Kit-agnostic: nothing here switches on a hero, kit, ability, status or resource name.
 
-import { describeAbility, describeStatus, TARGETING_TEXT } from '../../content/help.ts';
+import {
+  describeAbility,
+  describeCallWave,
+  describeFallen,
+  describeResource,
+  describeStatus,
+  TARGETING_TEXT,
+} from '../../content/help.ts';
 import type { Presentation } from '../../content/presentation.ts';
 import {
   abilityPresentation,
@@ -9,7 +16,9 @@ import {
   heroPresentation,
   intentKindOf,
   resourcePresentation,
+  respawnText,
   statusPresentation,
+  UI_TEXT,
 } from '../../content/presentation.ts';
 import type { HeroView, IntentView, Perception } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
@@ -140,6 +149,8 @@ function deadCard(input: HudInput, slot: number): HeroCardModel {
     selected: controls.selected === slot,
     dead: true,
     respawnSeconds: fallen === undefined ? undefined : respawnSecondsOf(fallen.respawnTicks),
+    respawnLabel: fallen === undefined ? undefined : respawnText(fallen.respawnTicks, TICK_HZ),
+    fallenLabel: UI_TEXT.fallen.label,
   };
 }
 
@@ -169,6 +180,8 @@ function heroCards(input: HudInput): HeroCardModel[] {
       selected,
       dead: false,
       respawnSeconds: undefined,
+      respawnLabel: undefined,
+      fallenLabel: '',
     });
   }
   return cards;
@@ -241,7 +254,25 @@ function helpModel(input: HudInput): HelpModel | undefined {
       text: describeStatus(s.id, { statuses: defs, heroes: game?.heroes ?? [] }) ?? '',
     }))
     .filter((s) => s.text !== '');
-  return { hero: hero === undefined ? '' : heroPresentation(ui, hero.def).label, abilities, statuses };
+  const resources = (hero?.resources ?? []).flatMap((r) => {
+    const text = describeResource(r.name, def);
+    if (text === undefined) {
+      return [];
+    }
+    const pres = resourcePresentation(ui, r.name);
+    return [{ label: pres.label, color: pres.color, text }];
+  });
+  const notes: [string, string][] = [[UI_TEXT.callWave.label, describeCallWave()]];
+  if (game !== undefined) {
+    notes.push([UI_TEXT.fallen.label, describeFallen(game.rules)]);
+  }
+  return {
+    hero: hero === undefined ? '' : heroPresentation(ui, hero.def).label,
+    abilities,
+    resources,
+    notes,
+    statuses,
+  };
 }
 
 function intentRows(input: HudInput): IntentRowModel[] {

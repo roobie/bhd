@@ -200,9 +200,9 @@ function familyOf(name: string): GenericFx | undefined {
 }
 
 /**
- * Which generic flash an event asks for: an event whose `kind` names it (a future `backlash` or `nova`
- * event) or a `dmg` whose tags do (`backlash`, `discharge`, `nova`, `ability:martyrdom`). Undefined
- * for every event that exists today, so unknown kinds fall through silently.
+ * Which generic flash an event asks for: an event whose `kind` names it (the Psyker's `backlash`
+ * `{hero, warp, damage}`) or a `dmg` whose tags do (the Martyrdom nova's `ability:martyrdom`, sourced by
+ * the Penitent). Undefined for every other event, so unknown kinds fall through silently.
  */
 export function genericFx(ev: SimEvent): GenericFx | undefined {
   const byKind = familyOf(ev.kind);
