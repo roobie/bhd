@@ -40,7 +40,7 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
-- [ ] backlog: lead defaults pending B (wave-master hand/budget, game length, reservation auto-cast, director goal) — DESIGN.md Risks
+- [ ] decision: wave-master/director defaults accepted by B 2026-11-01 (whole roster no hand, budget carries over, early send; fixed wave count with victory; reservations auto-cast for humans too, no lock; director paces, never plays to win)
 
 ## Log
 - 2026-11-01 initialized; design from Opus planning draft, lead defaults on B's open questions

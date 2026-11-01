@@ -83,7 +83,7 @@ Match determinism: identical full event stream (including `choice`) for the same
 - Decision flapping: stickiness, visible in the bot panel.
 - Perception cost in deep batches: clustering is O(n²) over ~100 enemies; measure in step 3.
 - Armed reservations are a second cast path in the sim; command-originated and deterministic; documented in `board.ts`.
-- **Lead defaults pending B** (provisional, recorded as one backlog item, not blocking):
+- **Lead defaults, accepted by B (2026-11-01):**
   1. Wave master: whole roster available (types unlock by wave), no random hand; budget per wave carries over; `send` early within a window.
   2. Game length with the Director: the content's fixed wave count with victory, so games end; endless escalation is a config option later.
   3. Reservations auto-cast the follower's ability, for humans too; no lock.
