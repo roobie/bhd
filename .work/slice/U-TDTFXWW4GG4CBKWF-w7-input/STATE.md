@@ -1,34 +1,35 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-WRCOBBQF2BA7YLWH
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - reduce is pure, emits valid commands only for driven live heroes, and a stub arming reducer works (node tests)
+  - keymap, pickEntity slop and attachInput pointer dispatch tested; npm run ci green
 ---
 
 # slice/w7-input
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+The control reducer and DOM input adapter: every input (keys, mouse, touch, HUD buttons) becomes a UiAction, and the reducer turns it into sim commands for the selected human-driven hero.
 
 ## Scope
-In: TODO
-Out: TODO
+In: controls.ts, input.ts and their tests.
+Out: arming (arming.ts), HUD buttons (hud.ts), wiring (app.ts).
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Contracts in types.ts are fixed. Reducer calls reduceArming first. No gameplay pinning.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Implemented and green; awaiting merge.
 
 ## Next
-- TODO
+- Merge; lead wires input into app.ts.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+npm run ci exit 0; node 699 tests, browser 87 tests.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -37,6 +38,10 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] learning: /tmp/ci.log is shared by parallel agents; write CI output to a per-agent path
+- [ ] backlog: tapping an allied hero selects it in the reducer (the table says so); the contract doc does not mention it
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 phase initialize → execute
+- 2026-11-01 phase execute → finalize
