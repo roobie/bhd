@@ -29,6 +29,7 @@ import { botPanel, directorPanel } from './panels.ts';
 import type { ReplayState } from './replay.ts';
 import { bannerOf, fastForwardTarget, loadReplay, recordLive, restartReplay } from './replay.ts';
 import { buildMatch, configFromSpec } from './setup.ts';
+import { serialiseShellHash } from './shell/config.ts';
 
 const SPEEDS = [0.5, 1, 2, 4, 8] as const;
 /** Log lines kept per category, and lines shown after filtering. */
@@ -276,7 +277,7 @@ export function mount(root: HTMLElement): () => void {
     const result = endText ?? 'running';
     return html`
       <h1>BHD debug viewer</h1>
-      <p class="note">debug viewer — not the game client (wave 7). Read-only: bots play, you watch.</p>
+      <p class="note">debug viewer — not the game client (wave 7). Read-only: bots play, you watch. <a href=${`play.html#${serialiseShellHash({ seed: cfg.seed, mode: cfg.mode, drive: [0] })}`}>play this seed</a></p>
       ${replayBanner()}
       <div class="controls">
         <button type="button" @click=${togglePlay}>${playing ? 'Pause' : 'Play'}</button>
