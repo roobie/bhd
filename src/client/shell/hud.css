@@ -1,4 +1,399 @@
-/* HUD styles. Owner: w7-hud. The contracts slice leaves this empty; layout tokens live on :root in play.html. */
-#hud {
-  font-family: inherit;
+/* HUD styles. Owner: w7-hud. Layout tokens (--bg, --fg, --panel, --border, --accent, --safe-*) live on :root in play.html.
+   The pixel constants below mirror hudInsets in hudmodel.ts: keep them in step. */
+.hud-root {
+  --top-h: 40px;
+  --bar-h: 68px;
+  --cards-h: 96px;
+  --col-w: 196px;
+  --hit: 44px;
+  --good: #5cb85c;
+  --bad: #d05050;
+  font-family: system-ui, sans-serif;
+  color: var(--fg);
+}
+
+.hud-root button,
+.hud-root a {
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hud-root .btn {
+  min-width: var(--hit);
+  min-height: var(--hit);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hud-root .btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hud-root .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hud-root .btn.primary {
+  background: var(--accent);
+  color: #1a1408;
+  font-weight: 600;
+}
+
+/* Top bar */
+.hud-root .top {
+  position: absolute;
+  top: var(--safe-top);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  height: var(--top-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  background: var(--panel);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.hud-root .top .btn {
+  min-height: var(--top-h);
+  border-radius: 0;
+  border-width: 0 0 0 1px;
+  background: none;
+}
+
+.hud-root .wave {
+  font-weight: 600;
+}
+
+.hud-root .next {
+  opacity: 0.7;
+}
+
+.hud-root .preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.hud-root .chip {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--c, #888);
+  color: #fff;
+  font-size: 11px;
+}
+
+.hud-root .ancient {
+  flex: 0 0 22%;
+  height: 8px;
+  border-radius: 4px;
+  background: #00000066;
+  overflow: hidden;
+}
+
+.hud-root .ancient i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Hero cards: a bottom row in portrait */
+.hud-root .cards {
+  position: absolute;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  height: var(--cards-h);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  box-sizing: border-box;
+  background: var(--panel);
+}
+
+.hud-root .card {
+  min-width: var(--hit);
+  min-height: var(--hit);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff0d;
+  cursor: pointer;
+}
+
+.hud-root .card.selected {
+  border-color: var(--c);
+  box-shadow: 0 0 0 1px var(--c);
+}
+
+.hud-root .card.dead {
+  opacity: 0.4;
+}
+
+.hud-root .name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.hud-root .swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.hud-root .badge {
+  margin-left: auto;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #ffffff1f;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.hud-root .badge.you {
+  background: var(--accent);
+  color: #1a1408;
+}
+
+.hud-root .hp,
+.hud-root .res {
+  position: relative;
+  display: block;
+  height: 7px;
+  border-radius: 3px;
+  background: #00000080;
+  overflow: hidden;
+}
+
+.hud-root .hp i {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+
+.hud-root .res {
+  height: 5px;
+}
+
+.hud-root .res i {
+  display: block;
+  height: 100%;
+  background: var(--c);
+}
+
+.hud-root .mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #fff;
+  opacity: 0.8;
+}
+
+.hud-root .pips {
+  display: flex;
+  gap: 3px;
+  min-height: 16px;
+}
+
+.hud-root .pip {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--c) var(--ring), #00000066 0);
+}
+
+.hud-root .pip em {
+  position: absolute;
+  inset: 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #1a1a1e;
+  font-size: 7px;
+  font-style: normal;
+}
+
+/* Ability bar: above the cards in portrait */
+.hud-root .abilities {
+  position: absolute;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: calc(var(--safe-bottom) + var(--cards-h));
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  background: var(--panel);
+}
+
+.hud-root .ability {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+  touch-action: none;
+  overflow: hidden;
+}
+
+/* The cooldown sweep: dark wedge covering the remaining fraction */
+.hud-root .ability::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(#000000a6 var(--cd, 0deg), transparent 0);
+  pointer-events: none;
+}
+
+.hud-root .ability.ready {
+  border-color: var(--good);
+  box-shadow: 0 0 8px #5cb85c80;
+}
+
+.hud-root .ability.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.hud-root .ability:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+
+.hud-root .glyph {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.hud-root .key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.hud-root .autopip {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  z-index: 1;
+}
+
+/* Floating bits */
+.hud-root .hint {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--top-h) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  font-size: 13px;
+  text-align: center;
+}
+
+.hud-root .intents {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--top-h) + 6px);
+  right: calc(var(--safe-right) + 6px);
+  max-width: 45%;
+  max-height: 30%;
+  overflow: auto;
+}
+
+.hud-root .picker {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + var(--cards-h) + var(--bar-h) + 8px);
+  transform: translateX(-50%);
+}
+
+.hud-root .end {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #000000b3;
+  pointer-events: auto;
+}
+
+.hud-root .end h2 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.hud-root .end p {
+  margin: 0 0 8px;
+}
+
+/* Landscape: hero cards in a left column, the ability cluster bottom-right */
+@media (orientation: landscape) {
+  .hud-root .cards {
+    top: calc(var(--safe-top) + var(--top-h));
+    right: auto;
+    bottom: var(--safe-bottom);
+    width: var(--col-w);
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 1fr);
+  }
+
+  .hud-root .abilities {
+    left: auto;
+    bottom: var(--safe-bottom);
+    justify-content: flex-end;
+    background: none;
+  }
+
+  .hud-root .picker {
+    bottom: calc(var(--safe-bottom) + var(--bar-h) + 8px);
+  }
 }
