@@ -1,8 +1,10 @@
 // The shared index of one game log, built once per log (WeakMap-cached) and read by every metric:
 // entity -> def / team / max hp, an hp tracker (damage clamped at 0, heal, death), the wave in force,
-// the Ancient's and the heroes' hp fraction and the enemies alive after each event.
+// the Ancient's and the heroes' hp fraction and the enemies alive after each event. A hero is not
+// removed by a `death`: it is down until its `respawn`, so a hero has a list of downs.
 // All per-event arrays are indexed like `log.events`. Pure.
 
+import type { SimEvent } from '../../sim/events.ts';
 import type { GameLog } from '../types.ts';
 
 interface EntityInfo {
@@ -11,9 +13,24 @@ interface EntityInfo {
   readonly team: 0 | 1;
   readonly maxHp: number;
   readonly spawnTick: number;
-  /** Tick of death or leak; undefined while it lived to the end of the game. */
+  /**
+   * Tick of death or leak; undefined while it lived to the end of the game. For a hero: the tick of
+   * the down it is in now (or ended the game in); undefined when it is up (see `downs` for all of them).
+   */
   deathTick: number | undefined;
   readonly isHero: boolean;
+  /** Heroes only: every down in order; `to` is the respawn tick, undefined while still down at the end. */
+  readonly downs: Down[];
+}
+
+interface Down {
+  readonly from: number;
+  to: number | undefined;
+}
+
+export interface Span {
+  readonly from: number;
+  readonly to: number;
 }
 
 export interface GameIndex {
@@ -76,6 +93,7 @@ class Tracker {
       spawnTick: e.tick,
       deathTick: undefined,
       isHero,
+      downs: [],
     });
     this.hp.set(e.id, maxHp);
     if (e.def === 'ancient') {
@@ -129,6 +147,50 @@ class Tracker {
     this.change(id, -(this.hp.get(id) ?? 0));
   }
 
+  /** Applies one event to the state; returns the hp a `dmg` actually removed, else 0. */
+  apply(e: SimEvent): number {
+    if (e.kind === 'dmg') {
+      return this.damage(e.dst, e.amount);
+    }
+    if (e.kind === 'spawn') {
+      this.spawn(e);
+    } else if (e.kind === 'heal') {
+      this.heal(e.dst, e.amount);
+    } else if (e.kind === 'respawn') {
+      this.respawn(e.id, e.tick);
+    } else if (e.kind === 'death' && this.entities.get(e.id)?.isHero === true) {
+      this.down(e.id, e.tick);
+    } else if (e.kind === 'death' || e.kind === 'leak') {
+      this.remove(e.id, e.tick);
+    } else if (e.kind === 'wave' && e.phase === 'start') {
+      this.wave = e.n;
+    }
+    return 0;
+  }
+
+  /** A hero death: it stays in the game at 0 hp until `respawn`. */
+  down(id: number, tick: number): void {
+    const info = this.entities.get(id);
+    if (info === undefined || info.deathTick !== undefined) {
+      return;
+    }
+    info.deathTick = tick;
+    info.downs.push({ from: tick, to: undefined });
+    this.change(id, -(this.hp.get(id) ?? 0));
+  }
+
+  /** A downed hero is back at full hp. */
+  respawn(id: number, tick: number): void {
+    const info = this.entities.get(id);
+    const last = info?.downs.at(-1);
+    if (info === undefined || last === undefined || last.to !== undefined) {
+      return;
+    }
+    last.to = tick;
+    info.deathTick = undefined;
+    this.change(id, info.maxHp - (this.hp.get(id) ?? 0));
+  }
+
   ancientFrac(): number {
     const anc = this.entities.get(this.ancientId);
     return anc === undefined ? 1 : (this.hp.get(this.ancientId) ?? 0) / anc.maxHp;
@@ -153,17 +215,7 @@ export function buildIndex(log: GameLog): GameIndex {
   const enemiesAlive = new Int32Array(events.length);
 
   events.forEach((e, i) => {
-    if (e.kind === 'spawn') {
-      t.spawn(e);
-    } else if (e.kind === 'dmg') {
-      effDamage[i] = t.damage(e.dst, e.amount);
-    } else if (e.kind === 'heal') {
-      t.heal(e.dst, e.amount);
-    } else if (e.kind === 'death' || e.kind === 'leak') {
-      t.remove(e.id, e.tick);
-    } else if (e.kind === 'wave' && e.phase === 'start') {
-      t.wave = e.n;
-    }
+    effDamage[i] = t.apply(e);
     wave[i] = t.wave;
     ancientFrac[i] = t.ancientFrac();
     teamFrac[i] = t.teamFrac();
@@ -200,4 +252,28 @@ export function heroAreas(suffix: string): (key: string) => readonly string[] {
     const [hero = key] = key.split(':');
     return [suffix === '' ? hero : `${hero}.${suffix}`];
   };
+}
+
+/** The spans of ticks an entity was alive in: spawn to the end of the game, minus its downs. */
+export function aliveSpans(ix: GameIndex, info: EntityInfo): readonly Span[] {
+  const spans: Span[] = [];
+  let from = info.spawnTick;
+  if (!info.isHero) {
+    return [{ from, to: info.deathTick ?? ix.endTick }];
+  }
+  for (const d of info.downs) {
+    spans.push({ from, to: d.from });
+    from = d.to ?? ix.endTick;
+  }
+  spans.push({ from, to: ix.endTick });
+  return spans.filter((s) => s.to > s.from);
+}
+
+/** Ticks of [from, to) that fall inside the spans. */
+export function overlap(spans: readonly Span[], from: number, to: number): number {
+  let total = 0;
+  for (const s of spans) {
+    total += Math.max(0, Math.min(s.to, to) - Math.max(s.from, from));
+  }
+  return total;
 }

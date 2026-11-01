@@ -4,12 +4,23 @@
 import type { GameLog, MetricDef, MetricValues } from '../types.ts';
 import { seriesName } from '../types.ts';
 import { choiceSpread } from './choice.ts';
-import { gunnerHeatBand } from './gunner.ts';
-import { abilityCasts, abilityValue, heroDeaths, heroDmgShare, teamFf, ultTiming } from './hero.ts';
+import { gunnerHeatBand, gunnerPavise } from './gunner.ts';
+import {
+  abilityCasts,
+  abilityValue,
+  heroDeaths,
+  heroDmgShare,
+  heroDowntime,
+  heroRespawns,
+  teamFf,
+  ultTiming,
+} from './hero.ts';
 import { comboRate, intentFulfil, intentLatency } from './intents.ts';
 import { outcomeAncientHp, outcomeLeaks, outcomeWave, teamLowestHp } from './outcome.ts';
+import { penitentNova, penitentPain } from './penitent.ts';
+import { psykerBacklash, psykerWarpHigh } from './psyker.ts';
 
-/** Registered metrics, in report order (the 13 of docs/METRICS.md; ability and intent each have two defs). */
+/** Registered metrics, in report order (docs/METRICS.md; ability and intent each have two defs). */
 export const METRICS: readonly MetricDef[] = [
   outcomeWave,
   outcomeLeaks,
@@ -26,6 +37,13 @@ export const METRICS: readonly MetricDef[] = [
   choiceSpread,
   teamLowestHp,
   ultTiming,
+  heroDowntime,
+  heroRespawns,
+  gunnerPavise,
+  penitentPain,
+  penitentNova,
+  psykerWarpHigh,
+  psykerBacklash,
 ];
 
 /** Every series value of one game, keyed by `seriesName(metric.id, key)`. */
