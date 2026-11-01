@@ -24,10 +24,10 @@ Out: playable client, multiplayer, non-Gunner hero kits (stand-ins only).
 Determinism rules in DESIGN.md §6.1 are pass/fail. Stand-in heroes are placeholders with no invented resources.
 
 ## Now
-Wave 0 initializing.
+Wave 0 (foundations) done: detmath, sim core, determinism gate, CI + Pages. Wave 1 next, awaiting B's go.
 
 ## Next
-- w0-foundations
+- w1 (DESIGN.md §7 Wave 1): create the wave unit; consume B-GLHTOKUXFDT5U2ZC.
 - Waves 1–5: create each wave unit when the previous one closes.
 
 ## Evidence

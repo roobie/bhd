@@ -1,5 +1,5 @@
 ---
-phase: execute
+phase: finalize
 parent: U-AK7QYARYTSKYZFTE
 owner:
   - claude
@@ -24,17 +24,21 @@ Not fully parallel: scaffold must land first (it creates the toolchain). Then de
 Toolchain: TS 7 strict, Biome, knip, Vitest, Node type stripping (D-NTY5JV4V7WOXX6OA).
 
 ## Now
-detmath and sim-core closed. determinism-harness next.
+All slices closed; closing wave.
 
 ## Next
-- determinism-harness
+- Close.
 
 ## Evidence
 - detmath + sim-core: `npm run ci` green, 54 tests
 - scaffold: `npm run ci` green (biome ci, tsc, knip, vitest)
+- determinism-harness + ci-pages: `npm run ci` green (node 146, browser 75 across chromium/firefox/webkit); first GitHub QA run 41329126170 green; https://roobie.github.io/bhd/ live.
+- Node same-seed identical hash sequence: test/determinism/determinism-node.test.ts.
 ## Harvest
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 slice/scaffold closed (U-VLEUWSHAPP54R32P)
 - 2026-11-01 slice/detmath (U-N6MFVW7IR6F2XNOU) and slice/sim-core (U-F7JATSM4UXEEF4BP) closed
+- 2026-11-01 slice/determinism-harness (U-VKRLXNBMNKEDB46P) and slice/ci-pages (U-UB7VXD5K3HUPVDEY) closed
+- 2026-11-01 phase execute → finalize
