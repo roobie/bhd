@@ -683,3 +683,27 @@
     padding: 0;
   }
 }
+
+.hud-root .helpres b {
+  color: var(--c);
+}
+
+.hud-root .notes {
+  margin: 0;
+}
+
+.hud-root .notes dt {
+  font-weight: 600;
+}
+
+.hud-root .notes dd {
+  margin: 0 0 6px;
+  opacity: 0.9;
+}
+
+.hud-root .card .respawn small {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
+}

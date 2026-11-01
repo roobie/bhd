@@ -42,11 +42,12 @@ export function spawnProp(ctx: TickContext, p: NewProp): Entity | undefined {
   return e;
 }
 
-/** Removes expired props (no `death` event: a prop is not a unit). Runs right after statuses. */
+/** Removes expired props, emitting `despawn` (no `death`: a prop is not a unit). Runs right after statuses. */
 export function propSystem(ctx: TickContext): void {
   for (const e of ctx.entities.values()) {
     if (e.kind === 'prop' && e.prop !== undefined && ctx.tick >= e.prop.until) {
       ctx.entities.remove(e.id);
+      ctx.emit({ tick: ctx.tick, kind: 'despawn', id: e.id });
     }
   }
 }

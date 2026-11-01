@@ -57,6 +57,6 @@ once the kits land:
   `value` on the Martyrdom cast would replace the estimate.
 - **Nova** hits are `splash` `dmg` events from the penitent.
 - **Warp** `resource` events carry the band's lower bound in Warp points.
-- **Pavise blocks** read `{kind: 'block', src, dst?, prop}` events (src the attacker, dst the protected target, prop the barrier id), which the lead adds at integration; `blocks` reads 0 until then. `despawn {id}` (a prop expiring) is not read by any metric.
+- **Pavise blocks** read `{kind: 'block', src, dst?, prop}` events (src the attacker, dst the protected target, prop the barrier id), which the sim emits when a Pavise stops an enemy hit or the Gunner's line. `despawn {id}` (a prop expiring) is not read by any metric.
 - **Backlash** with no target in range emits no `dmg`, so it is not counted.
-- Metric 9 (`combo.rate`) stays on the intent proxy.
+- Metric 9: `combo.rate` stays on the intent proxy; `combo.payoffs` (`wombo:w<n>`, `cashin:<status>`) counts real combos with `foldPayoffs` (perception/payoffs.ts), the same pure fold the client feedback uses.

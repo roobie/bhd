@@ -1,6 +1,8 @@
-// Metrics 9, 10: intents. `combo.rate` is a proxy until real combos exist: intent `fulfil` events per
-// kind per wave, with the payoff being the value of the fulfilling hero's latest cast.
+// Metrics 9, 10: intents. `combo.rate` is a proxy: intent `fulfil` events per kind per wave, with the
+// payoff being the value of the fulfilling hero's latest cast. `combo.payoffs` counts the real combos,
+// from the same pure fold the client uses (perception/payoffs.ts): wombos and status cash-ins.
 
+import { foldPayoffs } from '../../perception/payoffs.ts';
 import type { MetricDef } from '../types.ts';
 import { buildIndex } from './gameindex.ts';
 
@@ -30,6 +32,37 @@ export const comboRate: MetricDef = {
       const cast = casts.get(e.by)?.findLast((c) => c.tick <= e.tick);
       out[`${key}:payoff`] = (out[`${key}:payoff`] ?? 0) + (cast?.value ?? 0);
     });
+    return out;
+  },
+};
+
+export const comboPayoffs: MetricDef = {
+  id: 'combo.payoffs',
+  title: 'Combo payoffs found by foldPayoffs: wombos per wave, cash-ins per status',
+  unit: 'count',
+  areas: ['intents'],
+  missing: 'zero',
+  compute: (log) => {
+    const ix = buildIndex(log);
+    // Events are in tick order: binary search for the last event at or before `tick`.
+    const waveAt = (tick: number): number => {
+      let lo = 0;
+      let hi = log.events.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((log.events[mid]?.tick ?? 0) <= tick) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      return lo === 0 ? 0 : (ix.wave[lo - 1] ?? 0);
+    };
+    const out: Record<string, number> = {};
+    for (const p of foldPayoffs(log.events)) {
+      const key = p.kind === 'wombo' ? `wombo:w${waveAt(p.tick)}` : `cashin:${p.label}`;
+      out[key] = (out[key] ?? 0) + 1;
+    }
     return out;
   },
 };

@@ -206,8 +206,8 @@ export class Sim implements SimView {
   }
 
   /**
-   * Runs one tick and returns its events in emission order. Tick order: commands, intents, waves (spawn),
-   * statuses (expire), props (expire), respawns, movement, hero kits, enemies, deaths (+ end), hash. After the game has
+   * Runs one tick and returns its events in emission order. Tick order: respawns, commands, intents, waves (spawn),
+   * statuses (expire), props (expire), movement, hero kits, enemies, deaths (+ end), hash. After the game has
    * ended, a tick only advances the clock and emits `hash` events: commands already queued are dropped unlogged and new ones are rejected (`ended`)
    * and no system runs.
    */
@@ -227,6 +227,8 @@ export class Sim implements SimView {
 
   #runGameplay(ctx: TickContext): void {
     ctx.killers.clear();
+    // Respawns first, so a command addressed to a hero on its respawn tick is applied to the live hero.
+    respawnSystem(ctx);
     const due = this.#pending.get(this.#tick);
     if (due !== undefined) {
       this.#pending.delete(this.#tick);
@@ -240,7 +242,6 @@ export class Sim implements SimView {
     waveSystem(ctx);
     statusSystem(ctx);
     propSystem(ctx);
-    respawnSystem(ctx);
     moveSystem(ctx);
     heroSystem(ctx);
     enemySystem(ctx);

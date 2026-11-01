@@ -232,7 +232,7 @@ function blocks(raw: readonly object[]): SimEvent[] {
 }
 
 describe('gunner pavise', () => {
-  it('counts casts in the pavise slot and `block` events', () => {
+  it('counts casts in the pavise slot, and `block` events split by an enemy or a hero source', () => {
     const l = logOf([
       ...SPAWNS,
       { tick: 50, kind: 'ability', hero: 2, slot: 2, target: 0, value: 0 },
@@ -240,11 +240,11 @@ describe('gunner pavise', () => {
       { tick: 70, kind: 'ability', hero: 3, slot: 2, target: 0, value: 0 },
       ...blocks([
         { tick: 80, kind: 'block', src: 10, dst: 2, prop: 20 },
-        { tick: 85, kind: 'block', src: 11, prop: 20 },
+        { tick: 85, kind: 'block', src: 2, prop: 20 },
       ]),
       { tick: 90, kind: 'dmg', src: 10, dst: 2, amount: 5, tags: ['melee'] },
     ]);
-    expect(metric('gunner.pavise').compute(l)).toEqual({ casts: 1, blocks: 2 });
+    expect(metric('gunner.pavise').compute(l)).toEqual({ casts: 1, blocked: 1, selfBlocks: 1 });
   });
 });
 

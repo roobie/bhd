@@ -15,6 +15,9 @@ import { rosterGame } from '../../legacy.ts';
 
 const BAD = /NaN|undefined|\?|\{|\}/u;
 const HEX = /^#[0-9a-f]{6}$/u;
+const SECONDS = /\d+s/u;
+const BAD_TEXT = /NaN|undefined|\?\?/u;
+
 const base: Perception = perceive(new Sim({ seed: 1, game: defaultGame() }), createMemory(defaultPerception()));
 
 const controls: ControlState = {
@@ -257,7 +260,7 @@ describe('respawn countdown and call wave', () => {
   const fallen = (ticks: number): Perception => ({
     ...base,
     heroes: base.heroes.filter((h) => h.slot !== 1),
-    fallen: [{ id: 99, slot: 1, def: (base.heroes[1] as HeroView).def, respawnTicks: ticks }],
+    fallen: [{ id: 99, slot: 1, def: (base.heroes[1] as HeroView).def, respawnTicks: ticks, maxHp: 100 }],
   });
 
   it('a downed hero is a dead card that counts down whole seconds from Perception.fallen', () => {
@@ -267,6 +270,20 @@ describe('respawn countdown and call wave', () => {
     expect(card?.label).not.toBe('Hero 2');
     const [, sooner] = buildHudModel(input({ p: fallen(1) })).heroes;
     expect(sooner?.respawnSeconds).toBe(1);
+    expect(card?.respawnLabel).toMatch(SECONDS);
+    expect(card?.fallenLabel).not.toBe('');
+  });
+
+  it('help lists the call-wave and fallen rules and only resources it can describe, with no NaN', () => {
+    const m = buildHudModel(input({ game: rosterGame(), controls: { ...controls, help: true } }));
+    const titles = m.help?.notes.map(([t]) => t) ?? [];
+    expect(titles.length).toBe(2);
+    for (const [, text] of m.help?.notes ?? []) {
+      expect(text).not.toMatch(BAD_TEXT);
+    }
+    for (const r of m.help?.resources ?? []) {
+      expect(r.text).not.toMatch(BAD_TEXT);
+    }
   });
 
   it('a live hero has no countdown and a slot with no hero at all has none either', () => {
@@ -282,11 +299,14 @@ describe('respawn countdown and call wave', () => {
   });
 
   it('shows the time to the next wave and only offers the call while one is pending', () => {
-    const pending: Perception = { ...base, wave: { ...base.wave, n: 0, total: 5, nextAt: base.tick + 3 * TICK_HZ } };
+    const pending: Perception = {
+      ...base,
+      wave: { ...base.wave, n: 0, total: 5, nextAt: base.tick + 3 * TICK_HZ, canCall: true },
+    };
     const { top } = buildHudModel(input({ p: pending }));
     expect(top.nextInSeconds).toBe(3);
     expect(top.canCallWave).toBe(true);
-    const spent: Perception = { ...base, wave: { ...base.wave, n: 5, total: 5 } };
+    const spent: Perception = { ...base, wave: { ...base.wave, n: 5, total: 5, canCall: false } };
     expect(buildHudModel(input({ p: spent })).top.canCallWave).toBe(false);
   });
 });

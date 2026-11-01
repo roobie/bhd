@@ -173,6 +173,34 @@ function cancel(ctx: TickContext, cmd: Extract<IntentCommand, { op: 'cancel' }>)
   }
 }
 
+/**
+ * A hero went down: its pending post is cancelled (`cancel` by it, `expire` for each reservation on
+ * it) and its own reservations are withdrawn (`cancel` by it). A fired intent it posted stays for
+ * the other reservers. Ascending intent id, like every board phase.
+ */
+export function dropHeroIntents(ctx: TickContext, hero: number): void {
+  const board = ctx.intents;
+  const keep: Intent[] = [];
+  for (const intent of board.live) {
+    if (intent.by === hero && pending(ctx, intent)) {
+      emitOp(ctx, intent, 'cancel', hero);
+      for (const r of intent.reservations) {
+        emitOp(ctx, intent, 'expire', r.hero);
+      }
+      continue;
+    }
+    if (intent.reservations.some((r) => r.hero === hero)) {
+      intent.reservations = intent.reservations.filter((r) => r.hero !== hero);
+      emitOp(ctx, intent, 'cancel', hero);
+      if (intent.reservations.length === 0 && !pending(ctx, intent)) {
+        continue;
+      }
+    }
+    keep.push(intent);
+  }
+  board.live = keep;
+}
+
 /** Applies an `intent` command (called from commands.ts). Bad references are logged no-ops. */
 export function applyIntentCommand(ctx: TickContext, cmd: IntentCommand): void {
   switch (cmd.op) {

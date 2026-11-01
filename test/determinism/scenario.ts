@@ -1,5 +1,5 @@
 // The shared determinism scenario. Runs unchanged in Node and in browsers (no Node imports), and
-// both compare its result to golden.ts: that is how "browser matches Node" is proven.
+// browsers compare their result to the one Node computes in reference.setup.ts: that is how "browser matches Node" is proven.
 
 import { defaultBotSetup } from '../../src/content/bots.ts';
 import { defaultDirector, defaultMaster } from '../../src/content/director.ts';
@@ -128,6 +128,10 @@ export const SCRIPT: readonly Scripted[] = [
   { tick: 400, player: 0, cmd: { kind: 'ability', hero: 5, slot: 0 } },
   { tick: 545, player: 1, cmd: { kind: 'ability', hero: 2, slot: 1, x: 70, y: 34 } },
   { tick: 800, player: 0, cmd: { kind: 'ability', hero: 5, slot: 0 } },
+  // A Pavise between the Gunner (east) and the melee crowd: the Penitent steps behind it, so enemy
+  // hits across it are blocked and the Gunner's overpenetrating line is clipped (`block` events).
+  { tick: 640, player: 1, cmd: { kind: 'move', hero: 3, x: 75.4, y: 32 } },
+  { tick: 650, player: 0, cmd: { kind: 'ability', hero: 2, slot: 2, x: 74, y: 32 } },
   // Everyone holds fire as the third wave arrives, so it leaks and destroys the weak Ancient
   // (debug-spawned idle enemies never die, so victory is out of reach: this ends the game).
   { tick: 1005, player: 1, cmd: { kind: 'move', hero: 2, x: 77, y: 18 } },
@@ -142,7 +146,9 @@ export const SCRIPT: readonly Scripted[] = [
 
 /** The scenario game in master mode (wave master seat 4, default budget and costs). */
 function masterScenarioGame(): GameConfig {
-  return { ...scenarioGame(), master: defaultMaster() };
+  // Interval 20 s (the shipped one): longer than the master's send interval, so an early call has a window.
+  const base = scenarioGame();
+  return { ...base, waves: { ...base.waves, interval: 20 }, master: defaultMaster() };
 }
 
 /**
@@ -182,6 +188,9 @@ const MASTER_SCRIPT: readonly Scripted[] = [
   { tick: 310, player: 4, cmd: { kind: 'send' } },
   { tick: 320, player: 4, cmd: { kind: 'summon', def: 'runner', count: 4 } },
   { tick: 330, player: 4, cmd: { kind: 'summon', def: 'runner', count: 2 } },
+  // Master mode: callWave starts the pending wave now, like `send` (both throttles permitting).
+  { tick: 590, player: 4, cmd: { kind: 'summon', def: 'runner', count: 3 } },
+  { tick: 600, player: 0, cmd: { kind: 'callWave' } },
   { tick: 700, player: 4, cmd: { kind: 'send' } },
   { tick: 701, player: 4, cmd: { kind: 'summon', def: 'grunt', count: 2 } },
   { tick: 1100, player: 4, cmd: { kind: 'send' } },
@@ -211,7 +220,7 @@ interface MatchResult {
 export interface ScenarioResult {
   /** Master-mode script (intents board, `ctx.cast`, summon, send): cross-checks board and master hashing. */
   readonly master: MatchResult;
-  /** An all-bot Match with the default bots and Director: any bot or Director change moves it (`npm run golden`). */
+  /** An all-bot Match with the default bots and Director: any bot or Director change moves it. */
   readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];

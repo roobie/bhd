@@ -341,7 +341,7 @@ export function resourceTemplates(): { name: string; unfilled: (def: HeroDef | u
 
 /** Help for the call-next-wave control. */
 export function describeCallWave(): string {
-  return `Start the next wave now instead of waiting for the timer (key ${UI_TEXT.callWave.key}). Nothing happens once every wave has been sent.`;
+  return `Start the next wave now instead of waiting for the timer (key ${UI_TEXT.callWave.key}). It works only once the previous wave has finished spawning and the call cooldown has passed since it started; with a wave master it sends the wave they have queued, and waits while none is queued. Nothing happens once every wave has been sent.`;
 }
 
 /** Help for the fallen state and its respawn countdown, from the rules. */

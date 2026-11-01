@@ -247,6 +247,17 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       camera = fitCamera(match.sim.game.map, size, hudInsets(size, readSafeInsets(els.hud)));
     };
     resize();
+    // Callouts live in their own layer over the canvas (the HUD's renderer owns the HUD root's children).
+    if (feedback?.setView !== undefined) {
+      const layer = document.createElement('div');
+      layer.setAttribute('style', 'position:absolute;inset:0;overflow:hidden;pointer-events:none;');
+      els.hud.append(layer);
+      feedback.setView({ host: layer, project: (p) => camera?.worldToScreen(p) });
+      cleanups.push(() => {
+        feedback.setView?.(undefined);
+        layer.remove();
+      });
+    }
     // The canvas CSS size is the page's (never an inline px size), so observing the canvas and its
     // container sees every layout change; window events cover engines that fire no observer.
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(resize);

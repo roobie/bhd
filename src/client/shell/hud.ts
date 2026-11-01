@@ -5,6 +5,7 @@
 import type { TemplateResult } from 'lit-html';
 import { html, render as litRender, nothing } from 'lit-html';
 import { styleMap } from 'lit-html/directives/style-map.js';
+import { UI_TEXT } from '../../content/presentation.ts';
 import { KEY_CALL_WAVE, KEY_HELP, KEY_HOLD, KEY_STOP } from './input.ts';
 import { armPickerView, intentsListView } from './intentsui.ts';
 import type {
@@ -12,6 +13,7 @@ import type {
   AbilityButtonModel,
   HelpAbilityModel,
   HelpModel,
+  HelpResourceModel,
   HelpStatusModel,
   HeroCardModel,
   Hud,
@@ -64,8 +66,8 @@ function topBarView(t: TopBarModel, dispatch: Dispatch): TemplateResult {
       class="btn callwave"
       type="button"
       ?disabled=${!t.canCallWave}
-      aria-label="Call next wave (${KEY_CALL_WAVE})"
-      title="Call next wave (${KEY_CALL_WAVE})"
+      aria-label="${UI_TEXT.callWave.label} (${KEY_CALL_WAVE})"
+      title="${UI_TEXT.callWave.label} (${KEY_CALL_WAVE})"
       @click=${() => dispatch({ kind: 'callWave' })}
     >
       Call<small class="hotkey">${KEY_CALL_WAVE}</small>
@@ -123,7 +125,7 @@ function cardView(c: HeroCardModel, dispatch: Dispatch): TemplateResult {
       <i style=${styleMap({ width: pct(c.hpFrac) })}></i>
     </span>
     ${c.resources.map(resourceView)}
-    ${c.respawnSeconds === undefined ? nothing : html`<span class="respawn" role="timer" aria-label="Respawns in ${c.respawnSeconds} seconds">${c.respawnSeconds}s</span>`}
+    ${c.respawnSeconds === undefined ? nothing : html`<span class="respawn" role="timer" aria-label=${c.respawnLabel ?? ''} title=${c.respawnLabel ?? ''}><small>${c.fallenLabel}</small> ${c.respawnSeconds}s</span>`}
     <span class="pips">${c.statuses.map(pipView)}</span>
   </button>`;
 }
@@ -293,6 +295,10 @@ function helpStatusView(s: HelpStatusModel): TemplateResult {
   </li>`;
 }
 
+function helpResourceView(r: HelpResourceModel): TemplateResult {
+  return html`<li class="helpres" style=${styleMap({ '--c': r.color })}><b>${r.label}</b> ${r.text}</li>`;
+}
+
 function helpView(h: HelpModel, dispatch: Dispatch): TemplateResult {
   return html`<div class="help" data-hit role="dialog" aria-label="Help" tabindex="0">
     <header>
@@ -300,6 +306,9 @@ function helpView(h: HelpModel, dispatch: Dispatch): TemplateResult {
       <button class="btn closehelp" type="button" aria-label="Close help" @click=${() => dispatch({ kind: 'help' })}>&times;</button>
     </header>
     <div class="helpcards">${h.abilities.map(helpAbilityView)}</div>
+    ${h.resources.length === 0 ? nothing : html`<h2>Resources</h2><ul class="legend">${h.resources.map(helpResourceView)}</ul>`}
+    <h2>Rules</h2>
+    <dl class="notes">${h.notes.map(([title, text]) => html`<dt>${title}</dt><dd>${text}</dd>`)}</dl>
     <h2>Keys</h2>
     <p class="keys">${KEY_HELP.map((k) => html`<span><kbd>${k.keys}</kbd> ${k.does}</span>`)}</p>
     <h2>Statuses</h2>

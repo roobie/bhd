@@ -180,8 +180,15 @@ function engage(ctx: TickContext, e: Entity, def: EnemyDef, laneEnemy: boolean):
   if (laneEnemy) {
     e.move.mode = 'idle';
   }
-  // A hostile Pavise between the two blocks the hit (the enemy keeps trying).
-  if (e.attack.cooldown === 0 && firstBarrier(ctx.entities, e, target, e.team) === undefined) {
+  // A hostile Pavise between the two blocks the hit (the swing is spent on it).
+  if (e.attack.cooldown === 0) {
+    const barrier = firstBarrier(ctx.entities, e, target, e.team);
+    if (barrier !== undefined) {
+      // The swing lands on the barrier: it costs a full attack period, so a block is one blocked hit.
+      e.attack.cooldown = ticks(def.attack.cooldown);
+      ctx.emit({ tick: ctx.tick, kind: 'block', src: e.id, dst: target.id, prop: barrier.prop });
+      return;
+    }
     const amount = def.attack.damage;
     if (dealDamage(ctx, { src: e.id, dst: target.id, amount, tags: ['melee'] }) > 0) {
       e.attack.cooldown = ticks(def.attack.cooldown);

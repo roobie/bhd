@@ -1,4 +1,4 @@
-// Node only: the browser project runs determinism.test.ts. Replay and seed checks are engine-independent.
+// Node only: the browser project runs determinism.browser.test.ts. Replay and seed checks are engine-independent.
 
 import { describe, expect, it } from 'vitest';
 import type { Scripted } from './scenario.ts';
@@ -56,6 +56,13 @@ describe('determinism (node)', () => {
     expect(hashesOf(runSim(SEED, swapped, TICKS))).not.toEqual(hashesOf(runSim(SEED, SCRIPT, TICKS)));
   });
 
+  it('the scenario run exercises the Pavise: a block event, a despawn, a respawn (coverage invariant)', () => {
+    const kinds = new Set<string>(runSim(SEED, SCRIPT, TICKS).map((e) => e.kind));
+    for (const kind of ['block', 'despawn', 'respawn']) {
+      expect(kinds.has(kind)).toBe(true);
+    }
+  });
+
   it('hashes the last tick', () => {
     const events = runSim(SEED, SCRIPT, TICKS);
     expect(events.at(-1)).toMatchObject({ kind: 'hash', tick: TICKS });
@@ -77,5 +84,12 @@ describe('determinism (node)', () => {
     expect(ops.has('fire') || ops.has('expire')).toBe(true);
     const starts = events.filter((e) => e.kind === 'wave' && e.phase === 'start');
     expect(starts.length).toBeGreaterThan(0);
+  });
+
+  it("the master-mode script's callWave starts the pending wave on the tick it is applied", () => {
+    const events = runMasterSim(SEED, MASTER_TICKS);
+    const call = events.find((e) => e.kind === 'cmd' && e.cmd.kind === 'callWave');
+    expect(call).toBeDefined();
+    expect(events.some((e) => e.kind === 'wave' && e.phase === 'start' && e.tick === call?.tick)).toBe(true);
   });
 });

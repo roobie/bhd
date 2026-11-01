@@ -160,6 +160,24 @@ interface ChoiceEvent extends EventBase {
   readonly picked: string;
 }
 
+/**
+ * A prop (Pavise) stopped something: an enemy's single-target hit (`src` the enemy, `dst` the unit it
+ * aimed at) or the Gunner's overpenetrating line (`src` the Gunner, `dst` the first unit behind the
+ * prop that the line would have hit, absent if none). `prop` is the prop's entity id.
+ */
+interface BlockEvent extends EventBase {
+  readonly kind: 'block';
+  readonly src: number;
+  readonly dst?: number;
+  readonly prop: number;
+}
+
+/** A prop's lifetime ended and it was removed; `id` is the prop's entity id (its `spawn` event named it). */
+interface DespawnEvent extends EventBase {
+  readonly kind: 'despawn';
+  readonly id: number;
+}
+
 export type SimEvent =
   | CmdEvent
   | WaveEvent
@@ -176,4 +194,6 @@ export type SimEvent =
   | EndEvent
   | HashEvent
   | IntentEvent
-  | ChoiceEvent;
+  | ChoiceEvent
+  | BlockEvent
+  | DespawnEvent;

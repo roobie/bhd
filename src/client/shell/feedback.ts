@@ -17,7 +17,10 @@ const CATCHUP = 1.6;
 const MAX_LAG_MS = 200;
 const CALLOUT_MS = 900;
 const WOMBO_CALLOUT_MS = 1400;
-const MAX_CALLOUTS = 8;
+/** At most this many callouts are visible at once; a new one past it retires the oldest. */
+const MAX_CALLOUTS = 4;
+/** A callout of the same kind within this many world units and while still alive absorbs a new one (x N). */
+const MERGE_RADIUS = 6;
 
 interface Callout {
   readonly text: string;
@@ -27,6 +30,16 @@ interface Callout {
   readonly big: boolean;
   readonly startMs: number;
   readonly durationMs: number;
+  /** What it announces (a status label, or 'WOMBO'); same-key callouts close in space and time merge. */
+  readonly key: string;
+  /** Payoffs folded into it. */
+  readonly count: number;
+}
+
+/** A callout on screen: its data plus the DOM element drawn for it, if any. */
+interface LiveCallout {
+  data: Callout;
+  el?: HTMLElement | undefined;
 }
 
 /** Where callouts are drawn: a positioned host element and the camera's world -> css projection. */
@@ -60,10 +73,10 @@ function mid(a: Vec2 | undefined, b: Vec2 | undefined): Vec2 | undefined {
   return a !== undefined && b !== undefined ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : (a ?? b);
 }
 
-function drawCallout(view: FeedbackView, c: Callout): void {
+function drawCallout(view: FeedbackView, c: Callout): HTMLElement | undefined {
   const at = view.project({ x: c.x, y: c.y });
   if (at === undefined || typeof document === 'undefined') {
-    return;
+    return undefined;
   }
   const el = document.createElement('div');
   el.className = c.big ? 'bhd-callout bhd-callout-big' : 'bhd-callout';
@@ -91,6 +104,7 @@ function drawCallout(view: FeedbackView, c: Callout): void {
   } else {
     anim.onfinish = () => el.remove();
   }
+  return el;
 }
 
 interface VisualClock {
@@ -137,9 +151,59 @@ function calloutFor(p: Payoff, snap: Snapshot | undefined, label: (s: string) =>
     return undefined;
   }
   const big = p.kind === 'wombo';
-  const times = !big && p.count > 1 ? ` x${p.count}` : '';
-  const text = big ? `WOMBO x${p.count}!` : `${label(p.label)}${times}!`;
-  return { text, x: at.x, y: at.y, big, startMs: 0, durationMs: big ? WOMBO_CALLOUT_MS : CALLOUT_MS };
+  const key = big ? 'WOMBO' : label(p.label);
+  return {
+    text: calloutText(key, p.count, big),
+    x: at.x,
+    y: at.y,
+    big,
+    startMs: 0,
+    durationMs: big ? WOMBO_CALLOUT_MS : CALLOUT_MS,
+    key,
+    count: p.count,
+  };
+}
+
+function calloutText(key: string, count: number, big: boolean): string {
+  if (big) {
+    return `WOMBO x${count}!`;
+  }
+  return count > 1 ? `${key} x${count}!` : `${key}!`;
+}
+
+/** The live callout `c` folds into, if any: same key, close in space, still alive at `nowMs`. */
+function mergeTarget(live: readonly LiveCallout[], c: Callout, nowMs: number): LiveCallout | undefined {
+  return live.find(
+    (k) =>
+      k.data.key === c.key &&
+      nowMs < k.data.startMs + k.data.durationMs &&
+      Math.hypot(k.data.x - c.x, k.data.y - c.y) <= MERGE_RADIUS,
+  );
+}
+
+/**
+ * Adds `c` to the live callouts at `nowMs`: expired ones are retired, a same-key one close by absorbs
+ * it (keeps its position, restarts its life, bumps the count), and only the newest MAX_CALLOUTS stay.
+ */
+function place(live: readonly LiveCallout[], c: Callout, view: FeedbackView | undefined, nowMs: number): LiveCallout[] {
+  const alive = live.filter((k) => nowMs < k.data.startMs + k.data.durationMs);
+  const into = mergeTarget(alive, c, nowMs);
+  const count = (into?.data.count ?? 0) + c.count;
+  const placed: Callout = {
+    ...c,
+    x: into?.data.x ?? c.x,
+    y: into?.data.y ?? c.y,
+    count,
+    text: calloutText(c.key, count, c.big),
+    startMs: nowMs,
+  };
+  const kept = into === undefined ? alive : alive.filter((k) => k !== into);
+  const all = [...kept, { data: placed, el: view === undefined ? undefined : drawCallout(view, placed) }];
+  const retired = [...live.filter((k) => !kept.includes(k)), ...all.slice(0, -MAX_CALLOUTS)];
+  for (const k of retired) {
+    k.el?.remove();
+  }
+  return all.slice(-MAX_CALLOUTS);
 }
 
 /** A feedback sink with real audio when the platform has it (silent otherwise). */
@@ -148,7 +212,7 @@ export function createFeedback(options: FeedbackOptions = {}): Feedback {
   const label = options.statusLabel ?? ((s: string) => s.toUpperCase());
   const tracker = createPayoffTracker();
   const clock = createVisualClock();
-  let live: Callout[] = [];
+  let live: LiveCallout[] = [];
   let view: FeedbackView | undefined;
 
   audio.unlock();
@@ -158,11 +222,7 @@ export function createFeedback(options: FeedbackOptions = {}): Feedback {
     audio.play(p.kind);
     const c = calloutFor(p, snap, label);
     if (c !== undefined) {
-      const placed = { ...c, startMs: nowMs };
-      live = [...live.filter((k) => nowMs < k.startMs + k.durationMs), placed].slice(-MAX_CALLOUTS);
-      if (view !== undefined) {
-        drawCallout(view, placed);
-      }
+      live = place(live, c, view, nowMs);
     }
   };
 
@@ -181,12 +241,15 @@ export function createFeedback(options: FeedbackOptions = {}): Feedback {
       }
     },
     visualTime: (nowMs) => clock.read(nowMs),
-    callouts: (nowMs) => live.filter((k) => nowMs >= k.startMs && nowMs < k.startMs + k.durationMs),
+    callouts: (nowMs) => live.map((k) => k.data).filter((k) => nowMs >= k.startMs && nowMs < k.startMs + k.durationMs),
     setView(next) {
       view = next;
     },
     dispose() {
       view = undefined;
+      for (const k of live) {
+        k.el?.remove();
+      }
       live = [];
       audio.dispose();
     },

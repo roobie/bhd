@@ -4,7 +4,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 // Tests that run in browsers too: they must not import node:*.
 const BROWSER_TESTS = [
-  'test/determinism/determinism.test.ts',
+  'test/determinism/determinism.browser.test.ts',
   'test/detmath-rng.test.ts',
   'test/detmath-trig.test.ts',
   'test/client/viewer.browser.test.ts',
@@ -46,6 +46,8 @@ export default defineConfig({
         test: {
           name: 'browser',
           include: BROWSER_TESTS,
+          // Runs the determinism scenario on Node; the browsers must match it.
+          globalSetup: ['test/determinism/reference.setup.ts'],
           browser: {
             enabled: true,
             headless: true,

@@ -15,7 +15,6 @@
     "typecheck": "tsc",
     "test": "vitest run --project node",
     "test:browser": "vitest run --project browser",
-    "golden": "node test/determinism/regen.ts && biome format --write test/determinism/golden.ts",
     "check": "biome check",
     "fix": "biome check --write",
     "knip": "knip",

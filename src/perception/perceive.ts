@@ -10,6 +10,7 @@ import type { Entity } from '../sim/entities.ts';
 import { isDowned, respawnLeft } from '../sim/respawn.ts';
 import type { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
+import { canCallWave } from '../sim/waves.ts';
 import { buildClumps } from './clumps.ts';
 import { findComboWindows } from './combos.ts';
 import { gunnerParts } from './kits/gunner.ts';
@@ -148,22 +149,19 @@ function heroViews(sim: Sim, enemies: readonly EnemyView[], memory: PerceptionMe
 function fallenViews(sim: Sim): FallenView[] {
   const out: FallenView[] = [];
   for (const e of sim.entities.values()) {
-    if (isDowned(e)) {
-      out.push({
-        id: e.id,
-        slot: sim.game.heroes.findIndex((d) => d.id === e.def),
-        def: e.def,
-        respawnTicks: respawnLeft(e, sim.tick),
-      });
+    const slot = sim.game.heroes.findIndex((d) => d.id === e.def);
+    if (isDowned(e) && slot >= 0) {
+      out.push({ id: e.id, slot, def: e.def, respawnTicks: respawnLeft(e, sim.tick), maxHp: e.maxHp });
     }
   }
   return out.sort((a, b) => a.slot - b.slot || a.id - b.id);
 }
 
-function teamView(heroes: readonly HeroView[], memory: PerceptionMemory): TeamView {
+/** Team totals count fallen heroes too (0 hp of their max hp), so a downed hero reads as lost health, not absent. */
+function teamView(heroes: readonly HeroView[], fallen: readonly FallenView[], memory: PerceptionMemory): TeamView {
   const hp = heroes.reduce((n, h) => n + h.hp, 0);
-  const maxHp = heroes.reduce((n, h) => n + h.maxHp, 0);
-  const ids = new Set(heroes.map((h) => h.id));
+  const maxHp = heroes.reduce((n, h) => n + h.maxHp, 0) + fallen.reduce((n, f) => n + f.maxHp, 0);
+  const ids = new Set([...heroes.map((h) => h.id), ...fallen.map((f) => f.id)]);
   let lost = 0;
   for (const [victim, amount] of damageByVictim(memory)) {
     lost += ids.has(victim) ? amount : 0;
@@ -208,10 +206,11 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
   const heroes = heroViews(sim, enemies, memory);
   const clumps = buildClumps(enemies, memory.cfg.clumpRadius);
   const next = sim.game.waves.waves[sim.waves.n];
+  const fallen = fallenViews(sim);
   return {
     tick: sim.tick,
     heroes,
-    fallen: fallenViews(sim),
+    fallen,
     enemies,
     clumps,
     comboWindows: findComboWindows(enemies, clumps, {
@@ -223,10 +222,11 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
       n: sim.waves.n,
       total: sim.game.waves.waves.length,
       nextAt: sim.waves.nextAt,
+      canCall: canCallWave(sim),
       preview: sim.master === undefined ? (next?.spawns ?? []).map((g) => ({ def: g.def, count: g.count })) : [],
     },
     intents: intentViews(sim),
-    team: teamView(heroes, memory),
+    team: teamView(heroes, fallen, memory),
   };
 }
 

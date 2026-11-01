@@ -14,8 +14,10 @@ export interface RulesDef {
   readonly respawn: RespawnRule;
   /** True: the game ends ('team-wiped') when no hero is up. False (default, D-IYLBKMAIQNR7GE3R): only the Ancient's death ends it. */
   readonly wipeLoses: boolean;
+  /** Seconds after a wave starts before `callWave` may start the next one (the wave must also be done spawning). */
+  readonly callWaveMinSeconds: number;
 }
 
 export function defaultRules(): RulesDef {
-  return { leashRange: 13, respawn: { base: 10, perWave: 2, max: 45 }, wipeLoses: false };
+  return { leashRange: 13, respawn: { base: 10, perWave: 2, max: 45 }, wipeLoses: false, callWaveMinSeconds: 5 };
 }

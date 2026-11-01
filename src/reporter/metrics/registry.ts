@@ -15,7 +15,7 @@ import {
   teamFf,
   ultTiming,
 } from './hero.ts';
-import { comboRate, intentFulfil, intentLatency } from './intents.ts';
+import { comboPayoffs, comboRate, intentFulfil, intentLatency } from './intents.ts';
 import { outcomeAncientHp, outcomeLeaks, outcomeWave, teamLowestHp } from './outcome.ts';
 import { penitentNova, penitentPain } from './penitent.ts';
 import { psykerBacklash, psykerWarpHigh } from './psyker.ts';
@@ -32,6 +32,7 @@ export const METRICS: readonly MetricDef[] = [
   abilityCasts,
   abilityValue,
   comboRate,
+  comboPayoffs,
   intentFulfil,
   intentLatency,
   choiceSpread,
