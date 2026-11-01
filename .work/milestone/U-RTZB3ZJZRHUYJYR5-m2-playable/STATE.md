@@ -24,10 +24,13 @@ Out: anything not signed off by B at the wave 6 checkpoint.
 Starts after M1 closes. Wave 6 is a design checkpoint with B before any code.
 
 ## Now
-Parked until M1 closes.
+Wave 7 (client shell) is done. Wave 6 (design checkpoint) awaits B's answers to the 14 questions.
 
 ## Next
-- Wave 6 design checkpoint.
+- Wave 6: get B's answers.
+- Wave 8 (solo loop), depends on wave 6.
+- Wave 9 (bargains).
+- Wave 10 (multiplayer, last).
 
 ## Evidence
 ## Harvest
