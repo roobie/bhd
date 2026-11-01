@@ -35,6 +35,10 @@ Contracts creates every file above with a minimal working stub so each later sli
 - `dealDamage(ctx, {src, dst, amount, tags}) → number dealt` (combat.ts). Stub: hp −= amount. combat-core adds armour, pierce, statuses, friendly-fire flag. Never removes entities; the deaths system does.
 - `applyStatus(ctx, dst, status, src, durationTicks, value)` / `hasStatus` / `statusValue` (statuses.ts).
 - Queries (query.ts), all in ascending ID order, ties broken by lower ID: `unitsInRadius`, `nearestHostile`, `unitsOnSegment(x0,y0,x1,y1,halfWidth)`.
+- `heal(ctx, {src, dst, amount, tags}) → healed` (combat.ts), emits `heal`; `removeStatus(ctx, dst, status, src?)`.
+- **Hooks so later slices stay in their files:** enemy aggro targets a live `taunted` status's src first; `rooted` status zeroes speed and blocks move (Brace); `suppressed` slows via `effectiveSpeed` (combat-core); leak damage carries a `leak` tag and bypasses modifiers; `clumped` is applied by the stand-in pull.
+- **Systems skip dead actors** (hp ≤ 0) until the deaths system removes them; queries never return them.
+- Kit base state `hold` + `autocast` mask is shared, set by the dispatcher and hashed for every kit.
 - Hero kits (heroes/index.ts): `{ init(def), tick(ctx, hero), command(ctx, hero, cmd), hash(hasher, state) }` dispatched on `kit.kind`.
 
 ### Commands (replace spawn/move placeholders)
@@ -57,6 +61,6 @@ commands → waves (spawn) → statuses (expire) → movement → hero kits (res
 
 ## Risks & open questions
 - **Status semantics beyond Suppressed (slow) are provisional** (Marked, Exposed, Clumped): numbers are free to tune, but the mechanics go to B at the wave report.
-- **Gunner third ability** is stubbed behind a flag (§10 Q2).
+- **Gunner third ability:** Suppressing Fire (B, provisional, revisit later).
 - **Friendly fire** only on damage that carries the `ff` flag; only Gunner overpenetration sets it (§3 default, §10 Q1).
 - **Stand-in heroes** use generic ability types (taunt, mark, heal pulse, pull) with no resources; clearly marked placeholders.

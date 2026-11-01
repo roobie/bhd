@@ -2,30 +2,34 @@
 phase: initialize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'Lane map: waypoint path, Ancient with hp, hero spawn points'
+  - 'Runner, Grunt, Brute, Boss defined per §5 and spawned by a wave schedule (Boss every 5th wave); wave start/end events'
+  - 'Enemies walk the lane, aggro onto heroes in range (nearest, ID tiebreak), attack via dealDamage, leak at the Ancient'
+  - 'Tests cover schedule timing, aggro, leaks; npm run ci green'
 ---
 
 # slice/lane-waves
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Slice 1a: the lane, the enemy roster and wave spawning.
 
 ## Scope
-In: TODO
-Out: TODO
+In: map, enemy defs and behaviour, wave schedule
+Out: combat maths (combat-core), director (wave 4)
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EWBHXWC-w1-content-combat/DESIGN.md). Runs in a worktree in parallel with its sibling.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Waiting on sim-contracts.
 
 ## Next
-- TODO
+- Start after sim-contracts merges.
+- Emit `wave` `phase: end` (defined but unused); decide when a wave ends.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->

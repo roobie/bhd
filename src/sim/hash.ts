@@ -4,6 +4,13 @@
 // later checks, so it is caught within a check or two. Floats are hashed by their exact IEEE bits
 // (little-endian, so the result is platform independent; -0 and 0 differ).
 
+import type { Rng } from '../detmath/index.ts';
+import type { EntityStore } from './entities.ts';
+import { ENTITY_KIND_CODE, MOVE_MODE_CODE } from './entities.ts';
+import { hashKit } from './heroes/index.ts';
+import type { WaveState } from './waves.ts';
+import { hashWaves } from './waves.ts';
+
 const C1 = 0xcc_9e_2d_51;
 const C2 = 0x1b_87_35_93;
 
@@ -51,6 +58,15 @@ export class StateHasher {
     return this.u32(b ? 1 : 0);
   }
 
+  /** Length, then every UTF-16 code unit. Content ids are hashed as text, so there is no code table to keep in step. */
+  str(s: string): this {
+    this.u32(s.length);
+    for (let i = 0; i < s.length; i++) {
+      this.u32(s.charCodeAt(i));
+    }
+    return this;
+  }
+
   /** 16 hex chars. */
   digest(): string {
     let h1 = this.#h1 ^ this.#words;
@@ -63,4 +79,45 @@ export class StateHasher {
     h2 = (h2 + h1) | 0;
     return hex(h1) + hex(h2);
   }
+}
+
+/** Everything `stateHash` reads. */
+interface HashedState {
+  readonly tick: number;
+  readonly ended: boolean;
+  readonly entities: EntityStore;
+  readonly waves: WaveState;
+  readonly rng: Rng;
+}
+
+/**
+ * Canonical hash of game state, in a fixed order: tick, ended flag, entity store (next ID, count,
+ * then each entity in ID order: id, kind, def, team, x, y, radius, hp, maxHp, armour, speed,
+ * statuses, move, attack, kit), wave scheduler, sim RNG state. Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
+ * move modes through append-only code tables; content ids (def, status) as text. Pending commands
+ * are excluded on purpose: in lockstep, future inputs arrive at different times on different peers
+ * without being a desync.
+ */
+export function stateHash(s: HashedState): string {
+  const h = new StateHasher();
+  h.u32(s.tick).bool(s.ended).u32(s.entities.nextId).u32(s.entities.size);
+  for (const e of s.entities.values()) {
+    h.u32(e.id).u32(ENTITY_KIND_CODE[e.kind]).str(e.def).u32(e.team);
+    h.f64(e.x).f64(e.y).f64(e.radius).f64(e.hp).f64(e.maxHp).f64(e.armour).f64(e.speed);
+    h.u32(e.statuses.length);
+    for (const st of e.statuses) {
+      h.str(st.status).f64(st.until).u32(st.src).f64(st.value);
+    }
+    h.u32(MOVE_MODE_CODE[e.move.mode]).f64(e.move.tx).f64(e.move.ty).u32(e.move.waypoint);
+    h.f64(e.attack.cooldown).u32(e.attack.target);
+    h.bool(e.kit !== undefined);
+    if (e.kit !== undefined) {
+      hashKit(h, e.kit);
+    }
+  }
+  hashWaves(h, s.waves);
+  for (const w of s.rng.state) {
+    h.u32(w);
+  }
+  return h.digest();
 }

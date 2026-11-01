@@ -2,30 +2,33 @@
 phase: initialize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'dealDamage applies flat armour, pierce and statuses, honours the ff flag, emits dmg with tags'
+  - 'Statuses system: apply/refresh/expire with status on/off events; Suppressed, Marked, Exposed, Clumped with provisional effects'
+  - 'Each effect has a test showing the number it changes; npm run ci green'
 ---
 
 # slice/combat-core
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Slice 1b: the damage pipeline and the statuses system.
 
 ## Scope
-In: TODO
-Out: TODO
+In: combat.ts, statuses.ts, content/statuses.ts
+Out: hero kits, enemy AI
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EWBHXWC-w1-content-combat/DESIGN.md). Runs in a worktree in parallel with its sibling. Marked/Exposed/Clumped semantics are provisional; flag them for B.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Waiting on sim-contracts.
 
 ## Next
-- TODO
+- Start after sim-contracts merges.
+- Implement the Suppressed slow in `effectiveSpeed` (the contracts stub ignores it; movement.ts already calls it). Keep the `leak` tag bypass and keep setting `ctx.killers`.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->

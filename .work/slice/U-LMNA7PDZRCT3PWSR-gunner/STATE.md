@@ -2,30 +2,32 @@
 phase: initialize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'Gunner kit per project DESIGN §4.1: spin-up, heat bands with resource events, pierce >60%, overpenetration with ff >85%, overheat vent, Brace, Vent, Furnace Heart'
+  - 'Suppressing Fire (slot 2): wide low-damage cone applying Suppressed (provisional, B 2026-11-01)'
+  - 'Each mechanic has a test; heat band events match §6.6; npm run ci green'
 ---
 
 # slice/gunner
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Slice 1c: the Gunner, the one fully designed hero.
 
 ## Scope
-In: TODO
-Out: TODO
+In: heroes/gunner.ts, content/heroes/gunner.ts
+Out: Gunner bot (wave 3)
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EWBHXWC-w1-content-combat/DESIGN.md). Runs in a worktree in parallel with its sibling.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Waiting on sim-contracts.
 
 ## Next
-- TODO
+- Start after sim-contracts merges.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->

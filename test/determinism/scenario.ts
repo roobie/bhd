@@ -1,6 +1,7 @@
 // The shared determinism scenario. Runs unchanged in Node and in browsers (no Node imports), and
 // both compare its result to golden.ts: that is how "browser matches Node" is proven.
 
+import { defaultGame } from '../../src/content/index.ts';
 import {
   atan2,
   cos,
@@ -19,8 +20,8 @@ import { StateHasher } from '../../src/sim/hash.ts';
 import { Sim } from '../../src/sim/sim.ts';
 
 export const SEED = 0x5e_ed_12_34;
-export const TICKS = 300;
-const HASH_EVERY = 7;
+export const TICKS = 1500;
+const HASH_EVERY = 37;
 
 export interface Scripted {
   readonly tick: number;
@@ -28,30 +29,41 @@ export interface Scripted {
   readonly cmd: Command;
 }
 
-/** Several players, some on the same tick, targets near and far. Entity ids are 1, 2, ... in spawn order. */
+// defaultGame() ids: Ancient 1, then the lineup gunner 2, tank 3, ranged 4, support 5; debug spawns
+// below get 6, 7, 8, ... in order. Waves start on their own at tick 150.
+/** Several players, some on the same tick, hero commands of every kind, targets near and far. */
 export const SCRIPT: readonly Scripted[] = [
-  { tick: 1, player: 0, cmd: { kind: 'spawn', type: 'dummy', x: 0, y: 0 } },
-  { tick: 1, player: 1, cmd: { kind: 'spawn', type: 'dummy', x: 10, y: 3 } },
-  { tick: 1, player: 2, cmd: { kind: 'spawn', type: 'dummy', x: -5.5, y: 8.25 } },
-  { tick: 2, player: 1, cmd: { kind: 'move', entity: 2, x: 7.3, y: -2.1 } },
-  { tick: 2, player: 0, cmd: { kind: 'move', entity: 1, x: 1 / 3, y: 100 } },
-  { tick: 5, player: 2, cmd: { kind: 'move', entity: 3, x: -4, y: 11 } },
-  { tick: 17, player: 0, cmd: { kind: 'spawn', type: 'dummy', x: 123.456, y: -78.9 } },
-  { tick: 18, player: 1, cmd: { kind: 'move', entity: 4, x: 0.1, y: 0.2 } },
-  { tick: 18, player: 0, cmd: { kind: 'move', entity: 4, x: 50, y: 50 } },
-  { tick: 18, player: 2, cmd: { kind: 'move', entity: 99, x: 1, y: 1 } },
-  { tick: 40, player: 0, cmd: { kind: 'move', entity: 1, x: -20, y: 30.7 } },
+  { tick: 1, player: 0, cmd: { kind: 'spawn', def: 'grunt', x: 70, y: 25 } },
+  { tick: 1, player: 1, cmd: { kind: 'spawn', def: 'brute', x: 72, y: 31.5 } },
+  { tick: 1, player: 2, cmd: { kind: 'spawn', def: 'runner', x: -5.5, y: 8.25 } },
+  { tick: 2, player: 1, cmd: { kind: 'move', hero: 3, x: 70, y: 28 } },
+  { tick: 2, player: 0, cmd: { kind: 'move', hero: 2, x: 60 + 1 / 3, y: 21 } },
+  { tick: 5, player: 2, cmd: { kind: 'move', hero: 4, x: 76.5, y: 24 } },
+  { tick: 5, player: 2, cmd: { kind: 'hold', hero: 5, on: true } },
+  { tick: 17, player: 0, cmd: { kind: 'spawn', def: 'grunt', x: 60.456, y: 5.9 } },
+  { tick: 18, player: 1, cmd: { kind: 'move', hero: 5, x: 80.1, y: 27.2 } },
+  { tick: 18, player: 0, cmd: { kind: 'move', hero: 5, x: 82, y: 30 } },
+  { tick: 18, player: 2, cmd: { kind: 'move', hero: 99, x: 1, y: 1 } },
+  { tick: 18, player: 2, cmd: { kind: 'ability', hero: 2, slot: 0, x: 50, y: 20 } },
   // Same player, same tick: only the submission order (seq) says which target wins.
-  { tick: 40, player: 0, cmd: { kind: 'move', entity: 1, x: 7, y: -7 } },
-  { tick: 40, player: 1, cmd: { kind: 'move', entity: 2, x: 2 / 3, y: -1 / 7 } },
-  { tick: 41, player: 2, cmd: { kind: 'spawn', type: 'dummy', x: 2, y: 2 } },
+  { tick: 40, player: 0, cmd: { kind: 'move', hero: 2, x: 55, y: 30.7 } },
+  { tick: 40, player: 0, cmd: { kind: 'move', hero: 2, x: 58, y: 27 } },
+  { tick: 40, player: 1, cmd: { kind: 'move', hero: 3, x: 70 + 2 / 3, y: 28 - 1 / 7 } },
+  { tick: 41, player: 2, cmd: { kind: 'spawn', def: 'grunt', x: 2, y: 2 } },
+  { tick: 50, player: 0, cmd: { kind: 'ability', hero: 4, slot: 3, target: 6 } },
+  { tick: 55, player: 1, cmd: { kind: 'autocast', hero: 3, slot: 1, on: true } },
+  { tick: 55, player: 1, cmd: { kind: 'autocast', hero: 3, slot: 2, on: false } },
   // Negative zero: JSON turns it into 0, so the sim must have normalised it before logging.
-  { tick: 60, player: 1, cmd: { kind: 'spawn', type: 'dummy', x: -0, y: -0 } },
-  { tick: 61, player: 1, cmd: { kind: 'move', entity: 6, x: -0, y: 5 } },
-  { tick: 90, player: 1, cmd: { kind: 'move', entity: 5, x: 200, y: -200 } },
-  { tick: 150, player: 2, cmd: { kind: 'move', entity: 3, x: 0, y: 0 } },
-  { tick: 150, player: 0, cmd: { kind: 'move', entity: 1, x: 3, y: 3 } },
-  { tick: 299, player: 1, cmd: { kind: 'move', entity: 2, x: -1, y: 1 } },
+  { tick: 60, player: 1, cmd: { kind: 'spawn', def: 'runner', x: -0, y: -0 } },
+  { tick: 61, player: 1, cmd: { kind: 'move', hero: 5, x: -0, y: 25 } },
+  { tick: 61, player: 1, cmd: { kind: 'ability', hero: 4, slot: 1, x: -0, y: -0 } },
+  { tick: 90, player: 1, cmd: { kind: 'stop', hero: 2 } },
+  { tick: 100, player: 1, cmd: { kind: 'hold', hero: 5, on: false } },
+  { tick: 150, player: 2, cmd: { kind: 'move', hero: 3, x: 75, y: 30 } },
+  { tick: 150, player: 0, cmd: { kind: 'move', hero: 2, x: 62, y: 20.5 } },
+  { tick: 299, player: 1, cmd: { kind: 'hold', hero: 2, on: true } },
+  { tick: 600, player: 1, cmd: { kind: 'hold', hero: 2, on: false } },
+  { tick: 700, player: 2, cmd: { kind: 'ability', hero: 2, slot: 3 } },
 ];
 
 export interface ScenarioResult {
@@ -93,7 +105,7 @@ function drive(
   setup: (sim: Sim) => void,
   beforeTick: (sim: Sim, tick: number) => void,
 ): SimEvent[] {
-  const sim = new Sim({ seed, hashEvery: HASH_EVERY });
+  const sim = new Sim({ seed, game: defaultGame(), hashEvery: HASH_EVERY });
   setup(sim);
   const events: SimEvent[] = [];
   for (let i = 1; i <= ticks; i++) {

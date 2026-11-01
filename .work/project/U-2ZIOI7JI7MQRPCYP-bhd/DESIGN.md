@@ -66,7 +66,7 @@ Identity: she gets more dangerous the longer she commits; commitment is what's t
   - Riding the redline is the skill. Armoured waves push her hotter; hotter endangers her own tank.
 - **Brace (stance toggle):** braced = +30% range, spin never decays, rooted, fixed 90° arc. Unbracing takes 1 s. Doubles as the solo autopilot setting.
 - **Vent (ability):** dump all current heat as a fire cone; damage scales with heat; resets spin to zero.
-- **Third standard ability:** not designed yet. Proposal to bring to B: _Suppressing Fire_ — wide, low-damage cone that applies **Suppressed** (slow).
+- **Suppressing Fire (third standard ability, provisional; B 2026-11-01, revisit later):** wide, low-damage cone that applies **Suppressed** (slow).
 - **Furnace Heart (ultimate):** 6 s of no overheat and full overpenetration, followed by a forced 6 s vent.
 - **Weaknesses:** flat armour (until hot), divers flanking a braced Gunner, anything forcing her to move.
 - **Interactions:** Psyker pull → clean payoff into her cone. Penitent in front of her → overpenetration problem (negotiation). Huntress marks are consumed by first hit → she wastes them unless coordinated (deliberate anti-synergy). **Wombo:** Psyker pull + Penitent _Martyrdom_ + Gunner _Furnace Heart_ turns her worst anti-synergy into the best combo for 6 s.
@@ -282,7 +282,7 @@ Work in **waves**: every slice in a wave can run in parallel (one subagent each)
 ## 10. Open questions for B
 
 1. Friendly fire: core to the whole game, or only on specific heroes (Gunner, Psyker)?
-2. Gunner's third standard ability: accept _Suppressing Fire_ or something else?
+2. ~~Gunner's third standard ability~~ Suppressing Fire for now, revisit later (2026-11-01).
 3. ~~TypeScript strict as the language — OK?~~ Yes: TS 7 strict, lit-html for UI (2026-11-01).
 4. Platform priority: mobile-first, desktop-first, or equal?
 5. Art direction beyond "grimdark science-fantasy": reference points?

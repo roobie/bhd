@@ -1,38 +1,129 @@
-// Commands: the only input that changes sim state (DESIGN.md §3). Lockstep sends exactly these.
-// Plain JSON data so they serialize unchanged into the event log and over the wire.
+// Commands: the only input that changes sim state (project DESIGN.md §3). Lockstep sends exactly
+// these. Plain JSON data so they serialize unchanged into the event log and over the wire.
+// Validation is shape only; commands naming missing entities or bad targets are semantic no-ops
+// (still logged). No ownership checks until wave 10.
+//
+// Adding a command: extend the union, `isValidCommand`, `canonicalCommand` and `applyCommand`
+// (exhaustiveness checks catch kinds, not new optional fields) and the scenario in
+// test/determinism/scenario.ts.
 
+import { findById } from '../content/types.ts';
 import type { TickContext } from './context.ts';
-import type { EntityType } from './entities.ts';
-import { ENTITY_TYPE_CODE } from './entities.ts';
+import { spawnEnemy } from './enemies.ts';
+import { commandHero, spawnHero } from './heroes/index.ts';
 
-/** PLACEHOLDER (wave 0, debug): spawn an entity at (x, y). */
-interface SpawnCommand {
-  readonly kind: 'spawn';
-  readonly type: EntityType;
-  readonly x: number;
-  readonly y: number;
-}
+const ABILITY_SLOTS = 4;
 
-/** PLACEHOLDER (wave 0): walk `entity` toward (x, y) at its fixed speed. */
+/** Walk a hero to (x, y). */
 interface MoveCommand {
   readonly kind: 'move';
-  readonly entity: number;
+  readonly hero: number;
   readonly x: number;
   readonly y: number;
 }
 
-export type Command = SpawnCommand | MoveCommand;
+interface StopCommand {
+  readonly kind: 'stop';
+  readonly hero: number;
+}
+
+/** Hold fire on/off. */
+interface HoldCommand {
+  readonly kind: 'hold';
+  readonly hero: number;
+  readonly on: boolean;
+}
+
+/** Cast ability `slot` (0-3; 3 = ultimate; toggles such as Brace are abilities). `x`/`y` go together. */
+interface AbilityCommand {
+  readonly kind: 'ability';
+  readonly hero: number;
+  readonly slot: number;
+  readonly x?: number;
+  readonly y?: number;
+  readonly target?: number;
+}
+
+interface AutocastCommand {
+  readonly kind: 'autocast';
+  readonly hero: number;
+  readonly slot: number;
+  readonly on: boolean;
+}
+
+/** DEBUG (tests, scenarios): spawn a unit of content `def` at (x, y). Enemies spawn idle. Not a player action. */
+interface SpawnCommand {
+  readonly kind: 'spawn';
+  readonly def: string;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The commands that address one hero. */
+export type HeroCommand = MoveCommand | StopCommand | HoldCommand | AbilityCommand | AutocastCommand;
+
+export type Command = HeroCommand | SpawnCommand;
+
+function isId(n: unknown): boolean {
+  return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+}
+
+function isSlot(n: unknown): boolean {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < ABILITY_SLOTS;
+}
+
+function isCoord(n: unknown): boolean {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
+function isAbilityShape(cmd: AbilityCommand): boolean {
+  const hasX = cmd.x !== undefined;
+  const hasY = cmd.y !== undefined;
+  return (
+    isSlot(cmd.slot) &&
+    hasX === hasY &&
+    (!hasX || (isCoord(cmd.x) && isCoord(cmd.y))) &&
+    (cmd.target === undefined || isId(cmd.target))
+  );
+}
 
 /** Shape check at submission, so bad input never reaches the queue. Depends only on the command. */
 export function isValidCommand(cmd: Command): boolean {
   switch (cmd.kind) {
-    case 'spawn':
-      return Object.hasOwn(ENTITY_TYPE_CODE, cmd.type) && Number.isFinite(cmd.x) && Number.isFinite(cmd.y);
     case 'move':
-      return Number.isSafeInteger(cmd.entity) && Number.isFinite(cmd.x) && Number.isFinite(cmd.y);
+      return isId(cmd.hero) && isCoord(cmd.x) && isCoord(cmd.y);
+    case 'stop':
+      return isId(cmd.hero);
+    case 'hold':
+      return isId(cmd.hero) && typeof cmd.on === 'boolean';
+    case 'ability':
+      return isId(cmd.hero) && isAbilityShape(cmd);
+    case 'autocast':
+      return isId(cmd.hero) && isSlot(cmd.slot) && typeof cmd.on === 'boolean';
+    case 'spawn':
+      return typeof cmd.def === 'string' && cmd.def.length > 0 && isCoord(cmd.x) && isCoord(cmd.y);
     default:
       return false;
   }
+}
+
+function canonicalAbility(cmd: AbilityCommand): Command {
+  const out: {
+    kind: 'ability';
+    hero: number;
+    slot: number;
+    x?: number;
+    y?: number;
+    target?: number;
+  } = { kind: 'ability', hero: cmd.hero + 0, slot: cmd.slot + 0 };
+  if (cmd.x !== undefined && cmd.y !== undefined) {
+    out.x = cmd.x + 0;
+    out.y = cmd.y + 0;
+  }
+  if (cmd.target !== undefined) {
+    out.target = cmd.target + 0;
+  }
+  return out;
 }
 
 /**
@@ -42,10 +133,18 @@ export function isValidCommand(cmd: Command): boolean {
  */
 export function canonicalCommand(cmd: Command): Command {
   switch (cmd.kind) {
-    case 'spawn':
-      return { kind: 'spawn', type: cmd.type, x: cmd.x + 0, y: cmd.y + 0 };
     case 'move':
-      return { kind: 'move', entity: cmd.entity + 0, x: cmd.x + 0, y: cmd.y + 0 };
+      return { kind: 'move', hero: cmd.hero + 0, x: cmd.x + 0, y: cmd.y + 0 };
+    case 'stop':
+      return { kind: 'stop', hero: cmd.hero + 0 };
+    case 'hold':
+      return { kind: 'hold', hero: cmd.hero + 0, on: cmd.on };
+    case 'ability':
+      return canonicalAbility(cmd);
+    case 'autocast':
+      return { kind: 'autocast', hero: cmd.hero + 0, slot: cmd.slot + 0, on: cmd.on };
+    case 'spawn':
+      return { kind: 'spawn', def: cmd.def, x: cmd.x + 0, y: cmd.y + 0 };
     default: {
       const unknown: never = cmd;
       throw new Error(`unhandled command ${JSON.stringify(unknown)}`);
@@ -53,26 +152,26 @@ export function canonicalCommand(cmd: Command): Command {
   }
 }
 
+function applySpawn(ctx: TickContext, cmd: SpawnCommand): void {
+  const enemy = findById(ctx.game.enemies, cmd.def);
+  if (enemy !== undefined) {
+    spawnEnemy(ctx, enemy, cmd, 'idle');
+    return;
+  }
+  const hero = findById(ctx.game.heroes, cmd.def);
+  if (hero !== undefined) {
+    spawnHero(ctx, hero, cmd.x, cmd.y);
+  }
+}
+
 /** Applies one command. Commands that target missing entities are no-ops (still logged as `cmd`). */
 export function applyCommand(ctx: TickContext, cmd: Command): void {
-  switch (cmd.kind) {
-    case 'spawn': {
-      const e = ctx.entities.add(cmd.type, cmd.x, cmd.y);
-      ctx.emit({ tick: ctx.tick, kind: 'spawn', id: e.id, type: e.type });
-      return;
-    }
-    case 'move': {
-      const e = ctx.entities.get(cmd.entity);
-      if (e !== undefined) {
-        e.tx = cmd.x;
-        e.ty = cmd.y;
-        e.moving = true;
-      }
-      return;
-    }
-    default: {
-      const unknown: never = cmd;
-      throw new Error(`unhandled command ${JSON.stringify(unknown)}`);
-    }
+  if (cmd.kind === 'spawn') {
+    applySpawn(ctx, cmd);
+    return;
+  }
+  const hero = ctx.entities.get(cmd.hero);
+  if (hero?.kind === 'hero') {
+    commandHero(ctx, hero, cmd);
   }
 }
