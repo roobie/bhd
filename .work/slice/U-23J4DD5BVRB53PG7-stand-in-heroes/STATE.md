@@ -1,5 +1,5 @@
 ---
-phase: execute
+phase: finalize
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude
@@ -24,10 +24,10 @@ Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EW
 
 
 ## Now
-Implemented and gated (npm run ci green); awaiting review/merge.
+Criteria verified against Evidence; harvested; closing.
 
 ## Next
-- Review, merge.
+- Close.
 
 ## Evidence
 - Tank taunt, ranged mark, support heal pulse + pull (clumped), all PLACEHOLDER, no resources; cooldowns in kit state (hashed); autocast honoured.
@@ -45,8 +45,8 @@ Implemented and gated (npm run ci green); awaiting review/merge.
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
 - [x] learning (fixed): test/sim/hash.test.ts relabelled the Gunner's kit as 'standin', so hashStandin must tolerate a kit without cooldowns (`?.`); better to perturb a real stand-in hero there.
-- [ ] backlog: enemies.ts attack cooldown has the same decrement-then-return off-by-one (period ticks+1) as the old stand-in attack; test/sim/heroes.test.ts also encodes +1 for the Gunner.
-- [ ] backlog: wave 3 may want a dedicated pull intent / bot hook; stand-in autocast pull aims at the nearest hostile.
+- [x] backlog: enemies.ts attack cooldown has the same decrement-then-return off-by-one (period ticks+1) as the old stand-in attack; test/sim/heroes.test.ts also encodes +1 for the Gunner.
+- [x] backlog: wave 3 may want a dedicated pull intent / bot hook; stand-in autocast pull aims at the nearest hostile.
 
 ## Log
 - 2026-11-01 initialized
@@ -54,3 +54,4 @@ Implemented and gated (npm run ci green); awaiting review/merge.
 - 2026-11-01 implemented stand-in attack/abilities/tests
 - 2026-11-01 review fixes applied; owner scope change: only no-op-in-state invariants tested for failed casts, no tuning-pinning tests
 - 2026-11-01 re-review follow-ups: autocast heal no-op test, leash invariant tests
+- 2026-11-01 phase execute → finalize

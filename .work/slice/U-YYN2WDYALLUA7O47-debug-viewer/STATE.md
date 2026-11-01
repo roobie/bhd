@@ -24,10 +24,10 @@ Out: sending commands, any sim or content change, the real client, new dependenc
 Sim is fixed-tick (TICK_HZ 30), stepped here from requestAnimationFrame with an accumulator. Viewer only reads `sim.entities`, `sim.waves`, `sim.game`, `kit`. Pages deploy runs `npm run build` (tsc + vite build).
 
 ## Now
-Opus review fixes applied; all criteria hold. Waiting for merge and close.
+Criteria verified against Evidence; harvested; closing.
 
 ## Next
-- Main agent merges the branch; finalize the slice.
+- Close.
 
 ## Evidence
 - `npm run ci`: biome ci clean, tsc clean, knip clean, node 23 files / 356 tests, browser 12 files / 78 tests (chromium, firefox, webkit) all passed.
@@ -36,8 +36,8 @@ Opus review fixes applied; all criteria hold. Waiting for merge and close.
 - test/client/viewer.browser.test.ts (browser x3): canvas mounts, non-blank pixels, #tick increases, label and gunner heat meter element present, teardown called.
 
 ## Harvest
-- [ ] learning: the node vitest project globs test/**/*.test.ts, so DOM-only tests need the `.browser.test.ts` suffix (excluded in vite.config.ts) and an entry in BROWSER_TESTS.
-- [ ] backlog: the viewer is not screenshot-checked at phone width by a test; only CSS (width 100%, aspect-ratio) covers it.
+- [x] learning: the node vitest project globs test/**/*.test.ts, so DOM-only tests need the `.browser.test.ts` suffix (excluded in vite.config.ts) and an entry in BROWSER_TESTS.
+- [x] backlog: the viewer is not screenshot-checked at phone width by a test; only CSS (width 100%, aspect-ratio) covers it.
 
 ## Log
 - 2026-11-01 initialized
