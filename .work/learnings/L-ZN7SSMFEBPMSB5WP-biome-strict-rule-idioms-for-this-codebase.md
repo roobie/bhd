@@ -1,0 +1,15 @@
+---
+date: 2026-11-01
+read_if:
+  - fighting a Biome lint error
+refs:
+  - biome.jsonc
+---
+
+# L-ZN7SSMFEBPMSB5WP Biome strict-rule idioms for this codebase
+
+## Observation
+With every stable Biome rule on, some common idioms are rejected: barrel index files, increment statements, approximate math constants and over-precise literals, `satisfies never` as a statement, method-style interface members, and assertions inside test helpers.
+
+## Why it matters
+Put a module's code in its index directly instead of re-exporting; write `+= 1`; use Math.PI and shortest round-trip literals; do exhaustiveness with a `never`-typed const; use property-style members; make test helpers throw. Saves a lint round trip for every new slice.

@@ -24,15 +24,17 @@ Not fully parallel: scaffold must land first (it creates the toolchain). Then de
 Toolchain: TS 7 strict, Biome, knip, Vitest, Node type stripping (D-NTY5JV4V7WOXX6OA).
 
 ## Now
-scaffold closed. detmath and sim-core next, in parallel.
+detmath and sim-core closed. determinism-harness next.
 
 ## Next
-- {detmath, sim-core} → determinism-harness
+- determinism-harness
 
 ## Evidence
+- detmath + sim-core: `npm run ci` green, 54 tests
 - scaffold: `npm run ci` green (biome ci, tsc, knip, vitest)
 ## Harvest
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 slice/scaffold closed (U-VLEUWSHAPP54R32P)
+- 2026-11-01 slice/detmath (U-N6MFVW7IR6F2XNOU) and slice/sim-core (U-F7JATSM4UXEEF4BP) closed

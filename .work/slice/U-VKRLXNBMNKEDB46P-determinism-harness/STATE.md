@@ -20,10 +20,13 @@ In: determinism tests, banned-API lint/grep wired into CI.
 Out: desync debugging dumps (wave 10).
 
 ## Context & constraints
-Needs sim-core's hash. Owns the test harness and lint rule files.
+Needs sim-core's hash (`Sim#hash`, `hash` events). Owns the test harness and lint rule files.
+- Start from test/detmath-banned.test.ts (detmath's local scan): generalize it to sim, perception, bots, intents, director, and also ban `**` (pow semantics).
+- Browser run should cover detmath's KAT and trig tests too, not only sim hashes.
+- Replay = feed logged `cmd` events back through `command(player, cmd, tick)`.
 
 ## Now
-Waiting on sim-core.
+Unblocked: sim-core and detmath landed.
 
 ## Next
 - Choose the banned-API mechanism: Biome can't scope `noRestrictedGlobals`-style bans to folders cleanly, so likely a Vitest source scan like deadvox's test/coreIsPure.test.ts.
