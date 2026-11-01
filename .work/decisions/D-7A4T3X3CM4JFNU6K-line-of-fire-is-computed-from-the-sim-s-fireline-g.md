@@ -5,7 +5,7 @@ read_if:
   - changing Gunner ally-in-line cost or lineAllies
   - a stand-in stands in the Gunner's line
 refs:
-  - src/perception/perceive.ts#lineAlliesOf
+  - src/perception/kits/gunner.ts#lineAlliesOf
   - src/sim/heroes/gunner.ts#fireLine
 ---
 
