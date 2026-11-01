@@ -57,7 +57,7 @@ export function standinWeights(): Record<string, number> {
     // Gunner gets to reserve against it (a think, a slow seat's reaction delay of up to ~3 s, and the
     // Gunner's reservation margin); `directFactor` discounts casting at a smaller clump.
     'standin.support.pull.perEnemy': 0.4,
-    'standin.support.pull.minClump': 4,
+    'standin.support.pull.minClump': 3,
     'standin.support.pull.fireInSeconds': 4.5,
     'standin.support.pull.coordination': 1,
     'standin.support.pull.directFactor': 0.6,

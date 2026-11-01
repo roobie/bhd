@@ -17,7 +17,7 @@ export interface PerceptionDef {
 
 export function defaultPerception(): PerceptionDef {
   return {
-    clumpRadius: 5,
+    clumpRadius: 7,
     threatRadius: 12,
     lowHpFrac: 0.4,
     memorySeconds: 6,

@@ -33,6 +33,7 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
 - review fixes (9 findings): `npm run ci` exit 0, golden regenerated
+- tuning pass (seeds 1-10, viewer defaults, report-only runner kept outside repo): BEFORE 10/10 ancient-destroyed at waves 13-15, 1 tension peak in 9/10 games (first peak at 204-290s, i.e. only at the end), first hero death 216-297s, pull reserve 1-2, fulfil 0-1 per game. AFTER 3/10 victory (9/20 on seeds 1-20), peaks 1-5 (avg 2.8, build->peak->relax cycles repeat), first hero death 182-329s (victory games: 0-4 deaths), pull posts 6-14, reserves 3-8, fulfils 0-3 per game. Changes: content/director.ts (budgets sawtooth, damageGain 10, peakAbove 0.5, relaxBelow 0.3, lowHpGain 0.03, minIntervalSeconds 14, brute weight 0.7, boss 0.15), perception clumpRadius 7, standins pull.minClump 3, gunner reserve furnace/vent 90 and vent.minHeat 0.12. golden regenerated.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -47,3 +48,4 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
 - 2026-11-01 initialized; design from Opus planning draft, lead defaults on B's open questions
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 review fixes (reserve vs seat delay, silent first choice, support pull intent, gunner geometry from perception, dead config, viewer expired/overpen/log, unlockWave in MasterView.costs)
+- 2026-11-01 wave-2 tuning pass: content numbers only (see Evidence); no logic changes

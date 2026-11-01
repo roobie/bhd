@@ -76,19 +76,19 @@ export interface DirectorDef {
 const ROSTER: readonly (MasterCost & { readonly weight: number })[] = [
   { def: 'grunt', cost: 1, weight: 4 },
   { def: 'runner', cost: 1, unlockWave: 2, weight: 3 },
-  { def: 'brute', cost: 3, unlockWave: 3, weight: 2 },
-  { def: 'boss', cost: 10, unlockWave: 5, weight: 1 },
+  { def: 'brute', cost: 3, unlockWave: 3, weight: 0.7 },
+  { def: 'boss', cost: 10, unlockWave: 5, weight: 0.15 },
 ];
 
 export function defaultMaster(): MasterDef {
   return {
-    budgetPerWave: [8, 10, 12, 14, 18, 18, 20, 22, 24, 28, 28, 30, 32, 34, 40],
+    budgetPerWave: [16, 20, 24, 28, 18, 24, 28, 18, 24, 28, 20, 26, 30, 22, 28],
     costs: ROSTER.map((r) =>
       r.unlockWave === undefined
         ? { def: r.def, cost: r.cost }
         : { def: r.def, cost: r.cost, unlockWave: r.unlockWave },
     ),
-    minIntervalSeconds: 10,
+    minIntervalSeconds: 14,
     gap: 0.6,
   };
 }
@@ -98,12 +98,12 @@ export function defaultDirector(): DirectorDef {
     reactionSeconds: 0.5,
     thinkSeconds: 1,
     tension: {
-      damageGain: 4,
-      lowHpGain: 0.2,
+      damageGain: 10,
+      lowHpGain: 0.03,
       lowHpFrac: 0.4,
       leakGain: 0.3,
       decayPerSecond: 0.05,
-      peakAbove: 0.7,
+      peakAbove: 0.5,
       relaxBelow: 0.3,
       relaxSeconds: 8,
     },

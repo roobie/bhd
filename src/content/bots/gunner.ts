@@ -45,7 +45,7 @@ export function gunnerWeights(): Record<string, number> {
     'gunner.fire.overheatAvoid': 60,
 
     // ---- gunner.vent
-    'gunner.vent.minHeat': 0.3,
+    'gunner.vent.minHeat': 0.12,
     'gunner.vent.damage': 40,
     'gunner.vent.urgency': 80,
     'gunner.vent.allyRelief': 40,
@@ -72,8 +72,8 @@ export function gunnerWeights(): Record<string, number> {
     'gunner.furnace.ventLock': 15,
 
     // ---- gunner.reserve (against a 'pull' intent)
-    'gunner.reserve.furnace': 60,
-    'gunner.reserve.vent': 40,
+    'gunner.reserve.furnace': 90,
+    'gunner.reserve.vent': 90,
     'gunner.reserve.reach': 14,
     'gunner.reserve.offsetSeconds': 0.6,
     'gunner.reserve.marginSeconds': 0.8,
