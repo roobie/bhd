@@ -89,7 +89,7 @@ export const GOLDEN: ScenarioResult = {
       '4633cafa63932aca',
       '95cf0d0083289aa1',
     ],
-    eventDigest: '2389c25ff2a27888',
+    eventDigest: 'dc99f447ec7ffe53',
   },
   master: {
     hashes: [

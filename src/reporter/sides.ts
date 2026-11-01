@@ -5,13 +5,11 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { ConfigOverrides } from '../content/overrides.ts';
+import { PURE_DIRS } from '../match/pureDirs.ts';
 import { ensureSnapshot, git, resolveSha } from './snapshot.ts';
 import type { ResolvedSide, SideSpec } from './types.ts';
 
 const WORKTREE = 'WORKTREE';
-
-/** The dirs under `src` that decide a game (test/purity-scan.ts PURE_DIRS); the reporter itself does not. */
-const PURE_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'content', 'replay'];
 
 /**
  * Parses a side: `WORKTREE`, `path.json` (worktree plus overrides), `ref:path.json` or a plain ref.

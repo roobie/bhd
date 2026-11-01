@@ -22,6 +22,8 @@ const DIVERGENCE_MOVERS = 10;
 /** Share above which a choice option is a tax. */
 const TAX_SHARE = 0.9;
 const CHOICE_METRIC = 'choice.spread';
+/** Fewer pairs than this and a series is untested: p = 1, never a mover, outside the BH family. */
+const MIN_PAIRS = 10;
 
 interface Pair {
   readonly lineup: number;
@@ -38,6 +40,7 @@ interface Sample {
 }
 
 type Draft = Omit<SeriesStat, 'significant' | 'outside' | 'divergence'>;
+const NO_AREAS: readonly string[] = [];
 
 // ---------------------------------------------------------------- pairing
 
@@ -126,7 +129,7 @@ function bootstrapWith(d: readonly number[], resamples: number, cache: IndexCach
   if (first === undefined) {
     return { ci: [0, 0], p: 1 };
   }
-  if (d.every((x) => x === first)) {
+  if (n >= MIN_PAIRS && d.every((x) => x === first)) {
     // Exact: summing n copies of d could be off by an ulp.
     return { ci: [first, first], p: first === 0 ? 1 : 0 };
   }
@@ -147,7 +150,8 @@ function bootstrapWith(d: readonly number[], resamples: number, cache: IndexCach
   means.sort();
   const lo = means[Math.floor(0.025 * resamples)] as number;
   const hi = means[Math.ceil(0.975 * resamples) - 1] as number;
-  return { ci: [lo, hi], p: Math.min(1, (2 * Math.min(le, ge)) / resamples) };
+  // Add-one p: a resampled mean never makes p exactly 0.
+  return { ci: [lo, hi], p: Math.min(1, (2 * (Math.min(le, ge) + 1)) / (resamples + 1)) };
 }
 
 /** Benjamini-Hochberg: which hypotheses are rejected at false discovery rate q. */
@@ -209,12 +213,50 @@ function metricOf(name: string, byId: ReadonlyMap<string, MetricDef>): MetricDef
   return byId.get(at < 0 ? name : name.slice(0, at));
 }
 
-function sampleOf(name: string, pairs: readonly Pair[], missing: 'zero' | 'skip'): Sample {
+/** The key of a series name: `m[key]` -> `key`, `m` -> `''`. */
+function keyOf(name: string): string {
+  const at = name.indexOf('[');
+  return at < 0 ? '' : name.slice(at + 1, -1);
+}
+
+/** Per run: the `metric[group` tokens present, for metrics with a decision-level group. */
+type GroupIndex = (run: RunRecord) => ReadonlySet<string>;
+
+function groupIndex(byId: ReadonlyMap<string, MetricDef>): GroupIndex {
+  const cache = new WeakMap<RunRecord, Set<string>>();
+  return (run) => {
+    let set = cache.get(run);
+    if (set === undefined) {
+      set = new Set();
+      for (const name of Object.keys(run.values)) {
+        const m = metricOf(name, byId);
+        if (m?.group !== undefined) {
+          set.add(`${m.id}\u0000${m.group(keyOf(name))}`);
+        }
+      }
+      cache.set(run, set);
+    }
+    return set;
+  };
+}
+
+/**
+ * The paired values of one series. `zero`: a key absent on a side counts as 0, so a pair absent on
+ * both sides is 0 vs 0. `skip`: the pair is dropped. With a `group`, the pair is dropped when the
+ * group is absent on either side, else absent keys count as 0.
+ */
+function sampleOf(name: string, pairs: readonly Pair[], metric: MetricDef | undefined, groups: GroupIndex): Sample {
   const out: Sample = { a: [], b: [], pairs: [] };
+  const token = metric?.group === undefined ? undefined : `${metric.id}\u0000${metric.group(keyOf(name))}`;
+  const missing = metric?.missing ?? 'zero';
   for (const p of pairs) {
     const av = p.base.values[name];
     const bv = p.cand.values[name];
-    if ((av === undefined && bv === undefined) || (missing === 'skip' && (av === undefined || bv === undefined))) {
+    const skip =
+      token === undefined
+        ? missing === 'skip' && (av === undefined || bv === undefined)
+        : !(groups(p.base).has(token) && groups(p.cand).has(token));
+    if (skip) {
       continue;
     }
     out.a.push(av ?? 0);
@@ -246,9 +288,11 @@ function draftOf(name: string, metric: MetricDef | undefined, s: Sample, ctx: Dr
   const diffs = s.b.map((v, i) => v - (s.a[i] as number));
   const meanBase = mean(s.a);
   const meanDiff = mean(diffs);
-  const sdBase = sd(s.a);
+  // sd(base) is 0 when the base never varies; the spread of d is then the next best yardstick.
+  const spread = sd(s.a) || sd(diffs);
   const boot = bootstrapWith(diffs, options.resamples, ctx.cache);
-  const areas = metric?.areas ?? [];
+  const tested = diffs.length >= MIN_PAIRS;
+  const areas = metric?.areasOf?.(keyOf(name)) ?? metric?.areas ?? NO_AREAS;
   return {
     name,
     metric: metric?.id ?? name,
@@ -260,8 +304,9 @@ function draftOf(name: string, metric: MetricDef | undefined, s: Sample, ctx: Dr
     meanDiff,
     rel: meanBase === 0 ? null : meanDiff / meanBase,
     ci: boot.ci,
-    effect: sdBase === 0 ? 0 : Math.abs(meanDiff) / sdBase,
-    p: boot.p,
+    effect: spread === 0 ? 0 : Math.abs(meanDiff) / spread,
+    p: tested ? boot.p : 1,
+    tested,
     inTag: inTags(areas, tags),
     histogram: histogram(s.a, s.b, options.bins),
   };
@@ -310,13 +355,13 @@ function distinct(pairs: readonly Pair[], side: 'base' | 'cand'): number {
   return new Set(pairs.map((p) => p[side].hashDigest)).size;
 }
 
-function knownAreas(metrics: readonly MetricDef[]): string[] {
-  return [...new Set(metrics.flatMap((m) => m.areas))].sort();
+/** Every area a metric or one of the tested series belongs to. */
+function knownAreas(metrics: readonly MetricDef[], drafts: readonly Draft[]): string[] {
+  return [...new Set([...metrics.flatMap((m) => m.areas), ...drafts.flatMap((d) => d.areas)])].sort();
 }
 
-function warningsOf(input: ReportInput, pairs: readonly Pair[]): string[] {
+function warningsOf(input: ReportInput, pairs: readonly Pair[], areas: readonly string[]): string[] {
   const out: string[] = [];
-  const areas = knownAreas(input.metrics);
   for (const tag of input.tags) {
     if (!areas.some((a) => tagMatches(a, tag))) {
       out.push(`unknown tag '${tag}'; known areas: ${areas.join(', ')}`);
@@ -338,7 +383,8 @@ function warningsOf(input: ReportInput, pairs: readonly Pair[]): string[] {
   return out;
 }
 
-function headerOf(input: ReportInput, pairs: readonly Pair[], tested: number): ReportHeader {
+function headerOf(input: ReportInput, pairs: readonly Pair[], drafts: readonly Draft[]): ReportHeader {
+  const tested = drafts.filter((d) => d.tested).length;
   const side = (s: ReportInput['base']) => ({ label: s.label, ref: s.ref, sha: s.sha, dirty: s.dirty });
   return {
     scenario: input.scenario.id,
@@ -348,9 +394,9 @@ function headerOf(input: ReportInput, pairs: readonly Pair[], tested: number): R
     pairs: pairs.length,
     distinct: { base: distinct(pairs, 'base'), cand: distinct(pairs, 'cand') },
     seriesTested: tested,
+    seriesUntested: drafts.length - tested,
     options: input.options,
-    msPerGame: { base: input.timing.base.msPerGame, cand: input.timing.cand.msPerGame },
-    warnings: warningsOf(input, pairs),
+    warnings: warningsOf(input, pairs, knownAreas(input.metrics, drafts)),
   };
 }
 
@@ -384,24 +430,30 @@ export function buildReport(input: ReportInput): ReportData {
   const pairs = pairRuns(input.runs);
   const byId = new Map(input.metrics.map((m) => [m.id, m]));
   const ctx: DraftCtx = { input, cache: indexCache(input.options.resamples, input.options.seed) };
+  const groups = groupIndex(byId);
   const samples = new Map<string, Sample>();
   const drafts: Draft[] = [];
   for (const name of seriesNames(pairs)) {
     const metric = metricOf(name, byId);
-    const s = sampleOf(name, pairs, metric?.missing ?? 'zero');
+    const s = sampleOf(name, pairs, metric, groups);
     if (s.pairs.length > 0) {
       samples.set(name, s);
       drafts.push(draftOf(name, metric, s, ctx));
     }
   }
-  const bh = benjaminiHochberg(
-    drafts.map((d) => d.p),
+  // Untested series (too few pairs) are not part of the BH family.
+  const testedDrafts = drafts.filter((d) => d.tested);
+  const bh = new Map<string, boolean>();
+  benjaminiHochberg(
+    testedDrafts.map((d) => d.p),
     input.options.q,
-  );
+  ).forEach((rejected, i) => {
+    bh.set((testedDrafts[i] as Draft).name, rejected);
+  });
   const tagged = input.tags.length > 0;
   const ranked = drafts
-    .map((d, i): SeriesStat => {
-      const significant = (bh[i] as boolean) && passesFloor(d, input.options.floor);
+    .map((d): SeriesStat => {
+      const significant = d.tested && bh.get(d.name) === true && passesFloor(d, input.options.floor);
       return { ...d, significant, outside: significant && tagged && !d.inTag };
     })
     .sort((x, y) => y.effect - x.effect || (x.name < y.name ? -1 : 1));
@@ -409,7 +461,7 @@ export function buildReport(input: ReportInput): ReportData {
   const top = new Set(movers.slice(0, DIVERGENCE_MOVERS));
   const series = ranked.map((s) => (top.has(s.name) ? withDivergence(s, samples, input.loadLog) : s));
   return {
-    header: headerOf(input, pairs, series.length),
+    header: headerOf(input, pairs, drafts),
     series,
     movers,
     outside: series.filter((s) => s.outside).map((s) => s.name),

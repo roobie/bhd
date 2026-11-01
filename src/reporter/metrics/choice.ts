@@ -2,7 +2,7 @@
 // pick of that decision, the hero's death or the end of the game.
 
 import type { MetricDef } from '../types.ts';
-import { buildIndex, defOf } from './gameindex.ts';
+import { buildIndex, defOf, heroAreas } from './gameindex.ts';
 
 interface Open {
   readonly hero: number;
@@ -35,7 +35,10 @@ export const choiceSpread: MetricDef = {
   id: 'choice.spread',
   title: 'Time share per bot decision option',
   unit: 'fraction',
-  areas: ['hero.choice'],
+  areas: [],
+  areasOf: heroAreas('choice'),
+  // `<hero>:<decision>:<option>`: a pair where the decision never came up on a side is skipped, not zero-filled.
+  group: (key) => key.slice(0, key.lastIndexOf(':')),
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);

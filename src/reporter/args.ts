@@ -1,6 +1,7 @@
 // Pure command-line parsing for `bhd` (no fs, no process). Errors come back as values, never throws.
 
 import { parseArgs } from 'node:util';
+import { parseSide } from './sides.ts';
 import type { SideSpec } from './types.ts';
 
 const DIGITS = /^\d+$/u;
@@ -67,26 +68,6 @@ export type ParseResult =
 const fail = (message: string): ParseResult => ({ ok: false, message: `${message}\n\n${USAGE}` });
 const good = (command: Command): ParseResult => ({ ok: true, command });
 
-/** `WORKTREE`, `path.json`, `ref:path.json` or a ref. */
-export function parseSideSpec(text: string): SideSpec | undefined {
-  if (text === '') {
-    return undefined;
-  }
-  if (text === 'WORKTREE') {
-    return { kind: 'worktree' };
-  }
-  if (!text.endsWith('.json')) {
-    return { kind: 'ref', ref: text };
-  }
-  const colon = text.indexOf(':');
-  if (colon === -1) {
-    return { kind: 'overrides', path: text };
-  }
-  const ref = text.slice(0, colon);
-  const path = text.slice(colon + 1);
-  return ref === '' || path === '' ? undefined : { kind: 'ref-overrides', ref, path };
-}
-
 /** A non-negative integer >= min, or an error message. */
 function parseCount(text: string | undefined, name: string, min: number): number | string | undefined {
   if (text === undefined) {
@@ -122,7 +103,11 @@ function sideOption(text: string | undefined, name: string): SideSpec | string {
   if (text === undefined) {
     return `--${name} is required`;
   }
-  return parseSideSpec(text) ?? `--${name}: '${text}' is not a side`;
+  try {
+    return parseSide(text);
+  } catch (error) {
+    return `--${name}: ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 function parseReport(values: Values): ParseResult {

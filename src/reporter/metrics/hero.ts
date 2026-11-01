@@ -1,7 +1,7 @@
 // Metrics 4, 5, 6, 8, 13: per-hero deaths, damage share, friendly fire, ability use, ultimates.
 
 import type { GameLog, MetricDef } from '../types.ts';
-import { buildIndex, defOf } from './gameindex.ts';
+import { buildIndex, defOf, heroAreas } from './gameindex.ts';
 
 /** Ultimate slot per kit (the gunner's Furnace Heart is slot 3); other heroes use their highest slot. */
 const ULT_SLOT: Readonly<Record<string, number>> = { gunner: 3 };
@@ -23,7 +23,8 @@ export const heroDeaths: MetricDef = {
   id: 'hero.deaths',
   title: 'Hero deaths',
   unit: 'count',
-  areas: ['hero'],
+  areas: [],
+  areasOf: heroAreas(''),
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
@@ -45,7 +46,8 @@ export const heroDmgShare: MetricDef = {
   id: 'hero.dmgShare',
   title: 'Share of team damage to enemies',
   unit: 'fraction',
-  areas: ['hero'],
+  areas: [],
+  areasOf: heroAreas(''),
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
@@ -118,7 +120,8 @@ export const abilityCasts: MetricDef = {
   id: 'ability.casts',
   title: 'Ability casts',
   unit: 'count',
-  areas: ['hero.ability'],
+  areas: [],
+  areasOf: heroAreas('ability'),
   missing: 'zero',
   compute: (log) => {
     const out: Record<string, number> = {};
@@ -133,7 +136,8 @@ export const abilityValue: MetricDef = {
   id: 'ability.value',
   title: 'Mean value per ability cast',
   unit: 'value',
-  areas: ['hero.ability'],
+  areas: [],
+  areasOf: heroAreas('ability'),
   missing: 'skip',
   compute: (log) => {
     const out: Record<string, number> = {};
@@ -148,7 +152,8 @@ export const ultTiming: MetricDef = {
   id: 'ult.timing',
   title: 'Ultimate timing: wave, team hp and enemies alive at the first cast; cast count',
   unit: 'mixed',
-  areas: ['hero.ult'],
+  areas: [],
+  areasOf: heroAreas('ult'),
   missing: 'skip',
   compute: (log) => {
     const ix = buildIndex(log);

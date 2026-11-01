@@ -87,6 +87,9 @@ export function renderTable(data: ReportData): string {
   for (const row of data.choiceSpread.filter(choiceMoved)) {
     lines.push(`choice: ${choiceLine(row)}${row.tax ? '  ← tax (an option exceeds 90%)' : ''}`);
   }
-  lines.push(`${h.seriesTested} series tested, ${movers.length} moved, ${data.outside.length} outside the change`);
+  const untested = h.seriesUntested > 0 ? ` (${h.seriesUntested} untested: too few pairs)` : '';
+  lines.push(
+    `${h.seriesTested} series tested${untested}, ${movers.length} moved, ${data.outside.length} outside the change`,
+  );
   return `${lines.join('\n')}\n`;
 }

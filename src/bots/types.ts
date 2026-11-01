@@ -10,8 +10,13 @@ import type { Command } from '../sim/commands.ts';
 
 /** One thing a bot could do. `commands` are submitted when it wins (empty = do nothing). */
 export interface Option {
-  /** Stable within its decision (it is the `choice` event's option id). */
+  /** Stable within its decision; stickiness and emit-on-change track it. */
   readonly id: string;
+  /**
+   * What `choice` events call this option (default `id`). Options may share a label, e.g. one per
+   * target with the label `mark`, so the log holds a stable category, not an entity id.
+   */
+  readonly label?: string;
   /** Benefit, higher is better. */
   readonly value: number;
   /** Price, subtracted from value. */

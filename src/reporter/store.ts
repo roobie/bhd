@@ -102,3 +102,12 @@ export function reusableLog(path: string, spec: GameSpec, meta: LogMeta): GameLo
 export function writeTiming(outDir: string, timing: Timing): void {
   writeAtomic(join(outDir, 'timing.json'), `${JSON.stringify(timing, null, 2)}\n`);
 }
+
+/** The `timing.json` of a batch, or undefined when it has none (or it is unreadable). */
+export function readTiming(outDir: string): Timing | undefined {
+  try {
+    return JSON.parse(readFileSync(join(outDir, 'timing.json'), 'utf8')) as Timing;
+  } catch {
+    return undefined;
+  }
+}

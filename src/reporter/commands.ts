@@ -10,7 +10,8 @@ import type { Command, ReportCommand, RunCommand } from './args.ts';
 import { renderHtml } from './html.ts';
 import { METRICS } from './metrics/registry.ts';
 import { runBatch } from './pool.ts';
-import { buildReport } from './stats.ts';
+import { buildReport, reportJson } from './stats.ts';
+import { readTiming } from './store.ts';
 import { renderTable } from './table.ts';
 import type {
   BatchPlan,
@@ -114,12 +115,22 @@ function sizedScenario(scenario: Scenario, games: number): Scenario {
 async function runPlan(
   { scenario, base, cand, workers }: Omit<BatchPlan, 'outDir'>,
   io: Io,
-): Promise<{ result: BatchResult; runKey: string }> {
-  const runKey = hashOf({ scenario, base: sideIdentity(base), cand: sideIdentity(cand) });
+): Promise<{ result: BatchResult; runKey: string; outDir: string }> {
+  const runKey = hashOf({
+    scenario,
+    base: sideIdentity(base),
+    cand: cand === undefined ? null : sideIdentity(cand),
+  });
   const outDir = join(BHD_DIR, 'runs', runKey);
-  const plan = { scenario, base, cand, outDir, ...(workers === undefined ? {} : { workers }) };
+  const plan = {
+    scenario,
+    base,
+    outDir,
+    ...(cand === undefined ? {} : { cand }),
+    ...(workers === undefined ? {} : { workers }),
+  };
   const result = await runBatch(plan, progressReporter(io));
-  return { result, runKey };
+  return { result, runKey, outDir };
 }
 
 function withWorkers(workers: number | undefined): { workers?: number } {
@@ -127,7 +138,8 @@ function withWorkers(workers: number | undefined): { workers?: number } {
 }
 
 function reportOptions(deep: boolean): ReportOptions {
-  return { floor: 0.02, q: 0.1, resamples: deep ? 1000 : 2000, seed: 1, bins: 12 };
+  // Deep never resamples less than quick.
+  return { floor: 0.02, q: 0.1, resamples: deep ? 4000 : 2000, seed: 1, bins: 12 };
 }
 
 function loadLogOf(run: RunRecord): ReturnType<typeof decodeLog> {
@@ -139,7 +151,7 @@ async function reportCommand(command: ReportCommand, deps: Deps, io: Io): Promis
   const cand = await deps.resolveSide(command.cand, 'cand');
   const loaded = deps.loadScenario(command.deep, command.scenario);
   const scenario = command.scenario === undefined ? sizedScenario(loaded, command.games) : loaded;
-  const { result, runKey } = await runPlan({ scenario, base, cand, ...withWorkers(command.workers) }, io);
+  const { result, runKey, outDir } = await runPlan({ scenario, base, cand, ...withWorkers(command.workers) }, io);
   if (result.cached > 0) {
     io.err(`${result.cached} of ${result.runs.length} runs reused from disk\n`);
   }
@@ -149,7 +161,6 @@ async function reportCommand(command: ReportCommand, deps: Deps, io: Io): Promis
     cand,
     tags: command.tags,
     runs: result.runs,
-    timing: result.timing,
     metrics: METRICS,
     options: reportOptions(command.deep),
     loadLog: loadLogOf,
@@ -157,8 +168,8 @@ async function reportCommand(command: ReportCommand, deps: Deps, io: Io): Promis
   const key = hashOf({ runKey, tags: command.tags });
   const dir = resolve(command.out ?? join(BHD_DIR, 'reports', key));
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'report.json'), `${JSON.stringify(data, null, 2)}\n`);
-  writeFileSync(join(dir, 'index.html'), renderHtml(data));
+  writeFileSync(join(dir, 'report.json'), reportJson(data));
+  writeFileSync(join(dir, 'index.html'), renderHtml(data, readTiming(outDir)));
   io.out(renderTable(data));
   io.out(`\nreport: ${join(dir, 'index.html')}`);
 }
@@ -194,11 +205,6 @@ async function runOneSide(command: RunCommand, deps: Deps, io: Io): Promise<void
   const side = await deps.resolveSide(command.side, 'base');
   const loaded = deps.loadScenario(false, command.scenario);
   const scenario = command.scenario === undefined ? sizedScenario(loaded, command.games) : loaded;
-  // runBatch always plays two sides; the cand copy of one side hits the same cache keys.
-  const { result } = await runPlan(
-    { scenario, base: side, cand: { ...side, side: 'cand' }, ...withWorkers(command.workers) },
-    io,
-  );
-  const runs = result.runs.filter((r) => r.side === 'base');
-  io.out(summarizeRuns(runs, result.timing.base.msPerGame));
+  const { result } = await runPlan({ scenario, base: side, ...withWorkers(command.workers) }, io);
+  io.out(summarizeRuns(result.runs, result.timing.base.msPerGame));
 }

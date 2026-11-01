@@ -190,3 +190,14 @@ export function buildIndex(log: GameLog): GameIndex {
 export function defOf(ix: GameIndex, id: number): string {
   return ix.entities.get(id)?.def ?? '?';
 }
+
+/**
+ * Areas of a per-hero series from its key (`<hero>` or `<hero>:...`): the hero's own name, or
+ * `<hero>.<suffix>`, so `--tag gunner` covers `gunner`, `gunner.ability`, `gunner.ult`, `gunner.choice`.
+ */
+export function heroAreas(suffix: string): (key: string) => readonly string[] {
+  return (key) => {
+    const [hero = key] = key.split(':');
+    return [suffix === '' ? hero : `${hero}.${suffix}`];
+  };
+}

@@ -89,7 +89,6 @@ export function makeInput(s: Synth): ReportInput {
     cand: resolved('WORKTREE', 'cand'),
     tags: s.tags ?? [],
     runs: [...runs, ...(s.extraRuns ?? [])],
-    timing: { base: { games: s.pairs, msPerGame: 150 }, cand: { games: s.pairs, msPerGame: 160 } },
     metrics: s.metrics,
     options: { ...OPTIONS, ...s.options },
     loadLog: s.loadLog ?? (() => logOf([])),

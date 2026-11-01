@@ -238,10 +238,15 @@ function supportStand(ctx: BotCtx, post: Point): Decision {
   return standDecision(ctx, spots);
 }
 
-function castOption(ctx: BotCtx, id: string, args: { value: number; cost: number; cmd: Command }): Option {
+function castOption(
+  ctx: BotCtx,
+  id: string,
+  args: { value: number; cost: number; cmd: Command; label?: string },
+): Option {
   const slot = args.cmd.kind === 'ability' ? args.cmd.slot : -1;
   const pending = slot >= 0 && hasPendingCast(ctx, slot);
-  return { id, value: args.value, cost: args.cost, commands: pending ? [] : [args.cmd] };
+  const label = args.label === undefined ? {} : { label: args.label };
+  return { id, ...label, value: args.value, cost: args.cost, commands: pending ? [] : [args.cmd] };
 }
 
 function wait(value: number): Option {
@@ -316,6 +321,7 @@ function rangedMark(ctx: BotCtx): Decision[] {
         wait(w(ctx, 'standin.ranged.mark.wait')),
         ...cands.map(({ e, value }) =>
           castOption(ctx, `mark.${e.id}`, {
+            label: 'mark',
             value,
             cost,
             cmd: { kind: 'ability', hero: me.id, slot: ab.slot, target: e.id },

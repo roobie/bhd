@@ -5,7 +5,7 @@
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { specOf } from './scenarios.ts';
-import { logPath, runKey, writeTiming } from './store.ts';
+import { logPath, readTiming, runKey, writeTiming } from './store.ts';
 import type { BatchPlan, BatchResult, PoolMsg, ResolvedSide, RunDone, RunJob, RunRecord, Timing } from './types.ts';
 
 const WORKER_URL = new URL('./worker.ts', import.meta.url);
@@ -26,7 +26,8 @@ interface Task {
 function tasksOf(plan: BatchPlan): Task[] {
   const { scenario } = plan;
   const tasks: Task[] = [];
-  for (const resolved of [plan.base, plan.cand] satisfies ResolvedSide[]) {
+  const sides: ResolvedSide[] = plan.cand === undefined ? [plan.base] : [plan.base, plan.cand];
+  for (const resolved of sides) {
     for (let lineup = 0; lineup < scenario.lineups.length; lineup++) {
       for (let i = 0; i < scenario.seeds.count; i++) {
         const seed = scenario.seeds.from + i;
@@ -64,6 +65,7 @@ function runTasks(tasks: readonly Task[], size: number, onDone: (done: number) =
     const workers: Worker[] = [];
     let next = 0;
     let failed = false;
+    const inFlight = new Map<Worker, number>();
     const fail = (error: Error): void => {
       if (!failed) {
         failed = true;
@@ -80,13 +82,22 @@ function runTasks(tasks: readonly Task[], size: number, onDone: (done: number) =
         return;
       }
       next += 1;
+      inFlight.set(w, task.job.id);
       w.postMessage(task.job satisfies PoolMsg);
     };
     for (let i = 0; i < size; i++) {
       const w = new Worker(WORKER_URL);
       workers.push(w);
       w.on('error', fail);
+      w.on('exit', (code) => {
+        // A worker that ends with a job in flight would never reply: fail instead of hanging.
+        const job = inFlight.get(w);
+        if (job !== undefined) {
+          fail(new Error(`worker exited (code ${code}) while running game ${job}`));
+        }
+      });
       w.on('message', (msg: PoolMsg) => {
+        inFlight.delete(w);
         if (msg.type === 'error') {
           fail(new Error(`game ${msg.id} failed: ${msg.message}`));
         } else if (msg.type === 'done') {
@@ -113,9 +124,20 @@ function timingOf(replies: readonly RunDone[]): Timing['base'] {
 }
 
 /**
+ * A side that played no game this time (all logs reused) keeps the timing an earlier run measured,
+ * so a cached rerun never overwrites `timing.json` with zeros.
+ */
+function mergeTiming(old: Timing | undefined, fresh: Timing): { timing: Timing; changed: boolean } {
+  const pick = (side: 'base' | 'cand'): Timing['base'] =>
+    fresh[side].games > 0 || old === undefined ? fresh[side] : old[side];
+  const timing: Timing = { base: pick('base'), cand: pick('cand') };
+  return { timing, changed: fresh.base.games > 0 || fresh.cand.games > 0 || old === undefined };
+}
+
+/**
  * Runs every (lineup, seed) game of `plan.scenario` on both sides, reusing logs already on disk,
  * and returns the records sorted by (side, lineup, seed). `onProgress(done, total)` is called as
- * games finish. Writes `timing.json` into `plan.outDir`.
+ * games finish. Writes `timing.json` into `plan.outDir` when a game ran (else keeps the old one).
  */
 export async function runBatch(
   plan: BatchPlan,
@@ -145,10 +167,15 @@ export async function runBatch(
     });
   }
   records.sort((a, b) => sideRank(a.side) - sideRank(b.side) || a.lineup - b.lineup || a.seed - b.seed);
-  const timing: Timing = { base: timingOf(bySide.base), cand: timingOf(bySide.cand) };
-  writeTiming(plan.outDir, timing);
+  const timing = mergeTiming(readTiming(plan.outDir), {
+    base: timingOf(bySide.base),
+    cand: timingOf(bySide.cand),
+  });
+  if (timing.changed) {
+    writeTiming(plan.outDir, timing.timing);
+  }
   const cached = [...replies.values()].filter((r) => r.cached === true).length;
-  return { runs: records, timing, cached };
+  return { runs: records, timing: timing.timing, cached };
 }
 
 function sideRank(side: 'base' | 'cand'): number {

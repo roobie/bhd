@@ -2,9 +2,7 @@
 // DESIGN.md §6.1. Biome can't scope bans to folders, so this is the guard.
 
 import { posix } from 'node:path';
-
-/** Folders under src/ that must stay deterministic. */
-export const PURE_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'content', 'replay'];
+import { PURE_DIRS } from '../src/match/pureDirs.ts';
 
 /** Relative imports may only resolve into these (prefixes, repo-root relative). Packages are never allowed. */
 const ALLOWED_IMPORT_PREFIXES = PURE_DIRS.map((d) => `src/${d}/`);

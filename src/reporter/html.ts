@@ -1,7 +1,7 @@
 // The HTML report (step 2c): one self-contained file, inline CSS and SVG, no JS, all text escaped.
 
 import { choiceParts, fmtNum, fmtRel, fmtSigned, halfWidth } from './table.ts';
-import type { ChoiceSpreadRow, Divergence, Histogram, ReportData, ReportHeader, SeriesStat } from './types.ts';
+import type { ChoiceSpreadRow, Divergence, Histogram, ReportData, ReportHeader, SeriesStat, Timing } from './types.ts';
 
 const CSS = `
 :root{color-scheme:light dark;--bg:#fafaf8;--fg:#1d2127;--mut:#5d6672;--card:#fff;--line:#d8dce1;--a:#4a6f9c;--b:#c8590a;--warn:#9a5b00;--warnbg:#fff4de;--bad:#b3261e;--code:#eef0f3}
@@ -125,14 +125,20 @@ function sideText(s: ReportHeader['base']): string {
   return `${s.label} (${s.ref} @ ${s.sha.slice(0, 8)}${s.dirty ? ', dirty' : ''})`;
 }
 
-function header(h: ReportHeader): string {
+function timingText(t: Timing | undefined): string {
+  return t === undefined
+    ? ''
+    : `<span>${esc(t.base.msPerGame.toFixed(0))} / ${esc(t.cand.msPerGame.toFixed(0))} ms per game (base / cand)</span>`;
+}
+
+function header(h: ReportHeader, timing: Timing | undefined): string {
   const tags = h.tags.length === 0 ? 'none' : h.tags.join(', ');
   return (
     `<h1>${esc(h.scenario)}: ${esc(h.base.label)} → ${esc(h.cand.label)}</h1>` +
     `<p class="meta"><span>base ${esc(sideText(h.base))}</span> <span>cand ${esc(sideText(h.cand))}</span></p>` +
     `<p class="meta"><span>tags: ${esc(tags)}</span><span>${esc(h.pairs)} paired games</span>` +
-    `<span>${esc(h.seriesTested)} series tested</span>` +
-    `<span>${esc(h.msPerGame.base.toFixed(0))} / ${esc(h.msPerGame.cand.toFixed(0))} ms per game (base / cand)</span>` +
+    `<span>${esc(h.seriesTested)} series tested${h.seriesUntested > 0 ? `, ${esc(h.seriesUntested)} untested (too few pairs)` : ''}</span>` +
+    timingText(timing) +
     `<span>distinct games ${esc(h.distinct.base)} / ${esc(h.distinct.cand)}</span></p>` +
     h.warnings.map((w) => `<div class="warn" role="alert">${esc(w)}</div>`).join('') +
     `<p class="sub">Paired by (lineup, seed), Δ = cand − base. Shown: 95% bootstrap CI, ${esc(h.options.resamples)} resamples; ` +
@@ -173,7 +179,8 @@ function unchangedTable(rows: readonly SeriesStat[]): string {
   return `<div class="wrap"><table><thead><tr><th>series</th><th>Δ</th><th>change</th><th>95% CI</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-export function renderHtml(data: ReportData): string {
+/** `timing` (from `timing.json`) only fills the footer line: `report.json` never holds wall time. */
+export function renderHtml(data: ReportData, timing?: Timing): string {
   const h = data.header;
   const movers = data.series.filter((s) => s.significant);
   const inside = movers.filter((s) => !s.outside);
@@ -184,7 +191,7 @@ export function renderHtml(data: ReportData): string {
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>${esc(`BHD report: ${h.scenario}`)}</title><style>${CSS}</style></head><body><main>` +
-    header(h) +
+    header(h, timing) +
     section(
       tagged ? 'Movers inside the change' : 'Movers',
       inside.map(card).join(''),

@@ -8,6 +8,7 @@ import type { Deps } from './commands.ts';
 import { runCommand } from './commands.ts';
 import { DEEP, loadScenario, QUICK } from './scenarios.ts';
 import { resolveSide } from './sides.ts';
+import { repoRoot } from './snapshot.ts';
 import type { SideSpec } from './types.ts';
 
 /** The side's command-line form, as `sides.ts` parses it. */
@@ -24,11 +25,9 @@ function sideLabel(spec: SideSpec): string {
   }
 }
 
-// `npm run bhd` runs from the package root, which is the repository root.
-const REPO = process.cwd();
-
 const DEPS: Deps = {
-  resolveSide: (spec, side) => Promise.resolve().then(() => resolveSide(side, sideLabel(spec), REPO, REPO)),
+  resolveSide: (spec, side) =>
+    Promise.resolve().then(() => resolveSide(side, sideLabel(spec), repoRoot(process.cwd()), process.cwd())),
   loadScenario: (deep, file) => {
     if (file !== undefined) {
       return loadScenario(file);

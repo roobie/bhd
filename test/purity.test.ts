@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PURE_DIRS, scan } from './purity-scan.ts';
+import { PURE_DIRS } from '../src/match/pureDirs.ts';
+import { scan } from './purity-scan.ts';
 
 // Must exist and hold code, so a typo or a move can't turn the scan vacuous. The others (content) may be absent.
 const REQUIRED_DIRS = ['sim', 'detmath', 'perception', 'bots', 'intents', 'director', 'match', 'replay'];

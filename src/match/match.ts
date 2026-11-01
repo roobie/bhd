@@ -348,7 +348,15 @@ export class Match {
     const old = seat.decisions.find((v) => v.id === d.id);
     const changed = prev !== picked;
     if (d.options.length >= 2 && changed) {
-      out.push({ tick, kind: 'choice', hero: seat.hero, decision: d.id, options, picked });
+      const labelled = labelledOptions(d, options);
+      out.push({
+        tick,
+        kind: 'choice',
+        hero: seat.hero,
+        decision: d.id,
+        options: labelled,
+        picked: pickedLabel(d, picked),
+      });
     }
     this.#submit(seat, pick.option.commands, tick);
     return { id: d.id, options, picked, since: old?.picked === picked ? old.since : tick };
@@ -386,4 +394,29 @@ export class Match {
       }
     }
   }
+}
+
+/** The label `choice` events use for the option with this id. */
+function pickedLabel(d: Decision, id: string): string {
+  const o = d.options.find((x) => x.id === id);
+  return o?.label ?? id;
+}
+
+/** Options by label in first-seen order; options sharing a label are one entry with the best score. */
+function labelledOptions(
+  d: Decision,
+  options: readonly { id: string; score: number }[],
+): { id: string; score: number }[] {
+  const out: { id: string; score: number }[] = [];
+  options.forEach((o, i) => {
+    const label = d.options[i]?.label ?? o.id;
+    const at = out.findIndex((x) => x.id === label);
+    const seen = out[at];
+    if (seen === undefined) {
+      out.push({ id: label, score: o.score });
+    } else if (o.score > seen.score) {
+      seen.score = o.score;
+    }
+  });
+  return out;
 }

@@ -79,6 +79,13 @@ export interface MetricDef {
   readonly unit: string;
   /** Areas this metric belongs to; `--tag` matches them by dot-segment prefix, in either direction. */
   readonly areas: readonly string[];
+  /** Areas of one series by its key, when they depend on it (per-hero metrics: `gunner`, `gunner.ability`...). Replaces `areas`. */
+  readonly areasOf?: (key: string) => readonly string[];
+  /**
+   * The decision-level group of a key. A pair where the group has no key at all on one side is
+   * skipped; otherwise a key absent on a side counts as 0. Overrides `missing`.
+   */
+  readonly group?: (key: string) => string;
   /** A pair where a key is absent on one side: `zero` counts it as 0, `skip` drops that pair. */
   readonly missing: 'zero' | 'skip';
   /** Per-game values keyed by series key (`''` for a single-valued metric). Pure and deterministic. */
@@ -151,7 +158,8 @@ export interface RunRecord {
 export interface BatchPlan {
   readonly scenario: Scenario;
   readonly base: ResolvedSide;
-  readonly cand: ResolvedSide;
+  /** Absent: play the base side only (`bhd run`). */
+  readonly cand?: ResolvedSide;
   /** Directory the run logs go under (`.bhd/runs/<key>`). */
   readonly outDir: string;
   /** Worker threads; default `availableParallelism() - 1`. */
@@ -179,7 +187,7 @@ export interface ReportOptions {
   readonly floor: number;
   /** Benjamini-Hochberg false discovery rate (default 0.1). */
   readonly q: number;
-  /** Bootstrap resamples (2000 quick, 1000 deep). */
+  /** Bootstrap resamples (2000 quick, 4000 deep). */
   readonly resamples: number;
   /** Seed of the bootstrap rng. */
   readonly seed: number;
@@ -195,7 +203,6 @@ export interface ReportInput {
   /** `--tag` values. */
   readonly tags: readonly string[];
   readonly runs: readonly RunRecord[];
-  readonly timing: Timing;
   readonly metrics: readonly MetricDef[];
   readonly options: ReportOptions;
   readonly loadLog: (run: RunRecord) => GameLog;
@@ -217,10 +224,11 @@ export interface ReportHeader {
   readonly pairs: number;
   /** Distinct games (by hash digest) per side; below `pairs` means seeds repeat the same game. */
   readonly distinct: { readonly base: number; readonly cand: number };
-  /** Series that were tested. */
+  /** Series that were tested (n >= the minimum pairs). */
   readonly seriesTested: number;
+  /** Series with too few pairs to test: p = 1, never a mover, outside the BH family. */
+  readonly seriesUntested: number;
   readonly options: ReportOptions;
-  readonly msPerGame: { readonly base: number; readonly cand: number };
   /** Unknown tags, distinct-games warnings... shown at the top. */
   readonly warnings: readonly string[];
 }
@@ -259,10 +267,12 @@ export interface SeriesStat {
   readonly rel: number | null;
   /** Percentile bootstrap 95% CI of the mean difference. */
   readonly ci: readonly [number, number];
-  /** |meanDiff| / sd(base); the ranking key. 0 when sd is 0. */
+  /** |meanDiff| / sd(base), sd(d) when sd(base) is 0, else 0; the ranking key. */
   readonly effect: number;
-  /** Bootstrap two-sided p, used by Benjamini-Hochberg. */
+  /** Bootstrap two-sided p, used by Benjamini-Hochberg. 1 when untested. */
   readonly p: number;
+  /** False when n is below the minimum pairs: never significant, left out of the BH family. */
+  readonly tested: boolean;
   /** Survives the noise floor: CI excludes 0, |rel| >= floor, passes BH. */
   readonly significant: boolean;
   /** Matches one of the report's tags (always false when there are no tags). */

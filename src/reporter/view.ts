@@ -107,6 +107,11 @@ export async function runView(options: ViewOptions): Promise<void> {
   console.log(
     `bhd view: ${header.side} ${header.ref} ${header.sha.slice(0, 7)}${header.dirty ? '+dirty' : ''}, code at ${root}`,
   );
+  if (header.dirty) {
+    console.warn(
+      `bhd view: warning: this log was recorded from a dirty worktree (${header.sha.slice(0, 7)}+dirty); the viewer runs the current code, which may differ and fail hash verification`,
+    );
+  }
   console.log(`bhd view: ${url}`);
   if (options.open !== false) {
     openBrowser(url);

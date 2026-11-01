@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { firstDivergence } from '../../src/reporter/diverge.ts';
+import { renderHtml } from '../../src/reporter/html.ts';
 import {
   benjaminiHochberg,
   bootstrapMean,
@@ -52,7 +53,22 @@ describe('bootstrapMean', () => {
         800,
         3,
       ).p,
-    ).toBe(0);
+    ).toBeLessThan(0.01);
+  });
+
+  it('uses add-one p: (k+1)/(R+1), never exactly 0', () => {
+    expect(
+      bootstrapMean(
+        new Array<number>(40).fill(0).map((_, i) => 5 + (i % 3)),
+        99,
+        3,
+      ).p,
+    ).toBeCloseTo(2 / 100, 12);
+  });
+
+  it('gives a zero-width CI for a constant difference only from 10 pairs', () => {
+    expect(bootstrapMean(new Array<number>(9).fill(0.1), 50, 1).p).toBeGreaterThan(0);
+    expect(bootstrapMean(new Array<number>(10).fill(0.1), 50, 1).ci).toEqual([0.1, 0.1]);
   });
 });
 
@@ -101,6 +117,124 @@ describe('pairRuns', () => {
     expect(byName.get('s')?.meanDiff).toBe(4);
     expect(byName.get('z')?.n).toBe(2);
     expect(byName.get('z')?.meanCand).toBe(4);
+  });
+});
+
+describe('minimum sample size and missing values', () => {
+  const shifted = (pairs: number) =>
+    buildReport(
+      makeInput({
+        pairs,
+        metrics: [metric('big', [])],
+        series: { big: (i) => [10 + (i % 3), 20 + (i % 3)] },
+      }),
+    );
+
+  it('leaves a series with fewer than 10 pairs untested: p = 1, no mover', () => {
+    const data = shifted(9);
+    expect(data.series[0]).toMatchObject({ n: 9, tested: false, p: 1, significant: false });
+    expect(data.movers).toEqual([]);
+    expect(data.header).toMatchObject({ seriesTested: 0, seriesUntested: 1 });
+    expect(shifted(10).series[0]).toMatchObject({ tested: true, significant: true });
+  });
+
+  it('keeps untested series out of the BH family', () => {
+    const noise = normals(31);
+    const input = makeInput({
+      pairs: 30,
+      metrics: [metric('real', []), metric('rare', [], 'skip')],
+      series: { real: () => [10 + noise(), 14 + noise()], rare: (i) => [1, 2 + i] },
+    });
+    // `rare` exists on only 5 pairs: untested, so it cannot tip or dilute the family of 1.
+    const runs = input.runs.map((r) => {
+      const { rare, ...rest } = r.values;
+      return r.seed <= 5 ? r : { ...r, values: rest };
+    });
+    const data = buildReport({ ...input, runs });
+    expect(data.series.find((s) => s.name === 'rare')).toMatchObject({ n: 5, tested: false, p: 1 });
+    expect(data.series.find((s) => s.name === 'real')?.significant).toBe(true);
+    expect(data.header.seriesTested).toBe(1);
+  });
+
+  it('counts a pair missing on both sides as 0 vs 0 for zero metrics, and drops it for skip metrics', () => {
+    const present = [run('base', 0, 1, { z: 4, s: 4 }), run('cand', 0, 1, { z: 6, s: 6 })];
+    const absent = Array.from({ length: 11 }, (_, i) => [run('base', 0, i + 2, {}), run('cand', 0, i + 2, {})]).flat();
+    const input = {
+      ...makeInput({ pairs: 0, series: {}, metrics: [metric('z', [], 'zero'), metric('s', [], 'skip')] }),
+      runs: [...present, ...absent],
+    };
+    const byName = new Map(buildReport(input).series.map((s) => [s.name, s]));
+    expect(byName.get('z')).toMatchObject({ n: 12, meanBase: 4 / 12, meanCand: 0.5 });
+    expect(byName.get('s')?.n).toBe(1);
+  });
+
+  it('skips a pair at decision level for choice-like groups and zero-fills only inside a present decision', () => {
+    const group = (key: string) => key.slice(0, key.lastIndexOf(':'));
+    const m = { ...metric('choice.spread', ['x']), group };
+    const pairs = Array.from({ length: 12 }, (_, i) => i + 1);
+    const runs = pairs.flatMap((seed) => {
+      // The decision is absent on the cand side of the first two pairs; option `b` is absent on the base side of pair 3.
+      const base =
+        seed === 3 ? { 'choice.spread[h:d:a]': 1 } : { 'choice.spread[h:d:a]': 0.5, 'choice.spread[h:d:b]': 0.5 };
+      const cand = seed <= 2 ? {} : { 'choice.spread[h:d:a]': 0.2, 'choice.spread[h:d:b]': 0.8 };
+      return [run('base', 0, seed, base), run('cand', 0, seed, cand)];
+    });
+    const data = buildReport({ ...makeInput({ pairs: 0, series: {}, metrics: [m] }), runs });
+    const b = data.series.find((s) => s.name === 'choice.spread[h:d:b]');
+    expect(b?.n).toBe(10);
+    expect(b?.meanBase).toBeCloseTo((9 * 0.5 + 0) / 10, 12);
+  });
+});
+
+describe('effect size fallback', () => {
+  it('uses sd(d) when sd(base) is 0, and 0 when both are 0', () => {
+    const noise = normals(40);
+    const varied = buildReport(
+      makeInput({ pairs: 20, metrics: [metric('c', [])], series: { c: () => [5, 5 + 1 + noise()] } }),
+    );
+    expect(varied.series[0]?.effect).toBeGreaterThan(0);
+    const flat = buildReport(makeInput({ pairs: 20, metrics: [metric('c', [])], series: { c: () => [5, 6] } }));
+    expect(flat.series[0]?.effect).toBe(0);
+  });
+});
+
+describe('per-hero areas', () => {
+  it('takes areas from the key, and --tag gunner covers every gunner area', () => {
+    const areasOf = (suffix: string) => (key: string) => [`${key.split(':')[0]}${suffix === '' ? '' : `.${suffix}`}`];
+    const metrics = [
+      { ...metric('hero.deaths', []), areasOf: areasOf('') },
+      { ...metric('ability.casts', []), areasOf: areasOf('ability') },
+      { ...metric('team.ff', ['team.ff']) },
+    ];
+    const series = {
+      'hero.deaths[gunner]': (i: number): [number, number] => [i % 2, 1 + (i % 2)],
+      'hero.deaths[tank]': (i: number): [number, number] => [i % 2, 1 + (i % 2)],
+      'ability.casts[gunner:1]': (i: number): [number, number] => [i % 2, 1 + (i % 2)],
+      'ability.casts[tank:1]': (i: number): [number, number] => [i % 2, 1 + (i % 2)],
+    };
+    const data = buildReport(makeInput({ pairs: 20, metrics, series, tags: ['gunner'] }));
+    const byName = new Map(data.series.map((s) => [s.name, s]));
+    expect(byName.get('hero.deaths[gunner]')).toMatchObject({ areas: ['gunner'], inTag: true });
+    expect(byName.get('ability.casts[gunner:1]')).toMatchObject({ areas: ['gunner.ability'], inTag: true });
+    expect(byName.get('hero.deaths[tank]')).toMatchObject({ areas: ['tank'], inTag: false });
+    expect(byName.get('ability.casts[tank:1]')).toMatchObject({ areas: ['tank.ability'], inTag: false });
+    expect(data.header.warnings).toEqual([]);
+    const narrow = buildReport(makeInput({ pairs: 20, metrics, series, tags: ['gunner.heat'] }));
+    expect(narrow.series.find((s) => s.name === 'hero.deaths[gunner]')?.inTag).toBe(true);
+    expect(narrow.series.find((s) => s.name === 'ability.casts[gunner:1]')?.inTag).toBe(false);
+  });
+});
+
+describe('report.json and timing', () => {
+  it('holds no wall time, so it cannot depend on the worker count', () => {
+    const json = reportJson(synthetic([]));
+    for (const word of ['msPerGame', 'wall', 'timing']) {
+      expect(json).not.toContain(word);
+    }
+    const data = synthetic([]);
+    const slow = renderHtml(data, { base: { games: 1, msPerGame: 999 }, cand: { games: 1, msPerGame: 1 } });
+    expect(slow).toContain('999 / 1 ms per game');
+    expect(renderHtml(data)).not.toContain('ms per game');
   });
 });
 

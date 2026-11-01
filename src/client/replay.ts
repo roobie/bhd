@@ -61,7 +61,8 @@ export function recordLive(r: Replay, events: readonly SimEvent[]): void {
   if (!r.verdict.ok) {
     return;
   }
-  const fresh = checkpoints(events);
+  // Checkpoints past the log's last tick have nothing to compare with: not a divergence.
+  const fresh = checkpoints(events).filter((c) => c.tick <= r.log.header.ticks);
   if (fresh.length === 0) {
     return;
   }

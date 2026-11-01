@@ -270,6 +270,32 @@ describe('choice events', () => {
     });
   });
 
+  it('logs the label of an option, one entry per label, while ids still drive the pick', () => {
+    const opts = oneSeat(
+      (ctx) => [
+        {
+          id: 'x.mark',
+          options: [
+            { id: 'wait', value: 0, cost: 0, commands: [] },
+            { id: 'mark.7', label: 'mark', value: ctx.tick < 40 ? 1 : 0, cost: 0, commands: [] },
+            { id: 'mark.9', label: 'mark', value: ctx.tick < 40 ? 0.5 : 0.25, cost: 0, commands: [] },
+          ],
+        },
+      ],
+      { thinkSeconds: 0.5, reactionSeconds: 0.1 },
+    );
+    const choices = run(opts, (m) => m.tick >= 90).filter((e) => e.kind === 'choice');
+    expect(choices.map((c) => (c.kind === 'choice' ? [c.tick, c.picked] : []))).toEqual([
+      [15, 'mark'],
+      [45, 'mark'],
+    ]);
+    const [first] = choices;
+    expect(first?.kind === 'choice' ? first.options : []).toEqual([
+      { id: 'wait', score: 0 },
+      { id: 'mark', score: 1 },
+    ]);
+  });
+
   it('is never emitted for a decision with a single option', () => {
     const choices = flipping(40)
       .events()

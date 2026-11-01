@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import { METRICS } from '../../src/reporter/metrics/registry.ts';
 import { distinctWarnings, runBatch } from '../../src/reporter/pool.ts';
 import { QUICK } from '../../src/reporter/scenarios.ts';
+import { buildReport, reportJson } from '../../src/reporter/stats.ts';
+import { readLogFile } from '../../src/reporter/store.ts';
 import type { BatchPlan, ResolvedSide, RunRecord, Scenario } from '../../src/reporter/types.ts';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -46,6 +49,29 @@ describe('runBatch', () => {
     const order = one.runs.map((r) => `${r.side}/${r.lineup}/${r.seed}`);
     expect(order).toEqual([...order].sort((a, b) => (a < b ? -1 : 1)));
     expect(one.cached).toBe(0);
+    // report.json holds no wall time, so it is the same bytes whatever the worker count.
+    const reportOf = (name: string, runs: readonly RunRecord[]): string => {
+      const data = buildReport({
+        scenario: SHORT,
+        base: side('base'),
+        cand: side('cand'),
+        tags: [],
+        runs,
+        metrics: METRICS,
+        options: { floor: 0.02, q: 0.1, resamples: 200, seed: 1, bins: 12 },
+        loadLog: (r) => readLogFile(r.logPath),
+      });
+      return reportJson(data).replaceAll(join(TMP, name), '<out>');
+    };
+    expect(reportOf('one', one.runs)).toBe(reportOf('three', three.runs));
+  }, 120_000);
+
+  it('plays one side only when there is no cand', async () => {
+    const { cand: _, ...baseOnly } = plan('single', 2);
+    const result = await runBatch(baseOnly);
+    expect(result.runs).toHaveLength(6);
+    expect(result.runs.every((r) => r.side === 'base')).toBe(true);
+    expect(result.timing.cand.games).toBe(0);
   }, 120_000);
 
   it('reuses the logs on a second run and gives the same records', async () => {
@@ -53,7 +79,10 @@ describe('runBatch', () => {
     const again = await runBatch(plan('reuse', 2));
     expect(again.cached).toBe(12);
     expect(again.runs).toEqual(first.runs);
-    expect(again.timing.base.games).toBe(0);
+    expect(again.cached).toBe(12);
+    // Nothing ran: timing.json keeps what the first run measured instead of zeros.
+    expect(again.timing).toEqual(first.timing);
+    expect(JSON.parse(readFileSync(join(TMP, 'reuse', 'timing.json'), 'utf8'))).toEqual(first.timing);
   }, 120_000);
 
   it('reports progress up to the total', async () => {

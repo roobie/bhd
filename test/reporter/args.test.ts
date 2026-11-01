@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Command } from '../../src/reporter/args.ts';
-import { DEEP_GAMES, DEFAULT_GAMES, parseCli, parseSideSpec } from '../../src/reporter/args.ts';
+import { DEEP_GAMES, DEFAULT_GAMES, parseCli } from '../../src/reporter/args.ts';
 import { progressLine } from '../../src/reporter/commands.ts';
 
 function ok(argv: string[]): Command {
@@ -19,17 +19,20 @@ function rejected(argv: string[]): string {
   return result.ok ? 'ACCEPTED' : result.message;
 }
 
-describe('parseSideSpec', () => {
+describe('side forms (sides.ts parseSide)', () => {
+  const side = (text: string) => (ok(['run', '--side', text]) as { side: unknown }).side;
+
   it('reads the four side forms', () => {
-    expect(parseSideSpec('main')).toEqual({ kind: 'ref', ref: 'main' });
-    expect(parseSideSpec('WORKTREE')).toEqual({ kind: 'worktree' });
-    expect(parseSideSpec('o.json')).toEqual({ kind: 'overrides', path: 'o.json' });
-    expect(parseSideSpec('v1:dir/o.json')).toEqual({ kind: 'ref-overrides', ref: 'v1', path: 'dir/o.json' });
+    expect(side('main')).toEqual({ kind: 'ref', ref: 'main' });
+    expect(side('WORKTREE')).toEqual({ kind: 'worktree' });
+    expect(side('o.json')).toEqual({ kind: 'overrides', path: 'o.json' });
+    expect(side('v1:dir/o.json')).toEqual({ kind: 'ref-overrides', ref: 'v1', path: 'dir/o.json' });
   });
 
-  it('rejects empty parts', () => {
-    expect(parseSideSpec('')).toBeUndefined();
-    expect(parseSideSpec(':o.json')).toBeUndefined();
+  it('turns a side parse error into a usage error', () => {
+    expect(rejected(['run', '--side', ':o.json'])).toContain('--side');
+    expect(rejected(['run', '--side', 'main:notjson.txt'])).toContain('--side');
+    expect(rejected(['run', '--side', ''])).toContain('--side');
   });
 });
 
@@ -89,7 +92,7 @@ describe('parseCli report', () => {
     expect(rejected(['report', '--base', 'a', '--games', '1.5'])).toContain('--games');
     expect(rejected(['report', '--base', 'a', '--workers', 'x'])).toContain('--workers');
     expect(rejected(['report', '--base', 'a', '--deep', '--games', '5'])).toContain('mutually exclusive');
-    expect(rejected(['report', '--base', ':x.json'])).toContain('not a side');
+    expect(rejected(['report', '--base', ':x.json'])).toContain('--base: side');
     expect(rejected(['report', '--base', 'a', '--side', 'b'])).toContain('--side');
     expect(rejected(['report', '--base', 'a', '--bogus'])).toContain('usage:');
     expect(rejected(['report', 'extra', '--base', 'a'])).toContain('extra');

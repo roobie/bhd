@@ -26,7 +26,7 @@ a field says so. Hero and enemy `def` strings are content ids.
 | `end` | `wave`, `reason` | The game is over (`ancient-destroyed`\|`victory`); `wave` is the number of waves started. Gameplay stops after it. |
 | `hash` | `stateHash` | State hash after `tick` completed, every `hashEvery` ticks. Replays compare these. |
 | `intent` | `id`, `op`, `by`, `intentKind` | Intents board lifecycle. `op` is `post`\|`reserve`\|`fire`\|`fulfil`\|`expire`\|`cancel`; `by` is the hero the op concerns. |
-| `choice` | `hero`, `decision`, `options[{id,score}]`, `picked` | A bot decision between 2 or more options, emitted when first evaluated and whenever its pick changes. `options` are in the decision's fixed order; `picked` is one of their ids. |
+| `choice` | `hero`, `decision`, `options[{id,score}]`, `picked` | A bot decision between 2 or more options, emitted when first evaluated and whenever its pick changes. `options` are in the decision's fixed order; `picked` is one of their ids. Ids are the options' labels (`Option.label`, default the id): options that share a label (one per target) are one entry with the best score, so the log holds a category (`mark`), not an entity id. |
 
 `combo` events arrive with the combo waves (6 and 8).
 

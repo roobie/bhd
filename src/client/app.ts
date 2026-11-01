@@ -68,6 +68,14 @@ export function mount(root: HTMLElement): () => void {
   };
   scheme.addEventListener('change', refreshPalette);
 
+  /** A replay stops where its log does: a game cut off at maxTicks has no end event, and past it nothing is verified. */
+  function stopAtLogEnd(): void {
+    if (replay?.kind === 'ready' && endText === undefined && match.tick >= replay.log.header.ticks) {
+      endText = `end of log (tick ${replay.log.header.ticks})`;
+      playing = false;
+    }
+  }
+
   function stepOnce(): void {
     const events = match.step();
     if (replay?.kind === 'ready') {
@@ -82,6 +90,7 @@ export function mount(root: HTMLElement): () => void {
         moves.set(e.cmd.hero, { x: e.cmd.x, y: e.cmd.y, tick: e.tick });
       }
     }
+    stopAtLogEnd();
     const status = match.directorStatus;
     if (status !== undefined && match.tick % SPARK_EVERY === 0) {
       pushSample(tension, status.tension, SPARK_SAMPLES);

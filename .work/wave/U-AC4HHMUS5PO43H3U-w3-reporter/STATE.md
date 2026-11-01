@@ -27,7 +27,7 @@ See DESIGN.md. Determinism §6.1; Node code only in `src/reporter/`; no gameplay
 Step 3: Opus review of the integrated wave, then fixes.
 
 ## Next
-- Fix review findings plus: ranged stand-in logs mark options by entity id (`mark.<id>`), which floods movers; `bhd run` plays its side twice; `PURE_DIRS` duplicated in sides.ts.
+- [x] Fix review findings plus: ranged stand-in logs mark options by entity id (`mark.<id>`), which floods movers; `bhd run` plays its side twice; `PURE_DIRS` duplicated in sides.ts.
 - Close slices and wave; close M1.
 
 ## Evidence
@@ -37,7 +37,16 @@ Step 3: Opus review of the integrated wave, then fixes.
 - `bhd view .bhd/runs/1f5c758fd1eb/base/1-5.ndjson.gz --tick 2038` resolves the base snapshot and serves the viewer at tick 2038.
 
 ## Harvest
+- [ ] decision: `Option.label` (default id) is what `choice` events log, so ranged stand-in `mark.<entityId>` options log `mark` while ids still drive stickiness and emit-on-change; behaviour unchanged (golden state hashes identical, only `eventDigest` regenerated since choice events are in it)
+- [ ] decision: choice events collapse options sharing a label into one entry with the best score
+- [ ] decision: `MetricDef.areasOf(key)` gives per-hero areas from the key; `MetricDef.group(key)` makes choice.spread skip a pair at decision level when the decision is absent on a side
+- [ ] decision: `report.json` has no wall time; `renderHtml(data, timing)` reads `timing.json`; `runBatch` merges per side and rewrites `timing.json` only when a game ran
+- [ ] decision: `bhd run` passes no `cand` to `runBatch` (`BatchPlan.cand` optional)
+- [ ] decision: `PURE_DIRS` lives in `src/match/pureDirs.ts` (test/ cannot import src/reporter by the layering test)
+- [ ] decision: the viewer stops at `header.ticks` of a replayed log, and `recordLive` ignores checkpoints past it
+- [ ] learning: pool workers need an `exit` handler with a job in flight, else a silent exit hangs the batch
 
 ## Log
 - 2026-11-01 initialized; design from an Opus planner; lead decisions: doctrine noise 0.05, intent fulfil as combo proxy
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 review fixes (15 items) applied; ci green (670 node, 87 browser tests)
