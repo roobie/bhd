@@ -1,4 +1,4 @@
-// Enemy clumps (DESIGN "Perception"). STUB (basic and working): the perception slice owns it.
+// Enemy clumps (DESIGN "Perception").
 // Contract: sweep enemies by descending lane progress then ascending id; each joins the FIRST clump
 // whose centroid is within `radius` (centroid updated to the mean of its members), else starts a new
 // clump. Every enemy lands in exactly one clump.
@@ -19,12 +19,13 @@ function centroid(c: Building): { x: number; y: number } {
 export function buildClumps(enemies: readonly EnemyView[], radius: number): Clump[] {
   const sweep = [...enemies].sort((a, b) => b.progress - a.progress || a.id - b.id);
   const building: Building[] = [];
+  const r2 = radius * radius;
   for (const e of sweep) {
     let home = building.find((c) => {
-      const m = centroid(c);
-      const dx = m.x - e.x;
-      const dy = m.y - e.y;
-      return dx * dx + dy * dy <= radius * radius;
+      const n = c.members.length;
+      const dx = c.sumX / n - e.x;
+      const dy = c.sumY / n - e.y;
+      return dx * dx + dy * dy <= r2;
     });
     if (home === undefined) {
       home = { members: [], sumX: 0, sumY: 0, front: e.progress };

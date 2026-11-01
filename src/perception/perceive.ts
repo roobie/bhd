@@ -15,7 +15,7 @@ import type { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
 import { buildClumps } from './clumps.ts';
 import { findComboWindows } from './combos.ts';
-import type { PerceptionMemory } from './memory.ts';
+import { damageByVictim, livesLost, type PerceptionMemory } from './memory.ts';
 import { heroThreat } from './threat.ts';
 import type {
   AbilityView,
@@ -113,6 +113,7 @@ function gunnerAbilities(def: GunnerDef, kit: Extract<NonNullable<Entity['kit']>
   ];
 }
 
+/** Heroes the Gunner's line would hit: mirrors the sim's `fireLine` geometry (muzzle at the body edge). */
 function lineAlliesOf(sim: Sim, hero: Readonly<Entity>, range: number, halfWidth: number): number[] {
   const target = sim.entities.get(hero.attack.target);
   if (target === undefined || target.hp <= 0) {
@@ -121,12 +122,15 @@ function lineAlliesOf(sim: Sim, hero: Readonly<Entity>, range: number, halfWidth
   const dx = target.x - hero.x;
   const dy = target.y - hero.y;
   const len = Math.sqrt(dx * dx + dy * dy);
-  if (len === 0) {
-    return [];
-  }
-  const to = { x: hero.x + (dx / len) * range, y: hero.y + (dy / len) * range };
-  return unitsOnSegment(sim.entities, hero, to, halfWidth)
-    .filter((h) => h.unit.kind === 'hero' && h.unit.id !== hero.id)
+  const ux = len === 0 ? 1 : dx / len;
+  const uy = len === 0 ? 0 : dy / len;
+  const from = { x: hero.x + ux * hero.radius, y: hero.y + uy * hero.radius };
+  const to = { x: hero.x + ux * range, y: hero.y + uy * range };
+  return unitsOnSegment(sim.entities, from, to, halfWidth)
+    .filter(
+      (h) =>
+        h.unit.kind === 'hero' && h.unit.id !== hero.id && (h.unit.x - from.x) * ux + (h.unit.y - from.y) * uy >= 0,
+    )
     .map((h) => h.unit.id)
     .sort((a, b) => a - b);
 }
@@ -150,7 +154,12 @@ function heroParts(sim: Sim, e: Readonly<Entity>): HeroParts | undefined {
       role: 'gunner',
       resources: [{ name: 'heat', frac: heat, band: kit.heatBand }],
       abilities: gunnerAbilities(def, kit),
-      lineAllies: lineAlliesOf(sim, e, def.attack.range, def.heat.lineHalfWidth),
+      lineAllies: lineAlliesOf(
+        sim,
+        e,
+        def.attack.range * (kit.stance === STANCE.braced ? 1 + def.brace.rangeBonus : 1),
+        def.heat.lineHalfWidth,
+      ),
       gunner: {
         heat,
         spin: kit.spin,
@@ -175,6 +184,7 @@ function heroParts(sim: Sim, e: Readonly<Entity>): HeroParts | undefined {
 
 function heroViews(sim: Sim, enemies: readonly EnemyView[], memory: PerceptionMemory): HeroView[] {
   const out: HeroView[] = [];
+  const taken = damageByVictim(memory);
   for (const e of sim.entities.values()) {
     const parts = e.kind === 'hero' && e.hp > 0 ? heroParts(sim, e) : undefined;
     const slot = sim.game.heroes.findIndex((d) => d.id === e.def);
@@ -193,6 +203,7 @@ function heroViews(sim: Sim, enemies: readonly EnemyView[], memory: PerceptionMe
       maxHp: e.maxHp,
       hpFrac: frac(e.hp, e.maxHp),
       threat: heroThreat(e, enemies, memory.cfg.threatRadius),
+      recentDamage: e.maxHp > 0 ? (taken.get(e.id) ?? 0) / e.maxHp : 0,
       resources: parts.resources,
       abilities: parts.abilities,
       statuses: statusesOf(e),
@@ -211,12 +222,16 @@ function teamView(heroes: readonly HeroView[], memory: PerceptionMemory): TeamVi
   const hp = heroes.reduce((n, h) => n + h.hp, 0);
   const maxHp = heroes.reduce((n, h) => n + h.maxHp, 0);
   const ids = new Set(heroes.map((h) => h.id));
-  const lost = memory.damage.reduce((n, s) => (ids.has(s.dst) ? n + s.amount : n), 0);
+  let lost = 0;
+  for (const [victim, amount] of damageByVictim(memory)) {
+    lost += ids.has(victim) ? amount : 0;
+  }
   return {
     hpFrac: frac(hp, maxHp),
     lowHeroes: heroes.filter((h) => h.hpFrac <= memory.cfg.lowHpFrac).length,
     damageFrac: maxHp > 0 ? lost / maxHp : 0,
     leaks: memory.leaks.length,
+    livesLost: livesLost(memory),
   };
 }
 
@@ -256,7 +271,10 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
     heroes,
     enemies,
     clumps,
-    comboWindows: findComboWindows(enemies, clumps),
+    comboWindows: findComboWindows(enemies, clumps, {
+      statuses: memory.cfg.comboStatuses,
+      minCount: memory.cfg.comboMinCount,
+    }),
     ancient: ancientView(sim),
     wave: {
       n: sim.waves.n,

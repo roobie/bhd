@@ -1,7 +1,8 @@
 // PerceptionMemory: temporal features folded from the event stream EVERY tick by Match (so lazy
-// per-think computation can't change results). STUB (basic and working): the perception slice owns
-// it. Contract: `foldEvents` is called once per tick with that tick's events, in order; memory only
-// grows from events and is pruned by age, so it is a function of the event history.
+// per-think computation can't change results). `foldEvents` is called once per tick with that
+// tick's events, in order. Memory only grows from events and is pruned by age (samples at or before
+// `tick - window` drop), so it is a pure function of the event history and the current tick:
+// folding tick by tick, or all at once ending at the same tick, gives the same window.
 
 import type { PerceptionDef } from '../content/perception.ts';
 import type { SimEvent } from '../sim/events.ts';
@@ -20,13 +21,22 @@ interface LeakSample {
 
 export interface PerceptionMemory {
   readonly cfg: PerceptionDef;
-  /** Damage events inside the memory window (any victim; perceive filters to heroes). */
+  /** Damage events inside the memory window, oldest first (any victim; perceive filters to heroes). */
   damage: DamageSample[];
   leaks: LeakSample[];
 }
 
 export function createMemory(cfg: PerceptionDef): PerceptionMemory {
   return { cfg, damage: [], leaks: [] };
+}
+
+/** Drops the leading samples at or before `oldest`; samples arrive in tick order. */
+function prune<T extends { readonly tick: number }>(samples: T[], oldest: number): T[] {
+  let n = 0;
+  while (n < samples.length && (samples[n]?.tick ?? 0) <= oldest) {
+    n += 1;
+  }
+  return n === 0 ? samples : samples.slice(n);
 }
 
 /** Folds the events of `tick` into `memory` and drops samples older than the window. */
@@ -39,6 +49,20 @@ export function foldEvents(memory: PerceptionMemory, events: readonly SimEvent[]
     }
   }
   const oldest = tick - ticks(memory.cfg.memorySeconds);
-  memory.damage = memory.damage.filter((s) => s.tick > oldest);
-  memory.leaks = memory.leaks.filter((s) => s.tick > oldest);
+  memory.damage = prune(memory.damage, oldest);
+  memory.leaks = prune(memory.leaks, oldest);
+}
+
+/** Damage taken by each victim inside the window. */
+export function damageByVictim(memory: PerceptionMemory): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const s of memory.damage) {
+    out.set(s.dst, (out.get(s.dst) ?? 0) + s.amount);
+  }
+  return out;
+}
+
+/** Lives lost to leaks inside the window. */
+export function livesLost(memory: PerceptionMemory): number {
+  return memory.leaks.reduce((n, s) => n + s.livesLost, 0);
 }

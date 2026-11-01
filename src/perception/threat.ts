@@ -1,10 +1,11 @@
-// Per-hero threat (DESIGN "Perception"). STUB (basic and working): the perception slice owns it.
-// Contract: a dimensionless number, 0 = safe; here the damage per second of enemies within `radius`
-// of the hero as a fraction of its max hp. Pure function of the inputs.
+// Per-hero threat (DESIGN "Perception"). A dimensionless number, 0 = safe: the basic-attack damage
+// per second of the enemies that can hurt the hero now (within `radius`, or already attacking it),
+// as a fraction of its max hp. Pure function of the inputs.
 
 import type { EnemyView } from './types.ts';
 
 interface Body {
+  readonly id: number;
   readonly x: number;
   readonly y: number;
   readonly maxHp: number;
@@ -15,7 +16,7 @@ export function heroThreat(hero: Body, enemies: readonly EnemyView[], radius: nu
   for (const e of enemies) {
     const dx = e.x - hero.x;
     const dy = e.y - hero.y;
-    if (dx * dx + dy * dy <= radius * radius) {
+    if (e.target === hero.id || dx * dx + dy * dy <= radius * radius) {
       dps += e.dps;
     }
   }

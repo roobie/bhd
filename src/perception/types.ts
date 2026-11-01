@@ -64,6 +64,8 @@ export interface HeroView {
   readonly hpFrac: number;
   /** Incoming damage per second from nearby enemies as a fraction of max hp (threat.ts). */
   readonly threat: number;
+  /** Hp this hero lost within the memory window, as a fraction of its max hp (memory.ts). */
+  readonly recentDamage: number;
   readonly resources: readonly ResourceView[];
   /** One entry per ability the hero has, ascending by slot. */
   readonly abilities: readonly AbilityView[];
@@ -73,7 +75,12 @@ export interface HeroView {
   /** Current attack target id, 0 for none. */
   readonly target: number;
   readonly hold: boolean;
-  /** Allies (hero ids, ascending) on the overpenetration line from this hero to its target; empty if none. */
+  /**
+   * Allies (hero ids, ascending) the hero's overpenetration line would hit now: the segment from its
+   * muzzle toward its current target, as long as its effective range (brace included), widened by the
+   * line half width. Independent of heat, so it says who an overpenetrating shot would hit. Empty
+   * without a target and for stand-ins.
+   */
   readonly lineAllies: readonly number[];
   readonly gunner?: GunnerView;
 }
@@ -168,6 +175,8 @@ export interface TeamView {
   readonly damageFrac: number;
   /** Leaks within the memory window. */
   readonly leaks: number;
+  /** Ancient lives lost to those leaks. */
+  readonly livesLost: number;
 }
 
 export interface Perception {

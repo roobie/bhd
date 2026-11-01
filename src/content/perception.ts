@@ -9,10 +9,22 @@ export interface PerceptionDef {
   readonly lowHpFrac: number;
   /** How long damage and leak samples stay in `PerceptionMemory`. */
   readonly memorySeconds: number;
-  /** How long a combo window stays open after its status zone appears. */
+  /** Retained for config compatibility; combo windows end with the statuses that make them. */
   readonly comboWindowSeconds: number;
+  /** Status ids that form combo windows when enough carriers sit in one clump, in output order. */
+  readonly comboStatuses: readonly string[];
+  /** Carriers of one status in one clump needed for a window. */
+  readonly comboMinCount: number;
 }
 
 export function defaultPerception(): PerceptionDef {
-  return { clumpRadius: 5, threatRadius: 12, lowHpFrac: 0.4, memorySeconds: 6, comboWindowSeconds: 3 };
+  return {
+    clumpRadius: 5,
+    threatRadius: 12,
+    lowHpFrac: 0.4,
+    memorySeconds: 6,
+    comboWindowSeconds: 3,
+    comboStatuses: ['clumped', 'marked', 'suppressed'],
+    comboMinCount: 2,
+  };
 }
