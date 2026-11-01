@@ -3,7 +3,11 @@
 //  1. Target: the `src` of a live `taunted` status (several: the one lasting longest, ties to the
 //     lower id; a dead or missing taunter is ignored) wins, from any distance. Otherwise the
 //     current target is kept while it is alive and within LEASH_RANGE. Otherwise the nearest hero
-//     within AGGRO_RANGE (ties to the lower id). Only heroes are aggro targets: the Ancient is hit
+//     within AGGRO_RANGE (ties to the lower id). The leash is also anchored to the lane: a lane
+//     enemy more than LEASH_RANGE from the lane polyline (non-taunted) drops its target and
+//     acquires none until it is back, so a hero cannot drag enemies away forever. (Derived from
+//     the position: the entity has no spare field to store the exact point it left the lane.)
+//     Only heroes are aggro targets: the Ancient is hit
 //     by leaking only.
 //  2. Move: out of attack range, chase (`point` mode toward the target); in range, stand (`idle`).
 //     With no target any more (it died, or left the leash), the enemy returns to the lane at the
@@ -53,7 +57,13 @@ function taunter(ctx: TickContext, e: Readonly<Entity>): number {
   let bestUntil = 0;
   for (const s of e.statuses) {
     const src = ctx.entities.get(s.src);
-    if (s.status === 'taunted' && s.until > ctx.tick && s.until > bestUntil && src !== undefined && src.hp > 0) {
+    if (
+      s.status === 'taunted' &&
+      s.until > ctx.tick &&
+      (s.until > bestUntil || (s.until === bestUntil && s.src < best)) &&
+      src !== undefined &&
+      src.hp > 0
+    ) {
       best = s.src;
       bestUntil = s.until;
     }
@@ -90,11 +100,32 @@ function nearestHero(ctx: TickContext, from: Readonly<Point>, range: number): En
   return best;
 }
 
+/** Distance from `p` to the nearest point of the lane polyline. */
+function laneDistance(p: Readonly<Point>, lane: readonly Point[]): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < lane.length; i++) {
+    const a = lane[i];
+    const b = lane[i + 1] ?? a;
+    if (a === undefined || b === undefined) {
+      continue;
+    }
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+    best = Math.min(best, Math.sqrt(dist2(p, { x: a.x + t * dx, y: a.y + t * dy })));
+  }
+  return best;
+}
+
 /** Picks the target id (0 for none) for a lane enemy; see the file header. */
 function chooseTarget(ctx: TickContext, e: Readonly<Entity>): number {
   const taunted = taunter(ctx, e);
   if (taunted !== 0) {
     return taunted;
+  }
+  if (e.move.waypoint > 0 && laneDistance(e, ctx.game.map.lane) > LEASH_RANGE) {
+    return 0;
   }
   const current = ctx.entities.get(e.attack.target);
   if (current !== undefined && current.hp > 0 && current.kind === 'hero' && within(e, current, LEASH_RANGE)) {

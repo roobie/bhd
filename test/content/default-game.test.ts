@@ -83,3 +83,20 @@ describe('headless defaultGame', () => {
     expect(runHeadless(7).events).toEqual(runHeadless(7).events);
   });
 });
+
+describe('pillar smoke', () => {
+  // Loose bounds that guard against an instant loss or a trivial win with no commands. Retune
+  // consciously when balance changes; do not just widen them.
+  it.each([1, 2, 3])('seed %i: no commands survives wave 3 and does not win', (seed) => {
+    const sim = new Sim({ seed, game: defaultGame() });
+    const events: SimEvent[] = [];
+    for (let i = 0; i < MAX_TICKS && !sim.ended; i++) {
+      events.push(...sim.step());
+    }
+    const wave3 = events.find((e) => e.kind === 'wave' && e.phase === 'start' && e.n === 3);
+    expect(wave3).toBeDefined();
+    const end = events.find((e) => e.kind === 'end');
+    expect(end?.tick ?? Number.POSITIVE_INFINITY).toBeGreaterThan(wave3?.tick ?? 0);
+    expect(events.some((e) => e.kind === 'end' && e.reason === 'victory')).toBe(false);
+  });
+});

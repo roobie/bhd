@@ -80,6 +80,14 @@ describe('friendly fire', () => {
     expect(events).toEqual([{ tick: 10, kind: 'dmg', src: a.id, dst: b.id, amount: 27, tags: ['ff', 'overpen'] }]);
   });
 
+  it('a self hit never applies, even with ff', () => {
+    const { events, ctx, add } = rig();
+    const a = add({ team: 0, kind: 'hero' });
+    expect(dealDamage(ctx, { src: a.id, dst: a.id, amount: 30, tags: ['ff'] })).toBe(0);
+    expect(a.hp).toBe(1000);
+    expect(events).toEqual([]);
+  });
+
   it('ff does not matter across teams', () => {
     const { ctx, add } = rig();
     const a = add({ team: 0, kind: 'hero' });
@@ -227,5 +235,42 @@ describe('heal', () => {
     const ally = add({ team: 0, kind: 'hero' });
     ally.hp = 10;
     expect(heal(ctx, { src: ally.id, dst: ally.id, amount: 5, tags: [] })).toBe(5);
+  });
+});
+
+describe('the Ancient', () => {
+  it('is immune to ff, overpen and any non-leak damage, with no event', () => {
+    const { events, ctx, add } = rig();
+    const ancient = ctx.entities.get(1);
+    if (ancient === undefined) {
+      throw new Error('no ancient');
+    }
+    const hero = add({ team: 0, kind: 'hero' });
+    const foe = add();
+    const before = ancient.hp;
+    for (const src of [hero.id, foe.id, ancient.id]) {
+      for (const tags of [[], ['ff'], ['overpen'], ['ff', 'overpen', 'pierce']]) {
+        expect(dealDamage(ctx, { src, dst: ancient.id, amount: 50, tags })).toBe(0);
+      }
+    }
+    expect(ancient.hp).toBe(before);
+    expect(events).toEqual([]);
+    expect(dealDamage(ctx, { src: foe.id, dst: ancient.id, amount: 2, tags: ['leak'] })).toBe(2);
+    expect(ancient.hp).toBe(before - 2);
+  });
+
+  it('cannot be healed', () => {
+    const { events, ctx, add } = rig();
+    const ancient = ctx.entities.get(1);
+    if (ancient === undefined) {
+      throw new Error('no ancient');
+    }
+    const foe = add();
+    dealDamage(ctx, { src: foe.id, dst: ancient.id, amount: 2, tags: ['leak'] });
+    const { hp } = ancient;
+    events.length = 0;
+    expect(heal(ctx, { src: 2, dst: ancient.id, amount: 5, tags: [] })).toBe(0);
+    expect(ancient.hp).toBe(hp);
+    expect(events).toEqual([]);
   });
 });

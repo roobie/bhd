@@ -34,6 +34,7 @@ Implemented; `npm run ci` green. Awaiting merge / wave close.
 - Criterion 2 (statuses): src/sim/statuses.ts, src/content/statuses.ts; test/combat/statuses.test.ts (apply/refresh max, sorted order, removeStatus, expiry exactly at tick == until, same-tick off order, defaults 2-4 s).
 - Criterion 3 (each effect shows its number): Marked 40->50 then consumed; Exposed armour 6->1 (14->19); Clumped 10->15 for line/cone/splash; Suppressed 3->1.8 and real-sim distance x0.5; combined order 100->175. `npm run ci`: biome, tsc, knip, 283 node tests, 75 browser tests green.
 - Golden regenerated (`npm run golden`): gunner hits on armoured grunts now deal less. test/sim/heroes.test.ts amount 8 -> 7 (grunt armour 1). Old stub test/sim/combat.test.ts removed, superseded by test/combat/.
+- Review fixes: Ancient takes only `leak` damage and cannot be healed; self-hit never applies even with ff (lead default, provisional); tests in test/combat/damage.test.ts. `npm run ci` green, golden regenerated.
 
 ## Harvest
 - [ ] decision: damage order = leak bypass; ff gate (same team, no `ff` tag -> 0 dealt, no event); Marked (+value, consumed); Clumped (+value on line/cone/splash tags, not consumed); armour = max(0, armour - Exposed) unless `pierce`; floor = 20% of the modified amount.

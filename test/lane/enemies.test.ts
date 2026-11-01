@@ -88,6 +88,16 @@ describe('taunt', () => {
     expect(e.move.mode).toBe('point');
   });
 
+  it('breaks an equal-until tie toward the lower src id', () => {
+    const sim = heldSim(oneWave('grunt', 1));
+    const e = firstEnemy(sim);
+    const until = sim.tick + 100;
+    e.statuses.push({ status: 'taunted', until, src: RANGED, value: 0 });
+    e.statuses.push({ status: 'taunted', until, src: TANK, value: 0 });
+    sim.step();
+    expect(e.attack.target).toBe(TANK);
+  });
+
   it('is ignored once the taunter is dead, and falls back to the nearest hero', () => {
     const sim = heldSim(oneWave('grunt', 1));
     const e = firstEnemy(sim);
@@ -115,6 +125,36 @@ describe('leash', () => {
     const { x } = e;
     sim.step();
     expect(e.x).toBeGreaterThan(x);
+  });
+
+  it('is anchored to the lane: kiting cannot pull an enemy past the leash, and it still leaks', () => {
+    const sim = heldSim(oneWave('grunt', 1));
+    const e = firstEnemy(sim);
+    let maxOff = 0;
+    for (let i = 0; i < 600; i++) {
+      place(sim, TANK, e.x, e.y + 3);
+      sim.step();
+      maxOff = Math.max(maxOff, Math.abs(e.y));
+    }
+    expect(maxOff).toBeGreaterThan(LEASH_RANGE / 2);
+    expect(maxOff).toBeLessThanOrEqual(LEASH_RANGE + 0.5);
+    place(sim, TANK, 30, FAR_Y);
+    place(sim, RANGED, 30, FAR_Y);
+    place(sim, SUPPORT, 30, FAR_Y);
+    const events = stepUntil(sim, (ev) => ev.some((x) => x.kind === 'leak'));
+    expect(events.find((x) => x.kind === 'leak')).toMatchObject({ id: e.id });
+  });
+
+  it('leaks after its target dies while fighting at the lane end', () => {
+    const sim = heldSim(oneWave('grunt', 1), 10);
+    const e = firstEnemy(sim);
+    place(sim, TANK, e.x + 3, 0);
+    sim.step();
+    expect(e.attack.target).toBe(TANK);
+    e.move.waypoint = 2;
+    unit(sim, TANK).hp = 0;
+    const events = stepUntil(sim, (ev) => ev.some((x) => x.kind === 'leak'), 5);
+    expect(events.find((x) => x.kind === 'leak')).toMatchObject({ id: e.id, livesLost: 1 });
   });
 
   it('returns to the lane when the target dies, and then leaks as normal', () => {

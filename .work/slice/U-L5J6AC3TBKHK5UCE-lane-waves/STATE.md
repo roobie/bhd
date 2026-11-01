@@ -52,3 +52,4 @@ Implemented; `npm run ci` green. Ready for merge (golden regenerated).
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
+- Review fixes: leash anchored to lane distance (derived, no new field; test/lane/enemies.test.ts), taunt equal-until tie to lower src id, enemy at lane end leaks after target dies; pillar smoke test (seeds 1-3) in test/content. `npm run ci` green (314 node, 75 browser).
