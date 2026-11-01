@@ -9,6 +9,14 @@ import type { ControlContext, ControlState, ReduceResult, UiAction } from './typ
 /** Ticks a hint stays up (2 s at 30 Hz). */
 const HINT_TICKS = 60;
 
+/** Selects `slot`; changing hero drops any pending aim and arming. */
+function withSelected(state: ControlState, slot: number): ControlState {
+  if (slot === state.selected) {
+    return { ...state, aim: undefined };
+  }
+  return { ...state, selected: slot, aim: undefined, arming: initialArming() };
+}
+
 /** Idle controls with hero slot `selected` selected. */
 export function initialControls(selected: number): ControlState {
   return { selected, aim: undefined, cursor: undefined, arming: initialArming(), paused: false, hint: undefined };
@@ -170,7 +178,7 @@ export function reduce(state: ControlState, action: UiAction, ctx: ControlContex
       if (action.slot < 0 || action.slot > 3 || !Number.isInteger(action.slot)) {
         return { state: next, commands: [] };
       }
-      return { state: { ...next, selected: action.slot, aim: undefined }, commands: [] };
+      return { state: withSelected(next, action.slot), commands: [] };
     case 'hover':
       return { state: { ...next, cursor: { x: action.x, y: action.y } }, commands: [] };
     case 'cancel':
@@ -183,7 +191,7 @@ export function reduce(state: ControlState, action: UiAction, ctx: ControlContex
   const allyId = action.kind === 'primary' ? action.unit : undefined;
   const ally = ctx.p.heroes.find((h) => h.id === allyId);
   if (ally !== undefined && next.aim === undefined) {
-    return { state: { ...next, selected: ally.slot }, commands: [] };
+    return { state: withSelected(next, ally.slot), commands: [] };
   }
   const hero = drivenHero(next, ctx);
   if (hero === undefined) {

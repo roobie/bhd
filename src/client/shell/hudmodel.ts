@@ -12,6 +12,7 @@ import {
 } from '../../content/presentation.ts';
 import type { HeroView, IntentView, Perception } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
+import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS } from './arming.ts';
 import type {
   AbilityBarModel,
   AbilityButtonModel,
@@ -32,12 +33,11 @@ import type {
 const HERO_SLOTS = 4;
 const HOTKEYS = 'QWERTY';
 const DEAD_COLOR = '#555555';
-/** Fire-time picker bounds in seconds (arming.ts works in half seconds, 2..10). */
-const FIRE_MIN_SECONDS = 1;
-const FIRE_MAX_SECONDS = 5;
-/** Reserve offset bounds in seconds. */
-const OFFSET_MIN_SECONDS = -5;
-const OFFSET_MAX_SECONDS = 5;
+/** Picker bounds in seconds; arming.ts is the single source and works in half seconds. */
+const FIRE_MIN_SECONDS = ARM_MIN_HALF_SECONDS / 2;
+const FIRE_MAX_SECONDS = ARM_MAX_HALF_SECONDS / 2;
+const OFFSET_MIN_SECONDS = 0;
+const OFFSET_MAX_SECONDS = ARM_MAX_HALF_SECONDS / 2;
 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) {

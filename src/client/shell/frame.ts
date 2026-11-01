@@ -1,5 +1,4 @@
 // Pure frame driver (B-C4FU2FN3T5OXCUTV). Owner: w7-viewmath.
-// STUB from the contracts slice: signatures are final, bodies are not written.
 //
 // Contract of `planFrame`: pure (same inputs, same plan); never reads a clock. The first call
 // (clock.lastMs undefined) plans 0 steps. Otherwise gap = clamp(now - lastMs, 0, maxGapMs); paused

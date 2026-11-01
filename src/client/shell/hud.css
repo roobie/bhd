@@ -383,7 +383,9 @@
     width: var(--col-w);
     height: auto;
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(4, 1fr);
+    grid-template-rows: repeat(4, minmax(0, 96px));
+    align-content: start;
+    background: none;
   }
 
   .hud-root .abilities {

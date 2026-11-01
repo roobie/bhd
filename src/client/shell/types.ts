@@ -279,7 +279,7 @@ export type UiAction =
   | { readonly kind: 'restart' };
 
 /** An ability being aimed. */
-export interface AimState {
+interface AimState {
   readonly slot: number;
   readonly targeting: Targeting;
 }
@@ -307,7 +307,7 @@ export interface ArmingState {
 }
 
 /** A short HUD message ("a second trigger is already armed"). UX only, not a rule. */
-export interface Hint {
+interface Hint {
   readonly text: string;
   /** First tick at which it is no longer shown. */
   readonly untilTick: number;
@@ -368,6 +368,8 @@ export interface SceneInput {
   readonly effects: readonly Effect[];
   /** The app's clock in milliseconds (the only wall time the scene sees). */
   readonly nowMs: number;
+  /** Fractional sim tick (`p.tick + alpha`) for smooth countdown rings. */
+  readonly tickF: number;
 }
 
 /** What `intentfx` needs: the intent markers, the arm preview and the countdown rings. */
@@ -500,7 +502,7 @@ export interface ArmPickerModel {
   readonly maxSeconds: number;
 }
 
-export interface EndModel {
+interface EndModel {
   readonly result: 'win' | 'loss';
   readonly wave: number;
 }

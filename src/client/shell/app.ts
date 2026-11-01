@@ -35,6 +35,7 @@ import type {
   EntitySnap,
   FrameClock,
   HudInput,
+  Insets,
   ShellConfig,
   ShellElements,
   ShellHandle,
@@ -47,6 +48,28 @@ import { INPUT_DELAY_TICKS } from './types.ts';
 type EndInfo = NonNullable<HudInput['end']>;
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Reads the device safe-area insets (css px) through a throwaway probe element. */
+function readSafeInsets(root: HTMLElement): Insets {
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:absolute;visibility:hidden;pointer-events:none;width:0;height:0;' +
+    'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  root.append(probe);
+  const cs = globalThis.getComputedStyle(probe);
+  const px = (v: string): number => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const insets = {
+    top: px(cs.paddingTop),
+    right: px(cs.paddingRight),
+    bottom: px(cs.paddingBottom),
+    left: px(cs.paddingLeft),
+  };
+  probe.remove();
+  return insets;
+}
 
 function fallback(root: HTMLElement, detail: string): void {
   const box = document.createElement('div');
@@ -145,7 +168,8 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     const events = match.step();
     prev = curr;
     curr = takeSnapshot(match.sim, prev);
-    effects = advanceEffects(effects, events, curr, nowMs);
+    // Dead entities are gone from `curr`; the predecessor still has them.
+    effects = advanceEffects(effects, events, prev ?? curr, nowMs);
     for (const e of events) {
       if (e.kind === 'end') {
         end = { reason: e.reason, wave: e.wave };
@@ -174,7 +198,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       const height = Math.max(1, els.canvas.clientHeight);
       renderer.resize(width, height, globalThis.devicePixelRatio || 1);
       const size = { width, height };
-      camera = fitCamera(match.sim.game.map, size, hudInsets(size, NO_INSETS));
+      camera = fitCamera(match.sim.game.map, size, hudInsets(size, readSafeInsets(els.hud)));
     };
     resize();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(resize);
@@ -208,7 +232,21 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       const p = match.perception;
       drawn = interpolate(prev, curr, plan.alpha);
       buffer.clear();
-      buildScene({ map: match.sim.game.map, entities: drawn, p, controls, camera, ui, driven, effects, nowMs }, buffer);
+      buildScene(
+        {
+          map: match.sim.game.map,
+          entities: drawn,
+          p,
+          controls,
+          camera,
+          ui,
+          driven,
+          effects,
+          nowMs,
+          tickF: p.tick + plan.alpha,
+        },
+        buffer,
+      );
       renderer.draw(buffer, camera, PALETTE.background);
       if (hudDirty || hudTick !== match.tick) {
         hudTick = match.tick;

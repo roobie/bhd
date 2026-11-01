@@ -26,16 +26,19 @@ Out: the solo loop and switching the driven hero mid-game (8a); Penitent and Psy
 See DESIGN.md. The sim stays pure and deterministic, and the client only reads state and submits commands. Kit-agnostic: ability buttons, resource bars and statuses come from Perception plus content data. No new dependencies (lit-html is present). Biome with all rules as errors, TS strict, max 4 params. No gameplay-pinning tests (D-4E4QRJ7N6LIGZDSD). The debug viewer stays working for B on Pages. Sonnet subagents implement, Opus reviews (CLAUDE.md).
 
 ## Now
-Design written; awaiting lead review before execute.
+Step 3 integration done on branch worktree-agent-ac90591c314043633: knip entries removed, loose ends fixed, demo screenshots taken; awaiting Opus review and merge.
 
 ## Next
 - Lead reviews DESIGN.md, sends the two open questions to B (non-blocking), and moves to execute.
 - Step 1: w7-contracts slice.
 - Step 2: parallel slices w7-gl, w7-viewmath, w7-scene, w7-input, w7-hud, w7-arming, w7-shell.
-- Step 3: lead integration, demo and screenshots, Opus review.
+- Opus review of step 3, merge, then finalize (promote Harvest, close B-C4FU2FN3T5OXCUTV).
+- Not yet done: bot-reserves-against-human-armed-pull demo; touch emulation run; firefox/webkit screenshots.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+- step 3 ci: `npm run ci` exit 0; 765 node tests, 117 browser tests; `npm run golden` leaves test/determinism/golden.ts unchanged.
+- screenshots (chromium, swiftshader, `play.html#seed=7&drive=0`, preview build, 20 s run, then key 1, right-click move, Q aim, click cast) in /tmp/claude-1001/-home-agent1-devel-bhd/4052f7d7-39f0-46b6-914e-7f7736da79b3/scratchpad/w7-shots/: portrait-{0-start,1-t20,2-aim,3-after}.png (390x844), landscape-{...}.png (1280x720), viewer.png.
+- console: no errors or warnings in play.html (both sizes) or index.html; index.html has the "play this seed" link.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -51,7 +54,15 @@ Design written; awaiting lead review before execute.
 - [ ] backlog: replay driven games by feeding logged human cmd events back into the viewer/replay
 - [ ] backlog: B-C4FU2FN3T5OXCUTV is consumed by w7-viewmath (close it at finalize)
 
+- [ ] learning: advanceEffects was wired with the post-step snapshot (death effects would never place); app passes the predecessor
+- [ ] learning: arming offset bounds are 0..5 s (half-seconds 0..10), not the +-5 s the HUD guessed; hud now derives all picker bounds from ARM_*_HALF_SECONDS
+- [ ] learning: safe-area insets must be read through a probe element's computed padding (custom properties holding env() are not resolved)
+- [ ] backlog: wave preview shows "?" in the top bar at the start of the demo; check what Perception offers
+- [ ] backlog: units are small on the landscape fit (heroes ~24 px); consider a larger pixel floor or zoom
+- [ ] backlog: touch emulation, firefox and webkit screenshots not yet taken
+
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 design drafted by an Opus planner (purpose, scope, criteria, slices)
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 step 3 integration (knip, scene mock, tickF, effects snapshot, picker bounds, arming reset, safe-area, screenshots)

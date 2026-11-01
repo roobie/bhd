@@ -7,7 +7,7 @@
 import type { Camera, ControlState, EntitySnap, UiAction, Vec2 } from './types.ts';
 
 /** Ability hotkeys by slot: Q W E R. */
-export const ABILITY_KEYS: readonly string[] = ['q', 'w', 'e', 'r'];
+const ABILITY_KEYS: readonly string[] = ['q', 'w', 'e', 'r'];
 
 /** The parts of a KeyboardEvent the keymap reads. */
 export interface KeyInput {

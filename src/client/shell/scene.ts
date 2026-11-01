@@ -196,7 +196,7 @@ function decals(input: SceneInput, out: InstanceBuffer): void {
       selected: input.controls.selected,
       driven: input.driven,
       ui: input.ui,
-      tickF: input.p.tick,
+      tickF: input.tickF,
       pxPerUnit: input.camera.pxPerUnit,
     },
     out,

@@ -1,7 +1,7 @@
 // Scene invariants on the instance buffer (D-4E4QRJ7N6LIGZDSD: no gameplay numbers pinned).
 // intentfx is a separate slice; it is replaced by a no-op here so the scene is tested alone.
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createInstanceBuffer } from '../../../src/client/gl/instances.ts';
 import { buildScene, MIN_BODY_PX } from '../../../src/client/shell/scene.ts';
 import {
@@ -19,8 +19,6 @@ import { defaultPresentation } from '../../../src/content/presentation.ts';
 import { createMemory } from '../../../src/perception/memory.ts';
 import { perceive } from '../../../src/perception/perceive.ts';
 import { Sim } from '../../../src/sim/sim.ts';
-
-vi.mock('../../../src/client/shell/intentfx.ts', () => ({ intentInstances: vi.fn() }));
 
 const game = defaultGame();
 const p = perceive(new Sim({ seed: 1, game }), createMemory(defaultPerception()));
@@ -87,6 +85,7 @@ function input(entities: EntitySnap[], pxPerUnit = 10, over: Partial<SceneInput>
     driven: [0],
     effects: [],
     nowMs: 100,
+    tickF: p.tick,
     ...over,
   };
 }
