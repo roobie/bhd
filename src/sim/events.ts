@@ -80,6 +80,17 @@ interface ResourceEvent extends EventBase {
 }
 
 /**
+ * The Psyker's Discharge backlash fired (sim/heroes/psyker.ts): `warp` is his Warp when it was
+ * rolled, `damage` the per-target hit (`60 + warp`, tagged `ff` `splash`; the `dmg` events follow).
+ */
+interface BacklashEvent extends EventBase {
+  readonly kind: 'backlash';
+  readonly hero: number;
+  readonly warp: number;
+  readonly damage: number;
+}
+
+/**
  * `killer` is the entity id that took it to 0 hp, 0 if unknown. A hero is not removed: it stays
  * downed (hp 0) until a `respawn` event; a `death` is emitted once per down.
  */
@@ -158,6 +169,7 @@ export type SimEvent =
   | StatusEvent
   | AbilityEvent
   | ResourceEvent
+  | BacklashEvent
   | DeathEvent
   | RespawnEvent
   | LeakEvent

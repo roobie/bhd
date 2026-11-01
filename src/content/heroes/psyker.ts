@@ -12,10 +12,12 @@ interface WarpDef {
   /** Spell power bonus per Warp point (0.01 = +1%). */
   readonly powerPerPoint: number;
   /**
-   * Warp gained per basic-attack hit. Knob (B has not answered PLAN risk 1): with only Lash (+20
-   * every 10 s) against 4/s decay, Warp never builds, so basic attacks feed it. Default 4.
+   * Warp gained per basic-attack hit (settled by B): with only Lash (+20 every 10 s) against
+   * 4/s decay, Warp never builds, so basic attacks feed it.
    */
   readonly perHit: number;
+  /** Seconds after a cast during which Warp does not decay ("decays while he is not casting"). */
+  readonly decayDelay: number;
 }
 
 interface BacklashDef {
@@ -23,7 +25,7 @@ interface BacklashDef {
   readonly freeBelow: number;
   /** Chance per Warp point above `freeBelow` (0.012 = 1.2%), rolled per cast on the kit RNG. */
   readonly chancePerPoint: number;
-  /** Discharge: `baseDamage + Warp` as `ff` `splash` within `radius` of him. */
+  /** Discharge: `baseDamage + Warp` as `ff` `splash` within `radius` of him (the only outcome). */
   readonly baseDamage: number;
   readonly radius: number;
 }
@@ -62,7 +64,7 @@ export function psykerDef(): PsykerDef {
     armour: 0,
     speed: 4,
     attack: { damage: 14, range: 11, cooldown: 1 },
-    warp: { max: 100, decayPerSecond: 4, powerPerPoint: 0.01, perHit: 4 },
+    warp: { max: 100, decayPerSecond: 4, powerPerPoint: 0.01, perHit: 4, decayDelay: 1 },
     backlash: { freeBelow: 50, chancePerPoint: 0.012, baseDamage: 60, radius: 4 },
     lash: {
       cooldown: 10,
