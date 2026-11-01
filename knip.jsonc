@@ -5,12 +5,15 @@
   // Wave w3-reporter contracts: the stubs and the shared types have no importers until the step-2
   // slices wire them into worker.ts and cli.ts. Remove each line as its slice lands.
   "ignore": [
-    "src/reporter/pool.ts",
     "src/reporter/stats.ts",
     "src/reporter/html.ts",
     "src/reporter/table.ts",
     "src/reporter/view.ts",
     "src/reporter/metrics/registry.ts"
   ],
-  "ignoreIssues": { "src/reporter/types.ts": ["exports", "types"] }
+  "ignoreIssues": {
+    "src/reporter/types.ts": ["exports", "types"],
+    // readLogFile is the CLI slice's loadLog.
+    "src/reporter/store.ts": ["exports"]
+  }
 }
