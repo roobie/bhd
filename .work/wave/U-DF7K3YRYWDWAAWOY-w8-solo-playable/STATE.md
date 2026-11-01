@@ -32,17 +32,21 @@ Out: full kits (B-7YXA5H4O3R2J4NG2), Rift (B-C4AZ5S2JPOP24OUM), bargains (wave 9
 Decisions D-IL3SV332IUGDBPFW, D-ENVNBTY5YVUM7NAN, D-4TKP7DQRMLBK6K7W, D-XVHJGA432FCOHEEU, D-EVOB2RC2MXQWJYBE, D-MFT4K7D4HC3TOYPH, D-2BOISI7VSLW2ZX3F, D-ZAQVH22UMUMFOQBV, D-IYLBKMAIQNR7GE3R, D-H2FHQUWM3IJDUPCU, D-ZQ7UANKFTPZIMMZW. No gameplay pinning (D-4E4QRJ7N6LIGZDSD). Sonnet implements in worktrees; Opus reviews; only the lead pushes and regenerates golden.
 
 ## Now
-Step 3 integration in progress: golden replaced by cross-runtime check, step-1 review fixes, wiring, evidence runs.
+Step 3 integration done and green: cross-runtime check, step-1 review fixes, wiring, evidence runs, screenshots.
 
 ## Next
 - Step 2 slices A–G in parallel after step 1 integrates.
 - Step 3 integration, golden regen, 8d reporter review with B.
 
 ## Evidence
+- 2026-11-02 `npm run ci` exit 0 after step 3 wiring (log in scratchpad w8-int-ci.log); node 906 tests, browser 129 tests x3 browsers
+- 2026-11-02 all-bot games, 12 seeds each (scratchpad w8-int/evidence.ts, not asserted in tests): director mode 88 pull posts, 26 reservations, 18 fulfils, 2 wombos (seeds 2 and 9) by foldPayoffs, 517 cash-ins; 10 of 12 lost at wave 14-15, seeds 3 and 11 won. schedule mode (hold-the-line): 72 posts, 12 to 36 reservations, 0 fulfils, 0 wombos, all lost at wave 12. schedule (greedy): 168 posts, 24 reservations, 0 fulfils.
+- 2026-11-02 schedule-mode wombo shortfall diagnosed, no clear bot bug: first pull's Lash finds the clump gone after its 4.5 s lead; later pulls fire but Martyrdom is on cooldown and the Gunner's reserved Furnace overheats first (a heat gate on the reservation only removed reservations, so it was reverted)
+- 2026-11-02 screenshots at 390x844 and 1280x720 in scratchpad w8-int/: normal game at 90 s, callout, help for Penitent and Psyker, downed countdown; no clipping found
 
 ## Harvest
 - [x] decision: determinism spec is cross-runtime equality at test time, no committed golden (D-V4TA7WE5J4QC24D3, supersedes D-NMSA2YZXKCODLCC2)
-- [ ] decision: a blocked enemy swing costs a full attack period (block event = one blocked hit); callWave refused in master mode and throttled by rules.callWaveMinSeconds
+- [x] decision: D-3F64ED62IYC4SCZH: a blocked enemy swing costs a full attack period (block event = one blocked hit); callWave refused in master mode and throttled by rules.callWaveMinSeconds
 - [ ] decision: B (2026-11-01): Psyker basic-attack hits add Warp (about +4); Martyrdom nova hits enemies only (PLAN §3 Q1, Q2)
 
 ## Log
@@ -52,3 +56,4 @@ Step 3 integration in progress: golden replaced by cross-runtime check, step-1 r
 - 2026-11-02 step 1 engine prep merged; golden regenerated once; step 2 slices opened
 - 2026-11-02 step 3: golden.ts/regen.ts/npm run golden removed; browser project gets a Node-computed reference via globalSetup + inject (D-V4TA7WE5J4QC24D3)
 - 2026-11-02 step 3: step-1 review fixes (downGunner, callWave throttle, block/despawn events, fallen in team totals, intent drop on down, respawn first, damageTaken clamp)
+- 2026-11-02 step 3: feedback mounted in main (overlay layer + camera projection), help gains Resources and Rules, dead cards use respawnText/UI_TEXT, reporter gains combo.payoffs; all-bot evidence and screenshots recorded
