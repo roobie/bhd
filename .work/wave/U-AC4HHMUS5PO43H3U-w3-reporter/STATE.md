@@ -1,42 +1,39 @@
 ---
-phase: initialize
+phase: execute
 parent: U-AK7QYARYTSKYZFTE
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - '`npm run bhd -- report --base main --cand <heat-tweak branch> --tag gunner.heat` writes an HTML report and prints a summary table'
+  - The report shows explainable movement for the heat tweak and flags at least one mover outside the change
+  - '`bhd view <log> --tick T` opens the logged game in the debug viewer at T, hash-verified'
+  - npm run ci green; batch output is byte-identical across worker counts
 ---
 
 # wave/w3-reporter
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Ship the M1 deliverable: a paired diff reporter that shows what a change moves (project DESIGN §6.5, §7 wave 5 items 5a–5f).
 
 ## Scope
-In: TODO
-Out: TODO
+In: headless runner and worker pool, event-log store, the §6.7 metrics, paired bootstrap diff, HTML and CLI report, replay links into the debug viewer.
+Out: WebGL replay renderer (wave 7), the "adapted" column, canonical JSON for goldens, WebRTC fingerprint handshake.
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+See DESIGN.md. Determinism §6.1; Node code only in `src/reporter/`; no gameplay-pinning tests (D-4E4QRJ7N6LIGZDSD).
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Step 1: contracts slice.
 
 ## Next
-- TODO
+- Step 2: parallel slices runner, metrics, stats+report, cli, replay.
+- Step 3: lead integration and the heat-tweak demo.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
 
 ## Harvest
-<!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
-     - [ ] decision: …   → record decision
-     - [ ] learning: …   → record learning
-     - [ ] backlog: …    → record backlog
-     - [ ] process: …    → retrospective (change the process, or drop it)
--->
 
 ## Log
-- 2026-11-01 initialized
+- 2026-11-01 initialized; design from an Opus planner; lead decisions: doctrine noise 0.05, intent fulfil as combo proxy
+- 2026-11-01 phase initialize → execute
