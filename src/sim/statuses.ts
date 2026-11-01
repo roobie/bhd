@@ -1,5 +1,4 @@
-// Status system. Owner: combat-core. STUB: apply / refresh / expire, no gameplay effect except
-// `effectiveSpeed` (Suppressed slow is combat-core's to implement).
+// Status system. Owner: combat-core: apply / refresh / expire / remove, and the speed modifiers.
 // Instances live in `Entity.statuses`, kept sorted by (status id text, src) so hashing and
 // iteration are deterministic; at most one instance per (status, src).
 
@@ -22,13 +21,16 @@ interface StatusApplication {
 }
 
 /**
- * Applies a status to `dst` (refreshes an existing instance from the same src).
+ * Applies a status to `dst`. At most one instance per (status, src): re-applying from the same src
+ * refreshes it (`until` = max of old and new, `value` = max of old and new, no new `status` event).
+ * Different srcs keep separate instances; readers use the max value (`statusValue`), so effects
+ * never stack. No-op on missing or dead targets and on durations under one tick.
  * `durationTicks` must be a whole number of ticks (use `ticks()`).
  */
 export function applyStatus(ctx: TickContext, dst: number, app: StatusApplication): void {
   const { status, src, durationTicks, value } = app;
   const target = ctx.entities.get(dst);
-  if (target === undefined) {
+  if (target === undefined || target.hp <= 0 || !(durationTicks >= 1)) {
     return;
   }
   const until = ctx.tick + durationTicks;
@@ -43,7 +45,7 @@ export function applyStatus(ctx: TickContext, dst: number, app: StatusApplicatio
   const existing = target.statuses[at];
   if (existing !== undefined && compare(status, src, existing) === 0) {
     existing.until = Math.max(existing.until, until);
-    existing.value = value;
+    existing.value = Math.max(existing.value, value);
     return;
   }
   target.statuses.splice(at, 0, { status, until, src, value });
@@ -87,11 +89,15 @@ export function removeStatus(ctx: TickContext, dst: number, status: string, src?
 
 /**
  * Movement speed (world units per tick) after statuses. `rooted` (the Brace mechanism, also usable
- * by enemy roots) means 0 and blocks hero move commands. STUB: no other modifiers yet (the
- * Suppressed slow is combat-core's).
+ * by enemy roots) means 0 and blocks hero move commands. `suppressed` removes a fraction of the
+ * speed equal to its largest value, clamped to [0, 1]. `taunted` does not affect speed.
  */
 export function effectiveSpeed(e: Readonly<Entity>): number {
-  return hasStatus(e, 'rooted') ? 0 : e.speed;
+  if (hasStatus(e, 'rooted')) {
+    return 0;
+  }
+  const slow = Math.min(1, Math.max(0, statusValue(e, 'suppressed')));
+  return e.speed * (1 - slow);
 }
 
 /** Expires statuses whose time is up (tick order: after waves, before movement). */

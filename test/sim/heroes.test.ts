@@ -28,8 +28,8 @@ describe('hero kit stubs', () => {
     const events = stepN(sim, 30);
     const hits = dmgBy(events, GUNNER);
     expect(hits.length).toBeGreaterThan(1);
-    expect(hits.every((e) => e.kind === 'dmg' && e.dst === 6 && e.amount === 8)).toBe(true);
-    // 0.25 s cooldown = 8 ticks: hits are 9 ticks apart (cooldown counts down, then fires).
+    expect(hits.every((e) => e.kind === 'dmg' && e.dst === 6 && e.amount === 7)).toBe(true);
+    // grunt armour 1 takes 8 down to 7. 0.25 s cooldown = 8 ticks: hits are 9 ticks apart (cooldown counts down, then fires).
     expect(hits[1]?.tick).toBe((hits[0]?.tick ?? 0) + ticks(0.25) + 1);
   });
 
