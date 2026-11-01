@@ -254,7 +254,7 @@ export class Match {
       slot: s.slot,
       hero: s.hero,
       doctrine: s.doctrine.id,
-      post: { ...(s.bot.status?.()?.post ?? s.post) },
+      post: { ...s.post },
       leash: s.doctrine.leash,
       decisions: s.decisions,
     }));
@@ -313,16 +313,18 @@ export class Match {
       me,
       doctrine: seat.doctrine,
       weights: seat.weights,
-      rng: seat.rng,
+      delay: seat.delay,
       tick,
       inFlight: inFlight(seat, tick),
     });
     const views: DecisionView[] = [];
     const seen = new Map<string, string>();
+    const ids = new Set<string>();
     for (const d of decisions) {
-      if (seen.has(d.id)) {
+      if (ids.has(d.id)) {
         throw new Error(`seat ${seat.slot}: duplicate decision id '${d.id}' in one think`);
       }
+      ids.add(d.id);
       views.push(this.#resolve(seat, d, { tick, seen, out }));
     }
     seat.prev.clear();
@@ -337,7 +339,11 @@ export class Match {
     const prev = seat.prev.get(d.id);
     const pick = decide(d, seat.doctrine, seat.rng, prev);
     const picked = pick.option.id;
-    seen.set(d.id, picked);
+    // Only a real choice (2+ options) is remembered: a lone option is not a pick, so a later
+    // decision that gains options emits its first `choice`.
+    if (d.options.length >= 2) {
+      seen.set(d.id, picked);
+    }
     const options = d.options.map((o, i) => ({ id: o.id, score: pick.scores[i] ?? 0 }));
     const old = seat.decisions.find((v) => v.id === d.id);
     const changed = prev !== picked;
@@ -345,7 +351,7 @@ export class Match {
       out.push({ tick, kind: 'choice', hero: seat.hero, decision: d.id, options, picked });
     }
     this.#submit(seat, pick.option.commands, tick);
-    return { id: d.id, options, picked, since: changed || old === undefined ? tick : old.since };
+    return { id: d.id, options, picked, since: old?.picked === picked ? old.since : tick };
   }
 
   #thinkDirector(dir: DirectorSeat, tick: number): void {

@@ -45,6 +45,24 @@ export interface GunnerView {
   /** No fire for now (overheat or forced vent). */
   readonly locked: boolean;
   readonly furnaceActive: boolean;
+  /** Basic attack range, free stance. */
+  readonly attackRange: number;
+  /** Basic attack range while braced. */
+  readonly bracedRange: number;
+  /** Cosine of the half angle of the braced firing arc. */
+  readonly arcCos: number;
+  /** Cosine of the half angle of the Vent cone. */
+  readonly ventCos: number;
+  /** Cosine of the half angle of the Suppressing Fire cone. */
+  readonly suppressCos: number;
+  /** Half the width of the overpenetration line. */
+  readonly lineHalfWidth: number;
+  /** Heat the Suppressing Fire cast adds (0..1). */
+  readonly suppressHeat: number;
+  /** Above this heat, rounds pierce armour (0..1). */
+  readonly pierceAbove: number;
+  /** Above this heat, rounds overpenetrate into allies (0..1). */
+  readonly overpenAbove: number;
 }
 
 type HeroRole = 'gunner' | 'tank' | 'ranged' | 'support';
@@ -199,8 +217,8 @@ export interface MasterView {
   readonly budget: number;
   /** The pending wave. */
   readonly pending: readonly WaveGroupView[];
-  /** Cost per unit of each summonable enemy def. */
-  readonly costs: readonly { readonly def: string; readonly cost: number }[];
+  /** Cost per unit of each summonable enemy def, and the first wave it may be bought for. */
+  readonly costs: readonly { readonly def: string; readonly cost: number; readonly unlockWave: number }[];
   /** First tick a `send` is allowed (the previous wave's start plus the minimum interval). */
   readonly sendAt: number;
   /** Tick the next wave starts by itself. */

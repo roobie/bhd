@@ -16,7 +16,7 @@
 
 import { gunnerWeights } from '../content/bots/gunner.ts';
 import type { Point } from '../content/types.ts';
-import type { EnemyView, HeroView, IntentView } from '../perception/types.ts';
+import type { EnemyView, GunnerView, HeroView, IntentView } from '../perception/types.ts';
 import type { Command } from '../sim/commands.ts';
 import { ticks } from '../sim/time.ts';
 import type { BotCtx, Brain, Decision, Option, SeatInfo } from './types.ts';
@@ -36,6 +36,8 @@ interface Frame {
   readonly ctx: BotCtx;
   readonly mem: Memory;
   readonly me: HeroView;
+  /** The kit's numbers as perception reports them (ranges, cones, heat bands). */
+  readonly g: GunnerView;
   readonly heat: number;
   readonly spin: number;
   readonly braced: boolean;
@@ -115,9 +117,9 @@ function pickFocus(ctx: BotCtx, view: number): Point | undefined {
 }
 
 /** Allies standing in the line to the nearest enemy, from positions (the kit aims at the nearest hostile). */
-function estimateLine(ctx: BotCtx, w: (key: string) => number): number {
+function estimateLine(ctx: BotCtx, g: GunnerView, allyRadius: number): number {
   const { me } = ctx;
-  const range = w('gunner.geo.range');
+  const range = g.attackRange;
   let target: EnemyView | undefined;
   let best = range;
   for (const e of ctx.p.enemies) {
@@ -133,7 +135,7 @@ function estimateLine(ctx: BotCtx, w: (key: string) => number): number {
   const len = Math.max(1e-9, best);
   const ux = (target.x - me.x) / len;
   const uy = (target.y - me.y) / len;
-  const reach = w('gunner.geo.lineHalfWidth') + w('gunner.geo.allyRadius');
+  const reach = g.lineHalfWidth + allyRadius;
   let n = 0;
   for (const h of ctx.p.heroes) {
     if (h.id === me.id) {
@@ -148,11 +150,10 @@ function estimateLine(ctx: BotCtx, w: (key: string) => number): number {
   return n;
 }
 
-function frameOf(ctx: BotCtx, mem: Memory): Frame {
+function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
   const { me, p } = ctx;
   const w = (key: string): number => weight(ctx.weights, key, DEFAULTS[key] ?? 0);
-  const g = me.gunner;
-  const braced = g?.braced ?? false;
+  const { braced } = g;
   const focus = pickFocus(ctx, w('gunner.geo.view'));
   if (braced && !mem.braced) {
     mem.braceAim = mem.lastAim ?? focus;
@@ -162,23 +163,24 @@ function frameOf(ctx: BotCtx, mem: Memory): Frame {
     mem.lastAim = focus;
   }
   mem.braced = braced;
-  const range = w(braced ? 'gunner.geo.bracedRange' : 'gunner.geo.range');
+  const range = braced ? g.bracedRange : g.attackRange;
   const listed = me.lineAllies.length;
   return {
     ctx,
     mem,
     me,
-    heat: g?.heat ?? 0,
-    spin: g?.spin ?? 0,
+    g,
+    heat: g.heat,
+    spin: g.spin,
     braced,
     unbracing: !braced && me.statuses.some((s) => s.status === 'rooted'),
-    locked: g?.locked ?? false,
-    furnace: g?.furnaceActive ?? false,
+    locked: g.locked,
+    furnace: g.furnaceActive,
     enemies: p.enemies,
     inRange: p.enemies.filter((e) => dist(me, e) <= range),
     focus,
     aim: braced ? (mem.braceAim ?? focus) : focus,
-    lineAllies: listed > 0 || me.target !== 0 ? listed : estimateLine(ctx, w),
+    lineAllies: listed > 0 || me.target !== 0 ? listed : estimateLine(ctx, g, w('gunner.geo.allyRadius')),
     w,
   };
 }
@@ -216,13 +218,13 @@ function idle(id: string, value: number): Option {
 
 /** Where advancing would put her: toward the focus, stopping at 80% of range, inside the leash. */
 function advanceStand(f: Frame): Point {
-  const { me, w } = f;
+  const { me } = f;
   const { post } = f.mem;
   const leash = Math.max(1, f.ctx.doctrine.leash);
   let stand: Point = { x: me.x, y: me.y };
   if (f.focus !== undefined) {
     const d = dist(me, f.focus);
-    const walk = d - w('gunner.geo.range') * 0.8;
+    const walk = d - f.g.attackRange * 0.8;
     if (walk > 0) {
       stand = { x: me.x + ((f.focus.x - me.x) * walk) / d, y: me.y + ((f.focus.y - me.y) * walk) / d };
     }
@@ -280,7 +282,7 @@ function stanceDecision(f: Frame): Decision | undefined {
     return undefined;
   }
   const { doctrine } = ctx;
-  const arc = inCone(me, f.aim, f.enemies, { range: w('gunner.geo.bracedRange'), cos: w('gunner.geo.arcCos') });
+  const arc = inCone(me, f.aim, f.enemies, { range: f.g.bracedRange, cos: f.g.arcCos });
   const flank = f.enemies.filter(
     (e) => dist(me, e) <= w('gunner.geo.flankRange') && !arc.some((a) => a.id === e.id),
   ).length;
@@ -321,8 +323,8 @@ function fireDecision(f: Frame): Decision | undefined {
   const n = f.inRange.length;
   const extra = Math.min(Math.max(0, n - 1), w('gunner.fire.clumpCap'));
   const value = n === 0 ? 0 : w('gunner.fire.value') * (1 + w('gunner.fire.clump') * extra);
-  const overpen = w('gunner.heat.overpenAbove');
-  const pierce = w('gunner.heat.pierceAbove');
+  const overpen = f.g.overpenAbove;
+  const pierce = f.g.pierceAbove;
   // Pillar 1: the line only hits allies once rounds overpenetrate (heat above the band, or Furnace Heart).
   const line =
     f.furnace || f.heat > overpen ? 1 : w('gunner.fire.anticipation') * clamp01((f.heat - pierce) / (overpen - pierce));
@@ -363,8 +365,8 @@ function ventDecision(f: Frame): Decision | undefined {
   if (pending(f, (c) => c.kind === 'ability' && c.slot === SLOT.vent)) {
     return undefined;
   }
-  const hit = inCone(me, f.aim, f.enemies, { range: w('gunner.geo.ventRange'), cos: w('gunner.geo.ventCos') });
-  const overpen = w('gunner.heat.overpenAbove');
+  const hit = inCone(me, f.aim, f.enemies, { range: ab.range, cos: f.g.ventCos });
+  const overpen = f.g.overpenAbove;
   const value =
     w('gunner.vent.damage') * f.heat * Math.min(hit.length, 6) +
     w('gunner.vent.urgency') * clamp01((f.heat - overpen) / (1 - overpen)) +
@@ -384,9 +386,9 @@ function ventDecision(f: Frame): Decision | undefined {
 
 // ---------------------------------------------------------------- gunner.suppress
 
-function suppressAim(f: Frame): { readonly aim: Point | undefined; readonly count: number } {
-  const { me, w } = f;
-  const shape = { range: w('gunner.geo.suppressRange'), cos: w('gunner.geo.suppressCos') };
+function suppressAim(f: Frame, range: number): { readonly aim: Point | undefined; readonly count: number } {
+  const { me } = f;
+  const shape = { range, cos: f.g.suppressCos };
   const fresh = f.enemies.filter((e) => !e.statuses.some((s) => s.status === 'suppressed'));
   if (f.braced) {
     return { aim: f.aim, count: inCone(me, f.aim, fresh, shape).length };
@@ -414,11 +416,11 @@ function suppressDecision(f: Frame): Decision | undefined {
   if (pending(f, (c) => c.kind === 'ability' && c.slot === SLOT.suppress)) {
     return undefined;
   }
-  const { aim, count } = suppressAim(f);
+  const { aim, count } = suppressAim(f, ab.range);
   const value =
     w('gunner.suppress.perEnemy') * Math.min(count, 8) + (count > 0 ? w('gunner.suppress.threat') * me.threat : 0);
-  const heatCost = 0.1;
-  const hot = Math.max(0, f.heat - w('gunner.heat.pierceAbove'));
+  const heatCost = f.g.suppressHeat;
+  const hot = Math.max(0, f.heat - f.g.pierceAbove);
   const price = w('gunner.suppress.heatPrice') * heatCost * (1 + 4 * hot);
   // Suppressing Fire adds heat: never into an overheat lockout.
   const overheat = f.heat + heatCost >= 1 && !f.furnace ? w('gunner.reserve.heldAbility') : 0;
@@ -452,7 +454,7 @@ function furnaceValue(f: Frame): number {
   if (ultimate === 'free') {
     return crowd;
   }
-  const pierce = w('gunner.heat.pierceAbove');
+  const pierce = f.g.pierceAbove;
   const heat = w('gunner.furnace.heat') * clamp01((f.heat - pierce) / (1 - pierce));
   const distress = w('gunner.furnace.distress') * (ctx.p.team.lowHeroes + (ctx.p.ancient.hpFrac < 0.5 ? 1 : 0));
   if (ultimate === 'spike') {
@@ -496,7 +498,8 @@ function pullToReserve(f: Frame): IntentView | undefined {
       i.intentKind === 'pull' &&
       !i.fired &&
       i.by !== f.me.id &&
-      i.fireTick - f.ctx.tick > margin &&
+      // The reservation applies after the seat's reaction delay, and must land before the intent fires.
+      i.fireTick > f.ctx.tick + f.ctx.delay + margin &&
       !i.reservers.includes(f.me.id) &&
       !pending(f, (c) => c.kind === 'intent' && c.op === 'reserve' && c.intent === i.id),
   );
@@ -553,7 +556,10 @@ function reserveDecision(f: Frame): Decision | undefined {
 export const gunnerBrain: Brain<Memory> = {
   init: (seat: SeatInfo) => ({ post: seat.post, lastAim: undefined, braceAim: undefined, braced: false }),
   think: (ctx, mem) => {
-    const f = frameOf(ctx, mem);
+    if (ctx.me.gunner === undefined) {
+      return [];
+    }
+    const f = frameOf(ctx, mem, ctx.me.gunner);
     const all = [
       postDecision(f),
       stanceDecision(f),

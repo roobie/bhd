@@ -27,7 +27,7 @@ import { botPanel, directorPanel } from './panels.ts';
 import { buildMatch } from './setup.ts';
 
 const SPEEDS = [0.5, 1, 2, 4, 8] as const;
-/** Events kept for the log, and lines shown after filtering. */
+/** Log lines kept per category, and lines shown after filtering. */
 const LOG_KEPT = 400;
 const LOG_SHOWN = 24;
 /** Tension is sampled every this many ticks, up to SPARK_SAMPLES samples. */

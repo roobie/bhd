@@ -87,6 +87,14 @@ function hasPendingPost(ctx: BotCtx): boolean {
   return ctx.inFlight.some((f) => f.cmd.kind === 'intent' && f.cmd.op === 'post' && f.cmd.hero === ctx.me.id);
 }
 
+/** My own pull intent is posted (or on its way) and has not fired yet. */
+function ownPullPending(ctx: BotCtx): boolean {
+  return (
+    ctx.p.intents.some((i) => i.by === ctx.me.id && i.intentKind === 'pull' && !i.fired) ||
+    ctx.inFlight.some((f) => f.cmd.kind === 'intent' && f.cmd.op === 'post' && f.cmd.hero === ctx.me.id)
+  );
+}
+
 function hasLiveIntent(ctx: BotCtx): boolean {
   return ctx.p.intents.some((i) => i.by === ctx.me.id);
 }
@@ -391,7 +399,9 @@ function supportPull(ctx: BotCtx): Decision[] {
       cost,
       commands: busy ? [] : [post],
     });
-  } else {
+  } else if (!ownPullPending(ctx)) {
+    // Casting directly while its own posted pull is still to fire would waste the cooldown the
+    // announced pull (and the Gunner's reservation) relies on.
     options.push(
       castOption(ctx, 'cast', {
         value: base * w(ctx, 'standin.support.pull.directFactor'),

@@ -141,7 +141,7 @@ function drawCombos(s: OverlayScene): void {
 function drawIntents(s: OverlayScene): void {
   s.ctx.lineWidth = 1;
   for (const i of s.p.intents) {
-    const col = intentColor(intentState(i));
+    const col = intentColor(intentState(i, s.p.tick));
     s.ctx.strokeStyle = col;
     s.ctx.fillStyle = col;
     const c = toScreen(s.fit, i.x, i.y);
@@ -174,8 +174,11 @@ function drawOverpen(s: OverlayScene): void {
     if (t === undefined) {
       continue;
     }
+    const d = Math.sqrt((t.x - h.x) ** 2 + (t.y - h.y) ** 2);
+    const reach = h.gunner.braced ? h.gunner.bracedRange : h.gunner.attackRange;
+    const k = d < 1e-9 ? 0 : reach / d;
     s.ctx.strokeStyle = h.lineAllies.length > 0 ? OVERPEN_BLOCKED : OVERPEN_CLEAR;
-    line(s, h, { x: h.x + (t.x - h.x) * 1.3, y: h.y + (t.y - h.y) * 1.3 });
+    line(s, h, { x: h.x + (t.x - h.x) * k, y: h.y + (t.y - h.y) * k });
   }
 }
 

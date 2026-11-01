@@ -32,6 +32,7 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
+- review fixes (9 findings): `npm run ci` exit 0, golden regenerated
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -45,3 +46,4 @@ w2-contracts slice (U-LJEDSZA4LC22MX2H) in progress.
 ## Log
 - 2026-11-01 initialized; design from Opus planning draft, lead defaults on B's open questions
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 review fixes (reserve vs seat delay, silent first choice, support pull intent, gunner geometry from perception, dead config, viewer expired/overpen/log, unlockWave in MasterView.costs)

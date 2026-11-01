@@ -51,8 +51,6 @@ interface MixEntry {
   readonly def: string;
   /** Relative chance to be the def bought on a think. */
   readonly weight: number;
-  /** First wave this def may be bought for (copy of the roster's unlock). */
-  readonly unlockWave: number;
 }
 
 /** Per phase: the fraction of the master's money (budget + pending) the Director leaves unspent. */
@@ -109,7 +107,7 @@ export function defaultDirector(): DirectorDef {
       relaxBelow: 0.3,
       relaxSeconds: 8,
     },
-    mix: ROSTER.map((r) => ({ def: r.def, weight: r.weight, unlockWave: r.unlockWave ?? 1 })),
+    mix: ROSTER.map((r) => ({ def: r.def, weight: r.weight })),
     keepFrac: { build: 0, peak: 0.25, relax: 0.8 },
     maxPerThink: 4,
   };

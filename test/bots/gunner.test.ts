@@ -33,9 +33,9 @@ function record(): { samples: Sample[]; first: Sample['seat'] | undefined } {
       const bot = base.gunner(seat);
       return {
         think: (ctx) => {
-          const before = structuredClone({ ...ctx, rng: undefined });
+          const before = structuredClone(ctx);
           const out = bot.think(ctx);
-          samples.push({ ctx: { ...before, rng: ctx.rng } as BotCtx, seat, out });
+          samples.push({ ctx: before, seat, out });
           return out;
         },
       };
@@ -122,10 +122,10 @@ describe('gunner brain', () => {
     }
     const bot = createBot(gunnerBrain, head.seat);
     for (const s of samples) {
-      const frozen = Object.freeze({ ...structuredClone({ ...s.ctx, rng: undefined }), rng: s.ctx.rng }) as BotCtx;
-      const before = JSON.stringify({ ...frozen, rng: undefined });
+      const frozen = Object.freeze(structuredClone(s.ctx)) as BotCtx;
+      const before = JSON.stringify(frozen);
       bot.think(frozen);
-      expect(JSON.stringify({ ...frozen, rng: undefined })).toBe(before);
+      expect(JSON.stringify(frozen)).toBe(before);
     }
   });
 

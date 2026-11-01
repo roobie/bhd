@@ -112,8 +112,14 @@ describe('Director commands', () => {
     const hoard: DirectorDef = { ...def, keepFrac: { build: 1, peak: 1, relax: 1 } };
     const { events } = play(options(hoard), 3000);
     expect(masterCommands(events).filter((c) => c.cmd.kind === 'summon')).toEqual([]);
-    const locked: DirectorDef = { ...def, mix: def.mix.map((m) => ({ ...m, unlockWave: 99 })) };
-    expect(masterCommands(play(options(locked), 3000).events).filter((c) => c.cmd.kind === 'summon')).toEqual([]);
+    const game = defaultMasterGame();
+    const { master } = game;
+    if (master === undefined) {
+      throw new Error('master game has no master');
+    }
+    const locked = { ...game, master: { ...master, costs: master.costs.map((c) => ({ ...c, unlockWave: 99 })) } };
+    const lockedPlay = play({ ...options(), game: locked }, 3000);
+    expect(masterCommands(lockedPlay.events).filter((c) => c.cmd.kind === 'summon')).toEqual([]);
   });
 
   it('liveness: a Director-driven all-bot game reaches end within a generous bound, across seeds', () => {

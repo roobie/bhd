@@ -3,25 +3,14 @@
 // with the values below as the fallback, so a setup that omits a key still plays.
 //
 // Scores are "value minus cost" in arbitrary points: ~40 is one decent shot's worth of reason to
-// act. Geometry mirrors content/heroes/gunner.ts (cones as the cosine of the half angle, because
-// bots cannot use trig). Numbers are STARTING values, free to tune.
+// act. Kit geometry (ranges, cones, heat bands) is read from perception, not copied here. Numbers are STARTING values, free to tune.
 
 export function gunnerWeights(): Record<string, number> {
   return {
-    // ---- geometry (mirrors the kit)
-    'gunner.geo.range': 12,
-    'gunner.geo.bracedRange': 15.6,
-    'gunner.geo.arcCos': Math.SQRT1_2,
+    // ---- geometry (the kit's own numbers come from perception: GunnerView and AbilityView.range)
     'gunner.geo.flankRange': 8,
-    'gunner.geo.ventRange': 10,
-    'gunner.geo.ventCos': 0.8192,
-    'gunner.geo.suppressRange': 11,
-    'gunner.geo.suppressCos': 0.6428,
     'gunner.geo.view': 22,
-    'gunner.geo.lineHalfWidth': 0.4,
     'gunner.geo.allyRadius': 0.6,
-    'gunner.heat.pierceAbove': 0.6,
-    'gunner.heat.overpenAbove': 0.85,
     'gunner.lowHp': 0.35,
 
     // ---- gunner.post: post / advance / hold

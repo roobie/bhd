@@ -1,11 +1,10 @@
 // Bot shapes (wave w2-bots DESIGN "Utility framework and doctrines"). Owner: contracts (fixed
-// here). Bots are pure functions of (perception, own memory, doctrine, own rng): they return
+// here). Bots are pure functions of (perception, own memory, doctrine, own delay): they return
 // decisions, `Match` scores them (utility.ts `decide`), schedules the picked option's commands
 // after the seat's reaction delay and emits `choice` events. A bot never touches the sim.
 
 import type { Doctrine } from '../content/bots.ts';
 import type { Point } from '../content/types.ts';
-import type { Rng } from '../detmath/index.ts';
 import type { HeroView, Perception } from '../perception/types.ts';
 import type { Command } from '../sim/commands.ts';
 
@@ -52,8 +51,8 @@ export interface BotCtx {
   readonly doctrine: Doctrine;
   /** Kit weights with the doctrine's overrides applied; read through `weight()`. */
   readonly weights: Readonly<Record<string, number>>;
-  /** The seat's own stream. Brains should not need it (noise is applied by `decide`). */
-  readonly rng: Rng;
+  /** The seat's reaction delay in ticks: a command it submits now applies this many ticks later. */
+  readonly delay: number;
   /** The tick whose state `p` describes. */
   readonly tick: number;
   /** The seat's own commands submitted but not yet applied (copies), oldest first. */
@@ -69,8 +68,6 @@ export interface Brain<M> {
 /** A brain bound to its memory; one per seat. */
 export interface Bot {
   think: (ctx: BotCtx) => Decision[];
-  /** For the viewer: where the brain currently holds, if it moved its post off `SeatInfo.post`. */
-  status?: () => { readonly post?: Point };
 }
 
 /** Makes a seat's bot; the default table dispatches on `def.kit`. Tests inject their own. */

@@ -8,6 +8,7 @@ import type { GunnerDef } from '../content/heroes/gunner.ts';
 import type { StandinAbilityDef, StandinDef } from '../content/heroes/standins.ts';
 import type { Point } from '../content/types.ts';
 import { findById } from '../content/types.ts';
+import { cos, PI } from '../detmath/index.ts';
 import type { Entity } from '../sim/entities.ts';
 import { STANCE } from '../sim/heroes/gunner.ts';
 import { unitsOnSegment } from '../sim/query.ts';
@@ -113,6 +114,11 @@ function gunnerAbilities(def: GunnerDef, kit: Extract<NonNullable<Entity['kit']>
   ];
 }
 
+/** Cosine of half of a full cone width given in degrees (bots cannot use trig). */
+function halfAngleCos(fullDegrees: number): number {
+  return cos((fullDegrees * PI) / 360);
+}
+
 /** Heroes the Gunner's line would hit: mirrors the sim's `fireLine` geometry (muzzle at the body edge). */
 function lineAlliesOf(sim: Sim, hero: Readonly<Entity>, range: number, halfWidth: number): number[] {
   const target = sim.entities.get(hero.attack.target);
@@ -166,6 +172,15 @@ function heroParts(sim: Sim, e: Readonly<Entity>): HeroParts | undefined {
         braced: kit.stance === STANCE.braced,
         locked: kit.lockTicks > 0,
         furnaceActive: kit.furnaceTicks > 0,
+        attackRange: def.attack.range,
+        bracedRange: def.attack.range * (1 + def.brace.rangeBonus),
+        arcCos: halfAngleCos(def.brace.arcDegrees),
+        ventCos: halfAngleCos(def.vent.coneDegrees),
+        suppressCos: halfAngleCos(def.suppress.coneDegrees),
+        lineHalfWidth: def.heat.lineHalfWidth,
+        suppressHeat: def.suppress.heatCost,
+        pierceAbove: def.heat.pierceAbove,
+        overpenAbove: def.heat.overpenAbove,
       },
     };
   }
@@ -297,7 +312,7 @@ export function perceiveMaster(sim: Sim): MasterView | undefined {
   return {
     budget: master.budget,
     pending: master.pending.map((g) => ({ def: g.def, count: g.count })),
-    costs: def.costs.map((c) => ({ def: c.def, cost: c.cost })),
+    costs: def.costs.map((c) => ({ def: c.def, cost: c.cost, unlockWave: c.unlockWave ?? 1 })),
     sendAt: master.lastStart + ticks(def.minIntervalSeconds),
     nextAt: sim.waves.nextAt,
     wavesLeft: Math.max(0, sim.game.waves.waves.length - sim.waves.n),

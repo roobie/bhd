@@ -18,6 +18,8 @@ export function standinWeights(): Record<string, number> {
     'standin.tank.stand.travel': 0.2,
     // Cost charged to the tank for standing inside the Gunner's overpenetration line.
     'standin.tank.stand.inGunnerLine': 30,
+    // 0 on purpose: the tank's job is the front, so being forward is never charged as danger.
+    'standin.tank.stand.danger': 0,
     'standin.ranged.stand.post': 1,
     'standin.ranged.stand.forward': 1,
     'standin.ranged.stand.reach': 0.85,
@@ -52,10 +54,11 @@ export function standinWeights(): Record<string, number> {
     'standin.support.heal.cost': 0.4,
 
     // Support pull: `minClump` enemies make a clump worth an intent; `fireInSeconds` is the lead the
-    // Gunner gets to reserve against it; `directFactor` discounts casting at a smaller clump.
+    // Gunner gets to reserve against it (a think, a slow seat's reaction delay of up to ~3 s, and the
+    // Gunner's reservation margin); `directFactor` discounts casting at a smaller clump.
     'standin.support.pull.perEnemy': 0.4,
     'standin.support.pull.minClump': 4,
-    'standin.support.pull.fireInSeconds': 1.5,
+    'standin.support.pull.fireInSeconds': 4.5,
     'standin.support.pull.coordination': 1,
     'standin.support.pull.directFactor': 0.6,
     'standin.support.pull.cost': 0.8,

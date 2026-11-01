@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createBot } from '../../src/bots/brains.ts';
-import type { Bot, BotCtx, BrainTable, Decision } from '../../src/bots/types.ts';
+import type { Bot, BotCtx, BrainTable, Decision, Option } from '../../src/bots/types.ts';
 import type { BotSetup, Doctrine } from '../../src/content/bots.ts';
 import { defaultBotSetup, greedy } from '../../src/content/bots.ts';
 import { defaultDirector } from '../../src/content/director.ts';
@@ -277,6 +277,19 @@ describe('choice events', () => {
     expect(choices).toEqual([]);
   });
 
+  it('emits the first choice when a lone-option decision later gains options, even with the same pick', () => {
+    const opts = oneSeat(
+      (ctx) => {
+        const only: Option = { id: 'a', value: 1, cost: 0, commands: [] };
+        const more: Option = { id: 'b', value: 0, cost: 0, commands: [] };
+        return [{ id: 'x.grow', options: ctx.tick < 45 ? [only] : [only, more] }];
+      },
+      { thinkSeconds: 0.5, reactionSeconds: 0.1 },
+    );
+    const choices = run(opts, (m) => m.tick >= 90).filter((e) => e.kind === 'choice' && e.decision === 'x.grow');
+    expect(choices.map((c) => [c.tick, c.kind === 'choice' ? c.picked : ''])).toEqual([[45, 'a']]);
+  });
+
   it('stickiness keeps the previous pick through a small score change', () => {
     const choices = flipping(40, 0.6)
       .events()
@@ -309,9 +322,8 @@ describe('seats and perception', () => {
     }).toThrow(DUPLICATE_ID);
   });
 
-  it('seat views carry a copy of the post, the doctrine leash, and a post the brain reports moved', () => {
-    let moved: { x: number; y: number } | undefined;
-    const bot: Bot = { think: () => [], status: () => (moved === undefined ? {} : { post: moved }) };
+  it('seat views carry a copy of the post and the doctrine leash', () => {
+    const bot: Bot = { think: () => [] };
     const base = oneSeat(() => [], { thinkSeconds: 0.5, reactionSeconds: 0.1, doctrine: { leash: 7 } });
     const m = new Match({ ...base, brains: { gunner: () => bot, standin: () => bot } });
     const [seat] = m.seats;
@@ -319,9 +331,6 @@ describe('seats and perception', () => {
     const [spawn] = m.sim.game.map.heroSpawns;
     expect(seat?.post).toEqual(spawn);
     expect(seat?.post).not.toBe(spawn);
-    moved = { x: 1.5, y: 2.5 };
-    expect(m.seats[0]?.post).toEqual({ x: 1.5, y: 2.5 });
-    expect(m.seats[0]?.post).not.toBe(moved);
   });
 
   it('masterView is memoised by tick, undefined without a master, and frozen along with perception', () => {

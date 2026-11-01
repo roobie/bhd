@@ -43,6 +43,11 @@ function unitCost(master: MasterView, def: string): number {
   return master.costs.find((c) => c.def === def)?.cost ?? Number.POSITIVE_INFINITY;
 }
 
+/** First wave `def` may be bought for; never for a def the master cannot summon. */
+function unlockWave(master: MasterView, def: string): number {
+  return master.costs.find((c) => c.def === def)?.unlockWave ?? Number.POSITIVE_INFINITY;
+}
+
 /** Money committed by summons not yet applied. */
 function inFlightSpend(ctx: DirectorCtx): number {
   let sum = 0;
@@ -98,7 +103,9 @@ function buy(ctx: DirectorCtx, phase: TensionPhase, spent: number): Command[] {
   const avail = budget - keep;
   // The wave being bought is the one after those already started.
   const wave = ctx.p.wave.n + 1;
-  const candidates = def.mix.filter((m) => m.unlockWave <= wave && m.weight > 0 && unitCost(master, m.def) <= avail);
+  const candidates = def.mix.filter(
+    (m) => unlockWave(master, m.def) <= wave && m.weight > 0 && unitCost(master, m.def) <= avail,
+  );
   if (candidates.length === 0) {
     return [];
   }

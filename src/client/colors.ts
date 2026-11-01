@@ -27,12 +27,18 @@ export function teamColor(team: Team, def: string): string {
   return team === 1 ? `hsl(${hueOf(def) % 30} 70% ${40 + (hueOf(def) % 20)}%)` : '#888';
 }
 
-export type IntentState = 'posted' | 'reserved' | 'fired';
+export type IntentState = 'posted' | 'reserved' | 'fired' | 'expired';
 
-/** Op state of a live intent: fired, else reserved by at least one hero, else just posted. */
-export function intentState(i: { readonly fired: boolean; readonly reservers: readonly number[] }): IntentState {
+/** Op state of a live intent at `tick`: fired, else expired (its time passed unfired), else reserved by at least one hero, else just posted. */
+export function intentState(
+  i: { readonly fired: boolean; readonly fireTick: number; readonly reservers: readonly number[] },
+  tick: number,
+): IntentState {
   if (i.fired) {
     return 'fired';
+  }
+  if (i.fireTick <= tick) {
+    return 'expired';
   }
   return i.reservers.length > 0 ? 'reserved' : 'posted';
 }
@@ -41,6 +47,7 @@ const INTENT_COLORS: Readonly<Record<IntentState, string>> = {
   posted: '#3b82c4',
   reserved: '#e0a020',
   fired: '#2fa36b',
+  expired: '#8a8f98',
 };
 
 export function intentColor(state: IntentState): string {

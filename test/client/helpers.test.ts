@@ -1,8 +1,16 @@
 import { expect, test as it } from 'vitest';
-import { heroColor, intentColor, intentState, statusLetters, teamColor } from '../../src/client/colors.ts';
+import {
+  heroColor,
+  type IntentState,
+  intentColor,
+  intentState,
+  statusLetters,
+  teamColor,
+} from '../../src/client/colors.ts';
 import type { LogLine } from '../../src/client/eventlog.ts';
 import { pushEvents, visibleLines } from '../../src/client/eventlog.ts';
 import { fitWorld, toScreen } from '../../src/client/view.ts';
+import type { SimEvent } from '../../src/sim/events.ts';
 
 it('fitWorld centres and keeps aspect', () => {
   const fit = fitWorld({ w: 100, h: 50 }, { w: 400, h: 400 }, 0);
@@ -73,9 +81,27 @@ it('pushEvents categorises cmd, choice and intent lines and visibleLines filters
   ]);
 });
 
-it('intent state follows fired then reservers; colours differ', () => {
-  expect(intentState({ fired: false, reservers: [] })).toBe('posted');
-  expect(intentState({ fired: false, reservers: [3] })).toBe('reserved');
-  expect(intentState({ fired: true, reservers: [3] })).toBe('fired');
-  expect(new Set([intentColor('posted'), intentColor('reserved'), intentColor('fired')]).size).toBe(3);
+it('intent state follows fired, then expiry, then reservers; colours differ', () => {
+  expect(intentState({ fired: false, fireTick: 50, reservers: [] }, 10)).toBe('posted');
+  expect(intentState({ fired: false, fireTick: 50, reservers: [3] }, 10)).toBe('reserved');
+  expect(intentState({ fired: true, fireTick: 50, reservers: [3] }, 60)).toBe('fired');
+  expect(intentState({ fired: false, fireTick: 50, reservers: [3] }, 50)).toBe('expired');
+  expect(
+    new Set((['posted', 'reserved', 'fired', 'expired'] as const satisfies readonly IntentState[]).map(intentColor))
+      .size,
+  ).toBe(4);
+});
+
+it('pushEvents trims per category, so filtered-off chatter cannot evict other lines', () => {
+  const log: LogLine[] = [];
+  const cmd = (tick: number): SimEvent => ({
+    tick,
+    kind: 'cmd',
+    player: 0,
+    cmd: { kind: 'move', hero: 2, x: 1, y: 2 },
+  });
+  pushEvents(log, new Map(), [{ tick: 0, kind: 'intent', id: 1, op: 'post', by: 2, intentKind: 'pull' }], 3);
+  pushEvents(log, new Map(), [1, 2, 3, 4, 5, 6, 7].map(cmd), 3);
+  expect(log.filter((l) => l.cat === 'cmd')).toHaveLength(3);
+  expect(log.filter((l) => l.cat === 'intent')).toHaveLength(1);
 });

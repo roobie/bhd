@@ -59,7 +59,7 @@ function describeEvent(book: NameBook, event: SimEvent): LogLine | undefined {
   }
 }
 
-/** Appends described events to `log` as `t<tick> text`, keeping the last `max` lines. */
+/** Appends described events to `log` as `t<tick> text`, keeping the last `max` lines of each category. */
 export function pushEvents(log: LogLine[], book: NameBook, events: readonly SimEvent[], max: number): void {
   for (const e of events) {
     if (e.kind === 'spawn') {
@@ -70,9 +70,30 @@ export function pushEvents(log: LogLine[], book: NameBook, events: readonly SimE
       log.push({ cat: line.cat, text: `t${e.tick} ${line.text}` });
     }
   }
-  if (log.length > max) {
-    log.splice(0, log.length - max);
+  trimPerCategory(log, max);
+}
+
+/** Drops the oldest lines of any category that has more than `max`, so a chatty one cannot crowd out the rest. */
+function trimPerCategory(log: LogLine[], max: number): void {
+  const excess = new Map<LogCategory, number>();
+  for (const l of log) {
+    excess.set(l.cat, (excess.get(l.cat) ?? 0) + 1);
   }
+  for (const [cat, n] of excess) {
+    excess.set(cat, Math.max(0, n - max));
+  }
+  if ([...excess.values()].every((n) => n === 0)) {
+    return;
+  }
+  const kept = log.filter((l) => {
+    const n = excess.get(l.cat) ?? 0;
+    if (n > 0) {
+      excess.set(l.cat, n - 1);
+      return false;
+    }
+    return true;
+  });
+  log.splice(0, log.length, ...kept);
 }
 
 /** The last `max` lines whose category is not filtered off. */
