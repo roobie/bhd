@@ -93,7 +93,7 @@ export const GOLDEN: ScenarioResult = {
   },
   master: {
     hashes: [
-      'bb8357912516a66b',
+      '9d04882eb9b74fbc',
       'df28245fa7a75482',
       'd15976a96c053654',
       '066ea0231afeef4e',
@@ -130,7 +130,7 @@ export const GOLDEN: ScenarioResult = {
       'd7f53380e72be7ca',
       '2749509c181bf86d',
     ],
-    eventDigest: 'f00b645aad0fae3a',
+    eventDigest: '4eb10bde97587ffe',
   },
   hashes: [
     'c386ffe0867f8953',
