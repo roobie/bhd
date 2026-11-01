@@ -39,6 +39,18 @@ export interface AbilityView {
   readonly radius: number;
 }
 
+/** The Gunner's own standing Pavise barrier. */
+export interface PaviseView {
+  readonly x: number;
+  readonly y: number;
+  /** Unit vector along the barrier. */
+  readonly ux: number;
+  readonly uy: number;
+  readonly halfLength: number;
+  /** Ticks until it is gone. */
+  readonly ticksLeft: number;
+}
+
 /** Gunner-only state. */
 export interface GunnerView {
   /** 0..1. */
@@ -63,6 +75,8 @@ export interface GunnerView {
   readonly paviseRange: number;
   /** Half the Pavise's width. */
   readonly paviseHalfLength: number;
+  /** Her standing Pavise, undefined when none. */
+  readonly pavise: PaviseView | undefined;
   /** Above this heat, rounds pierce armour (0..1). */
   readonly pierceAbove: number;
   /** Above this heat, rounds overpenetrate into allies (0..1). */

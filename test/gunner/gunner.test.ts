@@ -243,21 +243,67 @@ describe('Vent', () => {
 });
 
 describe('Pavise', () => {
-  it('plants a barrier prop along the aim, goes on cooldown and expires', () => {
+  const props = (r: ReturnType<typeof gunnerRig>) => [...r.sim.entities.values()].filter((e) => e.kind === 'prop');
+
+  it('plants a barrier prop, goes on cooldown and expires', () => {
     const r = gunnerRig();
     const def = gunnerDef();
     r.step(1);
     r.cast(2, 5, 0);
     r.step(1);
-    const props = [...r.sim.entities.values()].filter((e) => e.kind === 'prop');
-    expect(props).toHaveLength(1);
-    expect(props[0]?.prop?.owner).toBe(GUNNER);
+    expect(props(r)).toHaveLength(1);
+    expect(props(r)[0]?.prop?.owner).toBe(GUNNER);
     expect(r.kit.cdPavise).toBeGreaterThan(0);
     r.cast(2, 5, 0);
     r.step(1);
-    expect([...r.sim.entities.values()].filter((e) => e.kind === 'prop')).toHaveLength(1);
+    expect(props(r)).toHaveLength(1);
     r.step(ticks(def.pavise.seconds) + 2);
-    expect([...r.sim.entities.values()].filter((e) => e.kind === 'prop')).toHaveLength(0);
+    expect(props(r)).toHaveLength(0);
+  });
+
+  it('respects range and stands across the aim (unit vector, perpendicular)', () => {
+    const def = gunnerDef();
+    for (const [x, y] of [
+      [50, 0],
+      [0, -40],
+      [30, 30],
+      [2, 0],
+    ] as const) {
+      const r = gunnerRig();
+      r.cast(2, x, y);
+      r.step(1);
+      const [prop] = props(r);
+      expect(prop?.prop).toBeDefined();
+      if (prop?.prop === undefined) {
+        return;
+      }
+      const d = Math.hypot(prop.x - r.gunner.x, prop.y - r.gunner.y);
+      const aimD = Math.hypot(x - r.gunner.x, y - r.gunner.y);
+      expect(d).toBeLessThanOrEqual(def.pavise.range + 1e-9);
+      expect(d).toBeCloseTo(Math.min(def.pavise.range, aimD), 6);
+      // Long axis is a unit vector perpendicular to the Gunner->point direction.
+      expect(Math.hypot(prop.prop.ux, prop.prop.uy)).toBeCloseTo(1, 9);
+      expect(prop.prop.ux * (prop.x - r.gunner.x) + prop.prop.uy * (prop.y - r.gunner.y)).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('clips the overpen line while it stands, and stops clipping once expired', () => {
+    const base = gunnerDef();
+    const def = fastHeat({
+      pavise: { ...base.pavise, seconds: 2 },
+      furnace: { ...base.furnace, activeSeconds: 30 },
+    });
+    const r = gunnerRig(def);
+    const near = r.dummy(5, 0);
+    const far = r.dummy(9, 0);
+    r.cast(2, 3, 0);
+    r.step(1);
+    r.cast(3);
+    const during = dmgFrom(r.step(ticks(2) - 4));
+    expect(during.filter((h) => h.dst === near.id || h.dst === far.id)).toEqual([]);
+    const after = dmgFrom(r.step(ticks(1)));
+    expect(after.some((h) => h.dst === near.id)).toBe(true);
+    expect(after.some((h) => h.dst === far.id)).toBe(true);
   });
 });
 

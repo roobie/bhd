@@ -6,7 +6,7 @@
 //   gunner.stance    free | brace                Brace is a toggle and roots; the option is the wanted state
 //   gunner.fire      fire | hold                 `hold` command; allies in the overpen line are a cost (pillar 1)
 //   gunner.vent      wait | vent                 against heat bands
-//   (gunner.pavise   wait | pavise               slice C, w8: the Pavise barrier; the bot does not cast it yet)
+//   gunner.pavise   wait | shield | block      Pavise: cover an ally in the line of fire, or wall off a push
 //   gunner.furnace   wait | furnace              per doctrine.ultimate: free | spike | combo
 //   gunner.reserve   none | furnace | vent       follow a 'pull' intent (the support's) with an armed cast
 // A decision with nothing meaningful to weigh (ability not ready, braced and cannot move, ...) is
@@ -16,7 +16,7 @@
 
 import { gunnerWeights } from '../content/bots/gunner.ts';
 import type { Point } from '../content/types.ts';
-import type { EnemyView, GunnerView, HeroView, IntentView } from '../perception/types.ts';
+import type { EnemyView, GunnerView, HeroView, IntentView, PaviseView } from '../perception/types.ts';
 import type { Command } from '../sim/commands.ts';
 import { ticks } from '../sim/time.ts';
 import type { BotCtx, Brain, Decision, Option, SeatInfo } from './types.ts';
@@ -53,6 +53,8 @@ interface Frame {
   /** The aim abilities use: the brace aim when braced. */
   readonly aim: Point | undefined;
   readonly lineAllies: number;
+  /** Her standing Pavise crosses the line of fire: allies behind it are safe, so are enemies. */
+  readonly covered: boolean;
   readonly w: (key: string) => number;
 }
 
@@ -116,25 +118,57 @@ function pickFocus(ctx: BotCtx, view: number): Point | undefined {
   return nearest === undefined ? undefined : { x: nearest.x, y: nearest.y };
 }
 
+interface Dir {
+  readonly ux: number;
+  readonly uy: number;
+  /** Distance to the nearest enemy, the one the kit shoots. */
+  readonly len: number;
+}
+
+/** Unit vector from `me` to the nearest of `enemies` (the kit aims at the nearest hostile). */
+function dirToNearest(me: Point, enemies: readonly EnemyView[]): Dir | undefined {
+  let nearest: EnemyView | undefined;
+  let best = Number.POSITIVE_INFINITY;
+  for (const e of enemies) {
+    const d = dist(me, e);
+    if (d < best) {
+      nearest = e;
+      best = d;
+    }
+  }
+  if (nearest === undefined) {
+    return undefined;
+  }
+  const len = Math.max(1e-9, best);
+  return { ux: (nearest.x - me.x) / len, uy: (nearest.y - me.y) / len, len };
+}
+
+/** Fraction t in [0, 1] where the segment from `a` to `b` crosses the barrier, undefined if it does not. */
+function barrierCrossing(bar: PaviseView, a: Point, b: Point): number | undefined {
+  const nx = -bar.uy;
+  const ny = bar.ux;
+  const da = (a.x - bar.x) * nx + (a.y - bar.y) * ny;
+  const db = (b.x - bar.x) * nx + (b.y - bar.y) * ny;
+  if (da * db >= 0) {
+    return undefined;
+  }
+  const t = da / (da - db);
+  const along = (a.x + (b.x - a.x) * t - bar.x) * bar.ux + (a.y + (b.y - a.y) * t - bar.y) * bar.uy;
+  return Math.abs(along) <= bar.halfLength ? t : undefined;
+}
+
 /** Allies standing in the line to the nearest enemy, from positions (the kit aims at the nearest hostile). */
 function estimateLine(ctx: BotCtx, g: GunnerView, allyRadius: number): number {
   const { me } = ctx;
   const range = g.attackRange;
-  let target: EnemyView | undefined;
-  let best = range;
-  for (const e of ctx.p.enemies) {
-    const d = dist(me, e);
-    if (d <= best) {
-      target = e;
-      best = d;
-    }
-  }
-  if (target === undefined) {
+  const dir = dirToNearest(
+    me,
+    ctx.p.enemies.filter((e) => dist(me, e) <= range),
+  );
+  if (dir === undefined) {
     return 0;
   }
-  const len = Math.max(1e-9, best);
-  const ux = (target.x - me.x) / len;
-  const uy = (target.y - me.y) / len;
+  const { ux, uy } = dir;
   const reach = g.lineHalfWidth + allyRadius;
   let n = 0;
   for (const h of ctx.p.heroes) {
@@ -165,6 +199,14 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
   mem.braced = braced;
   const range = braced ? g.bracedRange : g.attackRange;
   const listed = me.lineAllies.length;
+  const dir = dirToNearest(
+    me,
+    p.enemies.filter((e) => dist(me, e) <= range),
+  );
+  const covered =
+    g.pavise !== undefined &&
+    dir !== undefined &&
+    barrierCrossing(g.pavise, me, { x: me.x + dir.ux * range, y: me.y + dir.uy * range }) !== undefined;
   return {
     ctx,
     mem,
@@ -181,6 +223,7 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
     focus,
     aim: braced ? (mem.braceAim ?? focus) : focus,
     lineAllies: listed > 0 || me.target !== 0 ? listed : estimateLine(ctx, g, w('gunner.geo.allyRadius')),
+    covered,
     w,
   };
 }
@@ -328,7 +371,7 @@ function fireDecision(f: Frame): Decision | undefined {
   // Pillar 1: the line only hits allies once rounds overpenetrate (heat above the band, or Furnace Heart).
   const line =
     f.furnace || f.heat > overpen ? 1 : w('gunner.fire.anticipation') * clamp01((f.heat - pierce) / (overpen - pierce));
-  const allyCost = w('gunner.redline.allyInLine') * f.lineAllies * line * (1 - risk);
+  const allyCost = f.covered ? 0 : w('gunner.redline.allyInLine') * f.lineAllies * line * (1 - risk);
   const cool = f.furnace ? 0 : w('gunner.fire.overheatAvoid') * clamp01((f.heat - 0.9) / 0.1) * (1 - risk);
   return {
     id: 'gunner.fire',
@@ -387,6 +430,103 @@ function ventDecision(f: Frame): Decision | undefined {
     options: [
       idle('wait', w('gunner.vent.waitBase')),
       { id: 'vent', value, cost, commands: [castAt(f, SLOT.vent, f.aim)] },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------- gunner.pavise
+
+/** How live her overpenetration line is: 1 once rounds overpenetrate, a ramp toward it before. */
+function lineLive(f: Frame): number {
+  if (f.furnace || f.heat > f.g.overpenAbove) {
+    return 1;
+  }
+  const { pierceAbove, overpenAbove } = f.g;
+  return f.w('gunner.fire.anticipation') * clamp01((f.heat - pierceAbove) / (overpenAbove - pierceAbove));
+}
+
+/** Enemies the barrier at `at` would shadow: on her line, farther out than the barrier. */
+function shadowed(f: Frame, dir: Dir, at: number): number {
+  const { me, g } = f;
+  const range = f.braced ? g.bracedRange : g.attackRange;
+  let n = 0;
+  for (const e of f.enemies) {
+    const along = (e.x - me.x) * dir.ux + (e.y - me.y) * dir.uy;
+    const across = Math.abs((e.y - me.y) * dir.ux - (e.x - me.x) * dir.uy);
+    if (along > at && along <= range && across <= g.lineHalfWidth + f.w('gunner.geo.enemyRadius')) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/** What the barrier costs: its cooldown, and the reach she loses past it (live line, or the chance it goes live). */
+function paviseCost(f: Frame, dir: Dir, at: number): number {
+  const floor = f.w('gunner.pavise.reachFloor');
+  return (
+    f.w('gunner.pavise.cooldown') + f.w('gunner.pavise.reachLoss') * shadowed(f, dir, at) * Math.max(lineLive(f), floor)
+  );
+}
+
+function paviseCast(f: Frame, dir: Dir, at: number): Command {
+  const d = Math.min(at, f.g.paviseRange);
+  return { kind: 'ability', hero: f.me.id, slot: SLOT.pavise, x: f.me.x + dir.ux * d, y: f.me.y + dir.uy * d };
+}
+
+/** Shield: put the barrier just in front of the nearest ally standing in the line of fire. */
+function shieldOption(f: Frame, dir: Dir): Option {
+  const { me, g, w } = f;
+  const range = f.braced ? g.bracedRange : g.attackRange;
+  const reach = g.lineHalfWidth + w('gunner.geo.allyRadius');
+  const live = lineLive(f) * (1 - f.ctx.doctrine.risk);
+  let value = 0;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const h of f.ctx.p.heroes) {
+    const along = (h.x - me.x) * dir.ux + (h.y - me.y) * dir.uy;
+    const across = Math.abs((h.y - me.y) * dir.ux - (h.x - me.x) * dir.uy);
+    if (h.id === me.id || along <= 0 || along > range || across > reach) {
+      continue;
+    }
+    value += w('gunner.pavise.shield') * (h.role === 'penitent' ? 1 + w('gunner.pavise.penitentBonus') : 1) * live;
+    nearest = Math.min(nearest, along);
+  }
+  if (value === 0) {
+    return { id: 'shield', value: 0, cost: 0, commands: [] };
+  }
+  const at = Math.max(w('gunner.pavise.minReach'), nearest - w('gunner.geo.allyRadius') - w('gunner.pavise.gap'));
+  return { id: 'shield', value, cost: paviseCost(f, dir, at), commands: [paviseCast(f, dir, at)] };
+}
+
+/** Block: wall off a push, between her and the nearest enemy, when enough are close or she is hurt. */
+function blockOption(f: Frame): Option {
+  const { me, w } = f;
+  const near = f.enemies.filter((e) => dist(me, e) <= w('gunner.pavise.pushRange'));
+  const dir = dirToNearest(me, near);
+  if (dir === undefined || near.length < w('gunner.pavise.minEnemies')) {
+    return { id: 'block', value: 0, cost: 0, commands: [] };
+  }
+  const low = w('gunner.lowHp');
+  const value =
+    w('gunner.pavise.blockPush') * Math.min(near.length, w('gunner.pavise.blockCap')) +
+    w('gunner.pavise.blockThreat') * me.threat +
+    w('gunner.pavise.blockLowHp') * clamp01((low - me.hpFrac) / low);
+  const at = Math.max(w('gunner.pavise.minReach'), dir.len - w('gunner.pavise.blockGap'));
+  return { id: 'block', value, cost: paviseCost(f, dir, at), commands: [paviseCast(f, dir, at)] };
+}
+
+function paviseDecision(f: Frame): Decision | undefined {
+  const { me, w } = f;
+  const ab = abilityOf(me, SLOT.pavise);
+  if (ab === undefined || !ab.ready || f.locked || pending(f, (c) => c.kind === 'ability' && c.slot === SLOT.pavise)) {
+    return undefined;
+  }
+  const dir = dirToNearest(me, f.inRange);
+  return {
+    id: 'gunner.pavise',
+    options: [
+      idle('wait', w('gunner.pavise.waitBase')),
+      dir === undefined ? { id: 'shield', value: 0, cost: 0, commands: [] } : shieldOption(f, dir),
+      blockOption(f),
     ],
   };
 }
@@ -528,6 +668,7 @@ export const gunnerBrain: Brain<Memory> = {
       stanceDecision(f),
       fireDecision(f),
       ventDecision(f),
+      paviseDecision(f),
       furnaceDecision(f),
       reserveDecision(f),
     ];
