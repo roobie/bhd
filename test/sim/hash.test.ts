@@ -21,7 +21,7 @@ function fixture(): Sim {
   g.statuses.push({ status: 'marked', until: 40, src: 3, value: 2 });
   g.move = { mode: 'idle', tx: 1, ty: 2, waypoint: 3 };
   g.attack = { cooldown: 1.5, target: 5 };
-  sim.waves.queue.push({ at: 9, def: 'grunt' });
+  sim.waves.queue.push({ at: 9, def: 'grunt', wave: 1 });
   return sim;
 }
 

@@ -1,19 +1,33 @@
-// Enemies. Owner: lane-waves. STUB: lane-followers that leak at the end of the lane. Attacks on
-// heroes come later.
-// Systems skip dead actors: an enemy at 0 hp (not yet removed by the deaths system) neither
-// aggros nor leaks.
-// Aggro: an enemy's attack target is the `src` of its live `taunted` status (several: the one
-// lasting longest, ties to the lower id; a dead or missing taunter is ignored), else the nearest
-// hostile in attack range. Taunt is therefore pure status application: stand-in heroes never need
-// to edit this file.
+// Enemies. Owner: lane-waves.
+// Lane enemies (spawned by waves, `move.waypoint >= 1`) walk the lane. Each tick, in ID order:
+//  1. Target: the `src` of a live `taunted` status (several: the one lasting longest, ties to the
+//     lower id; a dead or missing taunter is ignored) wins, from any distance. Otherwise the
+//     current target is kept while it is alive and within LEASH_RANGE. Otherwise the nearest hero
+//     within AGGRO_RANGE (ties to the lower id). Only heroes are aggro targets: the Ancient is hit
+//     by leaking only.
+//  2. Move: out of attack range, chase (`point` mode toward the target); in range, stand (`idle`).
+//     With no target any more (it died, or left the leash), the enemy returns to the lane at the
+//     waypoint it was heading for (`lane` mode).
+//  3. Attack: a melee hit through dealDamage when in range and the cooldown is 0.
+//  4. Leak: at the end of the lane, damage the Ancient (tag `leak`, exact leakDamage), emit `leak`, remove.
+// Debug-spawned enemies (idle, waypoint 0) pick targets the same way but never chase or walk: they
+// only hit a target that is already in attack range.
+// Systems skip dead actors: an enemy at 0 hp (not yet removed by the deaths system) does nothing.
+// Taunt is pure status application: stand-in heroes never need to edit this file.
+// AGGRO_RANGE and LEASH_RANGE are code constants because the shared EnemyDef (contracts) has no
+// such fields.
 
 import type { EnemyDef, Point } from '../content/types.ts';
 import { findById } from '../content/types.ts';
 import { dealDamage } from './combat.ts';
 import type { TickContext } from './context.ts';
 import type { Entity, MoveMode } from './entities.ts';
-import { nearestHostile } from './query.ts';
-import { perTick } from './time.ts';
+import { perTick, ticks } from './time.ts';
+
+/** World units: a hero whose body is this close to a lane enemy draws it off the lane. */
+export const AGGRO_RANGE = 6;
+/** World units: an enemy gives up a (non-taunted) target farther than this and returns to the lane. */
+export const LEASH_RANGE = 10;
 
 /** Spawns an enemy at `at` and emits `spawn`. `lane` enemies head for waypoint 1 (they start on waypoint 0). */
 export function spawnEnemy(ctx: TickContext, def: EnemyDef, at: Point, mode: MoveMode): Entity {
@@ -47,7 +61,81 @@ function taunter(ctx: TickContext, e: Readonly<Entity>): number {
   return best;
 }
 
-/** Enemy phase of the tick: aggro, then leaks (damage the Ancient, emit `leak`, remove). */
+function dist2(a: Readonly<Point>, b: Readonly<Point>): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
+
+/** True when `b`'s body is within `range` of `a`'s centre. */
+function within(a: Readonly<Point>, b: Readonly<Entity>, range: number): boolean {
+  const reach = range + b.radius;
+  return dist2(a, b) <= reach * reach;
+}
+
+/** Nearest live hero whose body is within `range`; ties go to the lower id (ID order, strict <). */
+function nearestHero(ctx: TickContext, from: Readonly<Point>, range: number): Entity | undefined {
+  let best: Entity | undefined;
+  let bestD2 = 0;
+  for (const h of ctx.entities.values()) {
+    if (h.kind !== 'hero' || h.hp <= 0 || !within(from, h, range)) {
+      continue;
+    }
+    const d2 = dist2(from, h);
+    if (best === undefined || d2 < bestD2) {
+      best = h;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+/** Picks the target id (0 for none) for a lane enemy; see the file header. */
+function chooseTarget(ctx: TickContext, e: Readonly<Entity>): number {
+  const taunted = taunter(ctx, e);
+  if (taunted !== 0) {
+    return taunted;
+  }
+  const current = ctx.entities.get(e.attack.target);
+  if (current !== undefined && current.hp > 0 && current.kind === 'hero' && within(e, current, LEASH_RANGE)) {
+    return current.id;
+  }
+  return nearestHero(ctx, e, AGGRO_RANGE)?.id ?? 0;
+}
+
+function engage(ctx: TickContext, e: Entity, def: EnemyDef, laneEnemy: boolean): void {
+  if (e.attack.cooldown > 0) {
+    e.attack.cooldown -= 1;
+  }
+  const had = e.attack.target !== 0;
+  e.attack.target = chooseTarget(ctx, e);
+  const target = ctx.entities.get(e.attack.target);
+  if (target === undefined) {
+    if (had && laneEnemy) {
+      e.move.mode = 'lane';
+    }
+    return;
+  }
+  if (!within(e, target, def.attack.range)) {
+    if (laneEnemy) {
+      e.move.mode = 'point';
+      e.move.tx = target.x;
+      e.move.ty = target.y;
+    }
+    return;
+  }
+  if (laneEnemy) {
+    e.move.mode = 'idle';
+  }
+  if (e.attack.cooldown === 0) {
+    const amount = def.attack.damage;
+    if (dealDamage(ctx, { src: e.id, dst: target.id, amount, tags: ['melee'] }) > 0) {
+      e.attack.cooldown = ticks(def.attack.cooldown);
+    }
+  }
+}
+
+/** Enemy phase of the tick: aggro, move orders, attacks, then leaks (damage the Ancient, emit `leak`, remove). */
 export function enemySystem(ctx: TickContext): void {
   const laneLength = ctx.game.map.lane.length;
   for (const e of ctx.entities.values()) {
@@ -55,8 +143,9 @@ export function enemySystem(ctx: TickContext): void {
       continue;
     }
     const def = findById(ctx.game.enemies, e.def);
-    const taunted = taunter(ctx, e);
-    e.attack.target = taunted === 0 ? (nearestHostile(ctx.entities, e, def?.attack.range ?? 0)?.id ?? 0) : taunted;
+    if (def !== undefined) {
+      engage(ctx, e, def, e.move.waypoint > 0);
+    }
     if (e.move.mode !== 'lane' || e.move.waypoint < laneLength) {
       continue;
     }

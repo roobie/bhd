@@ -4,11 +4,14 @@ import { findById } from '../../src/content/types.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { Sim } from '../../src/sim/sim.ts';
 
-/** Generous bound: the last wave starts at ~85 s and the slowest enemy needs ~80 s to walk the lane. */
+/** Generous bound: the last wave starts at ~285 s and the slowest enemy needs ~72 s to walk the lane. */
 const MAX_TICKS = 30 * 400;
 
 function runHeadless(seed: number): { events: SimEvent[]; sim: Sim } {
-  const sim = new Sim({ seed, game: defaultGame() });
+  // A sturdy Ancient: with no commands, leaks must not end the run before every wave has played.
+  const base = defaultGame();
+  const game = { ...base, map: { ...base.map, ancient: { ...base.map.ancient, maxHp: 100_000 } } };
+  const sim = new Sim({ seed, game });
   const events: SimEvent[] = [];
   for (let i = 0; i < MAX_TICKS && !sim.ended; i++) {
     events.push(...sim.step());
@@ -70,7 +73,10 @@ describe('headless defaultGame', () => {
     const leaked = events.filter((e) => e.kind === 'leak').length;
     expect(spawned).toBe(scheduled);
     expect(dead + leaked).toBe(spawned);
-    expect(events.filter((e) => e.kind === 'wave').map((e) => e.n)).toEqual([1, 2, 3, 4, 5]);
+    const waveEvents = events.filter((e) => e.kind === 'wave');
+    const numbers = g.waves.waves.map((_, i) => i + 1);
+    expect(waveEvents.filter((e) => e.phase === 'start').map((e) => e.n)).toEqual(numbers);
+    expect([...waveEvents.filter((e) => e.phase === 'end').map((e) => e.n)].sort((a, b) => a - b)).toEqual(numbers);
   });
 
   it('is repeatable', () => {
