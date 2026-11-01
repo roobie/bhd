@@ -11,6 +11,7 @@ import { perceive } from '../../../src/perception/perceive.ts';
 import type { HeroView, Perception } from '../../../src/perception/types.ts';
 import { Sim } from '../../../src/sim/sim.ts';
 
+const BAD = /NaN|undefined|\?|\{|\}/u;
 const HEX = /^#[0-9a-f]{6}$/u;
 const base: Perception = perceive(new Sim({ seed: 1, game: defaultGame() }), createMemory(defaultPerception()));
 
@@ -30,6 +31,7 @@ const controls: ControlState = {
     lastPost: undefined,
   },
   paused: false,
+  help: false,
   hint: undefined,
 };
 
@@ -176,5 +178,64 @@ describe('hudInsets', () => {
       expect(v.width - i.left - i.right).toBeGreaterThan(v.width / 2);
       expect(v.height - i.top - i.bottom).toBeGreaterThan(v.height / 2);
     }
+  });
+});
+
+describe('help model', () => {
+  const game = defaultGame();
+  const open = { ...controls, help: true };
+
+  it('is absent while closed and present when open', () => {
+    expect(buildHudModel(input({ game })).help).toBeUndefined();
+    expect(buildHudModel(input({ game, controls: open })).help).toBeDefined();
+  });
+
+  it('has a card per ability of every hero, with no unfilled text and no NaN', () => {
+    for (const slot of [0, 1, 2, 3]) {
+      const m = buildHudModel(input({ game, controls: { ...open, selected: slot } }));
+      const hero = base.heroes.find((h) => h.slot === slot);
+      expect(m.help?.abilities.length).toBe(hero?.abilities.length);
+      for (const a of m.help?.abilities ?? []) {
+        for (const text of [a.text, a.cost, a.targeting]) {
+          expect(text).not.toMatch(BAD);
+        }
+        expect(a.text.length).toBeGreaterThan(0);
+        expect(Number.isFinite(a.cooldownSeconds)).toBe(true);
+      }
+    }
+  });
+
+  it('lists every presented status with text and no NaN', () => {
+    const m = buildHudModel(input({ game, controls: open }));
+    expect(m.help?.statuses.length).toBe(defaultPresentation().statuses.length);
+    for (const s of m.help?.statuses ?? []) {
+      expect(s.text).not.toMatch(BAD);
+      expect(s.text.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('falls back for an unknown effect and status: no text, still a card', () => {
+    const unknownEffect = (a: HeroView['abilities'][number]) => ({ ...a, effect: 'zzz' });
+    const hero = base.heroes[0] as HeroView;
+    const p = withHero(0, { abilities: hero.abilities.map(unknownEffect) });
+    const m = buildHudModel(input({ p, game, controls: open, ui: { ...defaultPresentation(), statuses: [] } }));
+    expect(m.help?.abilities.length).toBe(hero.abilities.length);
+    expect(m.help?.abilities.every((a) => a.text === '' && a.icon === undefined && a.label === 'zzz')).toBe(true);
+  });
+
+  it('keeps help numbers tied to the config: tuning a cooldown moves the card', () => {
+    const slow = withHero(0, {
+      abilities: (base.heroes[0] as HeroView).abilities.map((a) => ({ ...a, cooldownTicks: 300 })),
+    });
+    const m = buildHudModel(input({ p: slow, game, controls: { ...open, selected: 0 } }));
+    const timed = (m.help?.abilities ?? []).filter((a) => a.cooldownSeconds > 0);
+    expect(timed.length).toBeGreaterThan(0);
+    expect(timed.every((a) => a.cooldownSeconds === 10)).toBe(true);
+  });
+
+  it('buttons and pips carry icons for shipped content', () => {
+    const m = buildHudModel(input({ game, controls: open }));
+    expect(m.bar?.buttons.every((b) => b.icon !== undefined)).toBe(true);
+    expect(m.top.help).toBe(true);
   });
 });

@@ -207,6 +207,26 @@ describe('reduce', () => {
   });
 });
 
+describe('help toggle', () => {
+  const ctx = ctxWith([0]);
+
+  it('H toggles help without commands, pausing or touching the selection', () => {
+    const open = reduce(initialControls(0), { kind: 'help' }, ctx);
+    expect(open.state.help).toBe(true);
+    expect(open.state.paused).toBe(false);
+    expect(open.commands).toEqual([]);
+    expect(reduce(open.state, { kind: 'help' }, ctx).state.help).toBe(false);
+  });
+
+  it('Escape closes help first and leaves an aim alone', () => {
+    const aiming = { ...initialControls(0), aim: { slot: 1, targeting: 'direction' as const }, help: true };
+    const closed = reduce(aiming, { kind: 'cancel' }, ctx);
+    expect(closed.state.help).toBe(false);
+    expect(closed.state.aim).toBeDefined();
+    expect(reduce(closed.state, { kind: 'cancel' }, ctx).state.aim).toBeUndefined();
+  });
+});
+
 describe('keyAction', () => {
   const s = initialControls(0);
   const k = (key: string, mods: { ctrl?: boolean; alt?: boolean } = {}) =>
@@ -219,7 +239,8 @@ describe('keyAction', () => {
     expect(k('w', { ctrl: true })).toEqual({ kind: 'autocast', slot: 1 });
     expect(k('e', { alt: true })).toEqual({ kind: 'cast', slot: 2, arm: true });
     expect(k('s')).toEqual({ kind: 'stop' });
-    expect(k('h')).toEqual({ kind: 'hold' });
+    expect(k('f')).toEqual({ kind: 'hold' });
+    expect(k('h')).toEqual({ kind: 'help' });
     expect(k('p')).toEqual({ kind: 'pause' });
     expect(k(' ')).toEqual({ kind: 'pause' });
     expect(k('Escape')).toEqual({ kind: 'cancel' });

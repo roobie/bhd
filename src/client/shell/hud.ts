@@ -9,6 +9,9 @@ import { armPickerView, intentsListView } from './intentsui.ts';
 import type {
   AbilityBarModel,
   AbilityButtonModel,
+  HelpAbilityModel,
+  HelpModel,
+  HelpStatusModel,
   HeroCardModel,
   Hud,
   HudDeps,
@@ -31,6 +34,14 @@ const END_TITLE = { win: 'Victory', loss: 'Defeat', time: 'Time' } as const;
 
 type Dispatch = (action: UiAction) => void;
 
+/** An icon from path data (24x24, even-odd); the glyph text when the id has no icon. */
+function iconView(icon: string | undefined, glyph: string): TemplateResult {
+  if (icon === undefined) {
+    return html`<span class="glyph">${glyph}</span>`;
+  }
+  return html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d=${icon}></path></svg>`;
+}
+
 const pct = (f: number): string => `${(f * 100).toFixed(1)}%`;
 
 function topBarView(t: TopBarModel, dispatch: Dispatch): TemplateResult {
@@ -47,6 +58,15 @@ function topBarView(t: TopBarModel, dispatch: Dispatch): TemplateResult {
     <span class="ancient" role="progressbar" aria-label="Ancient hp" aria-valuenow=${Math.round(t.ancientFrac * 100)}>
       <i style=${styleMap({ width: pct(t.ancientFrac) })}></i>
     </span>
+    <button
+      class="btn helpbtn ${t.help ? 'on' : ''}"
+      type="button"
+      aria-label="Help"
+      aria-pressed=${t.help ? 'true' : 'false'}
+      @click=${() => dispatch({ kind: 'help' })}
+    >
+      ?
+    </button>
     <button class="btn pause" type="button" aria-label=${t.paused ? 'Resume' : 'Pause'} @click=${() => dispatch({ kind: 'pause' })}>
       ${t.paused ? '▶' : '⏸'}
     </button>
@@ -66,7 +86,7 @@ function pipView(s: StatusPipModel): TemplateResult {
     class="pip ${s.harmful ? 'harmful' : 'boon'}"
     title="${s.label} ${s.secondsLeft.toFixed(1)}s"
     style=${styleMap({ '--c': s.color, '--ring': `${(s.frac * 360).toFixed(0)}deg` })}
-    ><em>${s.glyph}</em></span
+    >${iconView(s.icon, s.glyph)}</span
   >`;
 }
 
@@ -192,7 +212,7 @@ function abilityView(b: AbilityButtonModel, gestures: Gestures): TemplateResult 
     @contextmenu=${(e: Event) => e.preventDefault()}
     @click=${(e: MouseEvent) => gestures.click(b.slot, e)}
   >
-    <span class="glyph">${b.glyph}</span>
+    ${iconView(b.icon, b.glyph)}
     <small class="key">${b.hotkey}</small>
     ${b.autocast ? html`<i class="autopip"></i>` : nothing}
   </button>`;
@@ -225,6 +245,45 @@ function barView(bar: AbilityBarModel, gestures: Gestures, dispatch: Dispatch): 
   </div>`;
 }
 
+function helpAbilityView(a: HelpAbilityModel): TemplateResult {
+  const facts = [
+    html`<li>${a.targeting}</li>`,
+    html`<li>${a.cooldownSeconds > 0 ? `Cooldown ${a.cooldownSeconds.toFixed(0)}s` : 'No cooldown'}</li>`,
+    a.cost === '' ? nothing : html`<li>Cost: ${a.cost}</li>`,
+    html`<li>${a.armable ? 'Can be armed as a timed trigger' : 'Cannot be armed'}</li>`,
+  ];
+  return html`<article class="helpcard">
+    <span class="ico">${iconView(a.icon, a.glyph)}</span>
+    <div>
+      <h3>${a.label} <kbd>${a.hotkey}</kbd></h3>
+      <ul>${facts}</ul>
+      ${a.text === '' ? nothing : html`<p>${a.text}</p>`}
+    </div>
+  </article>`;
+}
+
+function helpStatusView(s: HelpStatusModel): TemplateResult {
+  return html`<li class="helpstatus ${s.harmful ? 'harmful' : 'boon'}" style=${styleMap({ '--c': s.color })}>
+    <span class="pip">${iconView(s.icon, s.glyph)}</span>
+    <div>
+      <b>${s.label}</b> <small>${s.harmful ? 'harmful' : 'helpful'}</small>
+      ${s.text === '' ? nothing : html`<p>${s.text}</p>`}
+    </div>
+  </li>`;
+}
+
+function helpView(h: HelpModel, dispatch: Dispatch): TemplateResult {
+  return html`<div class="help" data-hit role="dialog" aria-label="Help">
+    <header>
+      <h2>${h.hero === '' ? 'Help' : `${h.hero}: abilities`}</h2>
+      <button class="btn" type="button" aria-label="Close help" @click=${() => dispatch({ kind: 'help' })}>&times;</button>
+    </header>
+    <div class="helpcards">${h.abilities.map(helpAbilityView)}</div>
+    <h2>Statuses</h2>
+    <ul class="legend">${h.statuses.map(helpStatusView)}</ul>
+  </div>`;
+}
+
 function endView(model: HudModel, dispatch: Dispatch): TemplateResult | typeof nothing {
   const { end } = model;
   if (end === undefined) {
@@ -246,6 +305,7 @@ function template(model: HudModel, deps: HudDeps, gestures: Gestures): TemplateR
     ${model.picker === undefined ? nothing : html`<div class="picker" data-hit>${armPickerView(model.picker, dispatch)}</div>`}
     ${model.bar === undefined ? nothing : barView(model.bar, gestures, dispatch)}
     <div class="cards">${model.heroes.map((c) => cardView(c, dispatch))}</div>
+    ${model.help === undefined ? nothing : helpView(model.help, dispatch)}
     ${endView(model, dispatch)}
   `;
 }

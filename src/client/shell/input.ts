@@ -20,7 +20,7 @@ export interface KeyInput {
 
 /**
  * The keymap, pure: 1-4 select; Q/W/E/R cast slot 0-3 (Ctrl: autocast; Alt: `cast` with `arm: true`); S stop;
- * H hold; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
+ * F hold fire; H help; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
  * other key.
  */
 export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefined {
@@ -41,8 +41,10 @@ export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefin
   switch (key) {
     case 's':
       return { kind: 'stop' };
-    case 'h':
+    case 'f':
       return { kind: 'hold' };
+    case 'h':
+      return { kind: 'help' };
     case 'p':
     case ' ':
       return { kind: 'pause' };

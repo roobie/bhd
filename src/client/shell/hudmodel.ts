@@ -1,6 +1,7 @@
 // Pure: Perception + presentation + controls -> HudModel. Owner: w7-hud.
 // Kit-agnostic: nothing here switches on a hero, kit, ability, status or resource name.
 
+import { describeAbility, describeStatus, TARGETING_TEXT } from '../../content/help.ts';
 import type { Presentation } from '../../content/presentation.ts';
 import {
   abilityPresentation,
@@ -18,6 +19,7 @@ import type {
   AbilityButtonModel,
   ArmPickerModel,
   ControlState,
+  HelpModel,
   HeroCardModel,
   HudInput,
   HudModel,
@@ -65,6 +67,7 @@ function topBar(input: HudInput): TopBarModel {
     previewHidden: preview.length === 0 && pending,
     ancientFrac: clamp01(p.ancient.hpFrac),
     paused: controls.paused,
+    help: controls.help,
   };
 }
 
@@ -102,6 +105,7 @@ function statusPips(h: HeroView, p: Perception, ui: Presentation, longest: Map<s
       id: s.status,
       label: pres.label,
       glyph: pres.glyph,
+      icon: pres.icon,
       color: pres.color,
       harmful: pres.harmful,
       secondsLeft,
@@ -173,6 +177,7 @@ function abilityBar(input: HudInput): AbilityBarModel | undefined {
       effect: a.effect,
       label: pres.label,
       glyph: pres.glyph,
+      icon: pres.icon,
       hotkey: HOTKEYS[a.slot] ?? String(a.slot + 1),
       targeting: pres.targeting,
       ready: a.ready,
@@ -184,6 +189,43 @@ function abilityBar(input: HudInput): AbilityBarModel | undefined {
     };
   });
   return { slot: hero.slot, buttons, hold: hero.hold, armOn: arming.armOn, enabled };
+}
+
+/** The help overlay for the selected hero; undefined while closed. Numbers come from the game config and perception. */
+function helpModel(input: HudInput): HelpModel | undefined {
+  const { p, ui, controls, game } = input;
+  if (!controls.help) {
+    return undefined;
+  }
+  const hero = p.heroes.find((h) => h.slot === controls.selected);
+  const def = game?.heroes.find((d) => d.id === hero?.def);
+  const defs = game?.statuses ?? [];
+  const abilities = (hero?.abilities ?? []).map((a) => {
+    const pres = abilityPresentation(ui, a.effect, a);
+    const desc = describeAbility(a.effect, { def, statuses: defs });
+    return {
+      slot: a.slot,
+      label: pres.label,
+      glyph: pres.glyph,
+      icon: pres.icon,
+      hotkey: HOTKEYS[a.slot] ?? String(a.slot + 1),
+      targeting: TARGETING_TEXT[pres.targeting],
+      cooldownSeconds: desc?.toggle === true ? 0 : a.cooldownTicks / TICK_HZ,
+      cost: desc?.cost ?? '',
+      text: desc?.text ?? '',
+      armable: pres.armable,
+    };
+  });
+  const statuses = ui.statuses.map((s) => ({
+    id: s.id,
+    label: s.label,
+    glyph: s.glyph,
+    icon: s.icon,
+    color: s.color,
+    harmful: s.harmful,
+    text: describeStatus(s.id, defs) ?? '',
+  }));
+  return { hero: hero === undefined ? '' : heroPresentation(ui, hero.def).label, abilities, statuses };
 }
 
 function intentRows(input: HudInput): IntentRowModel[] {
@@ -274,6 +316,7 @@ export function buildHudModel(input: HudInput): HudModel {
     intents: intentRows(input),
     picker: picker(controls, input.maxOffsetSeconds),
     hint,
+    help: helpModel(input),
     end: end === undefined ? undefined : { result: endResult(end.reason), wave: end.wave },
   };
 }

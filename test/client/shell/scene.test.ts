@@ -52,6 +52,7 @@ const controls: ControlState = {
     lastPost: undefined,
   },
   paused: false,
+  help: false,
   hint: undefined,
 };
 

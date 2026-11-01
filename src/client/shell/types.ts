@@ -10,6 +10,7 @@
 // down in the debug viewer's convention); screen coordinates are CSS pixels with the origin at the
 // top-left of the canvas. Angles are radians. Ticks are sim ticks (30 Hz).
 
+import type { GameConfig } from '../../content/index.ts';
 import type { Presentation, Targeting } from '../../content/presentation.ts';
 import type { MapDef } from '../../content/types.ts';
 import type { Match } from '../../match/match.ts';
@@ -277,6 +278,8 @@ export type UiAction =
   | { readonly kind: 'cancel' }
   /** Local pause toggle (no command). */
   | { readonly kind: 'pause' }
+  /** Toggle the help overlay (H, the top bar "?"). Never emits a command and never pauses. */
+  | { readonly kind: 'help' }
   /** Restart the match (handled by the app, ignored by the reducer). */
   | { readonly kind: 'restart' };
 
@@ -326,6 +329,8 @@ export interface ControlState {
   readonly cursor: Vec2 | undefined;
   readonly arming: ArmingState;
   readonly paused: boolean;
+  /** The help overlay is open. */
+  readonly help: boolean;
   readonly hint: Hint | undefined;
 }
 
@@ -414,6 +419,8 @@ export interface TopBarModel {
   readonly previewHidden: boolean;
   readonly ancientFrac: number;
   readonly paused: boolean;
+  /** The help overlay is open (the "?" button shows pressed). */
+  readonly help: boolean;
 }
 
 export interface ResourceBarModel {
@@ -430,6 +437,8 @@ export interface StatusPipModel {
   readonly id: string;
   readonly label: string;
   readonly glyph: string;
+  /** SVG path `d` (24x24); undefined means show the glyph. */
+  readonly icon: string | undefined;
   readonly color: string;
   readonly harmful: boolean;
   /** Seconds left, from `StatusView.until`. */
@@ -461,6 +470,8 @@ export interface AbilityButtonModel {
   readonly effect: string;
   readonly label: string;
   readonly glyph: string;
+  /** SVG path `d` (24x24); undefined means show the glyph. */
+  readonly icon: string | undefined;
   /** Key label such as 'Q'. */
   readonly hotkey: string;
   readonly targeting: Targeting;
@@ -482,6 +493,44 @@ export interface AbilityBarModel {
   readonly hold: boolean;
   readonly armOn: boolean;
   readonly enabled: boolean;
+}
+
+/** One ability card of the help overlay. */
+export interface HelpAbilityModel {
+  readonly slot: number;
+  readonly label: string;
+  readonly glyph: string;
+  readonly icon: string | undefined;
+  readonly hotkey: string;
+  /** How it is aimed, as text. */
+  readonly targeting: string;
+  /** Full cooldown in seconds from perception; 0 when it has none (a toggle, or no cooldown). */
+  readonly cooldownSeconds: number;
+  /** Cost or side effect, empty when free. */
+  readonly cost: string;
+  /** Filled description, empty when help has no entry for the effect. */
+  readonly text: string;
+  /** Can be posted as a timed trigger. */
+  readonly armable: boolean;
+}
+
+/** One row of the help overlay's status legend. */
+export interface HelpStatusModel {
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: string;
+  readonly icon: string | undefined;
+  readonly color: string;
+  readonly harmful: boolean;
+  readonly text: string;
+}
+
+/** The help overlay: the selected hero's ability cards and the status legend. */
+export interface HelpModel {
+  /** The selected hero's label; empty when it is dead. */
+  readonly hero: string;
+  readonly abilities: readonly HelpAbilityModel[];
+  readonly statuses: readonly HelpStatusModel[];
 }
 
 export interface IntentRowModel {
@@ -525,6 +574,8 @@ export interface HudModel {
   readonly picker: ArmPickerModel | undefined;
   /** An active hint text, if any. */
   readonly hint: string | undefined;
+  /** Undefined while help is closed. */
+  readonly help: HelpModel | undefined;
   readonly end: EndModel | undefined;
 }
 
@@ -536,6 +587,8 @@ export interface HudInput {
   readonly driven: readonly number[];
   /** `game.intents.maxOffsetSeconds`; bounds the reserve offset picker. */
   readonly maxOffsetSeconds: number;
+  /** The game config, the source of help numbers (hero and status defs); without it help shows `?` for them. */
+  readonly game?: GameConfig;
   /** Set once the match has ended. */
   readonly end: { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks'; readonly wave: number } | undefined;
 }
