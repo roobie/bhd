@@ -24,11 +24,10 @@ Out: anything not signed off by B at the wave 6 checkpoint.
 Starts after M1 closes. Wave 6 is a design checkpoint with B before any code.
 
 ## Now
-Wave 7 (client shell) and w7b (quality pass: projectiles, help, icons) are closed. Waiting for B's answers to the wave 6 design checkpoint questions.
+Wave 7 (client shell) and w7b (quality pass: projectiles, help, icons) are closed. Wave 6 (design checkpoint) is closed: B's answers are recorded as decisions. Wave 8 (solo playable) is next and being planned.
 
 ## Next
-- Wave 6: wait for B's answers to the design checkpoint questions (also confirm the Hold fire H to F remap).
-- Wave 8 (solo loop), depends on wave 6.
+- Wave 8 (solo playable), being planned; reduced M2 kits per D-ZQ7UANKFTPZIMMZW.
 - Wave 9 (bargains).
 - Wave 10 (multiplayer, last).
 
@@ -38,3 +37,4 @@ Wave 7 (client shell) and w7b (quality pass: projectiles, help, icons) are close
 - 2026-11-01 initialized (parked)
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 wave w7b-quality-pass closed
+- 2026-11-01 wave w6-design-checkpoint closed
