@@ -110,6 +110,43 @@ describe('taunt', () => {
   });
 });
 
+describe('leash invariants', () => {
+  const grunt = findById(defaultGame().enemies, 'grunt');
+  if (grunt === undefined) {
+    throw new Error('no grunt');
+  }
+
+  it('a luring hero never pulls a lane enemy beyond the leash (plus one tick of speed)', () => {
+    const sim = heldSim(oneWave('grunt', 1));
+    const e = firstEnemy(sim);
+    const slack = e.speed + 1e-9;
+    for (let i = 0; i < 1500 && !sim.ended && sim.entities.get(e.id) !== undefined; i++) {
+      const h = unit(sim, TANK);
+      h.hp = h.maxHp;
+      place(sim, TANK, e.x + 2, LEASH_RANGE - 1);
+      sim.step();
+      expect(Math.abs(e.y)).toBeLessThanOrEqual(LEASH_RANGE + slack);
+    }
+  });
+
+  it('a hero parked just beyond the reach threshold cannot stall the enemy', () => {
+    const sim = heldSim(oneWave('grunt', 1));
+    const e = firstEnemy(sim);
+    const h = unit(sim, TANK);
+    const y = LEASH_RANGE - (grunt.attack.range + e.radius + h.radius) + 0.1;
+    const events = stepUntil(
+      sim,
+      (ev) => {
+        h.hp = h.maxHp;
+        place(sim, TANK, 30, y);
+        return ev.some((x) => x.kind === 'leak');
+      },
+      3000,
+    );
+    expect(events.some((x) => x.kind === 'leak')).toBe(true);
+  });
+});
+
 describe('leash', () => {
   it('drops a target that leaves the leash range and returns to the lane', () => {
     const sim = heldSim(oneWave('grunt', 1));

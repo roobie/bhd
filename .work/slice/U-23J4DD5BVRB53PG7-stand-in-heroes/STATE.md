@@ -35,6 +35,7 @@ Implemented and gated (npm run ci green); awaiting review/merge.
 - Golden regenerated (kit hash gained cooldowns). npm run ci: 325 node + 75 browser tests green.
 
 - Review fixes: heal with nobody hurt and pull with no enemy in radius now return no-cast (no cooldown spent, no event); `?.` dropped from hashStandin and test/sim/hash.test.ts now perturbs real stand-in and Gunner kits (swapping in the other kind's real kit for `kit.kind`), covering cooldowns; autocast now runs before the cooldown countdown so it leaves the same cooldown as a manual cast. `npm run ci` green (352 node + 75 browser).
+- Re-review follow-up: added autocast-heal-with-nobody-hurt no-op test; leash invariant tests in test/lane/enemies.test.ts. `npm run ci` exit 0.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -52,3 +53,4 @@ Implemented and gated (npm run ci green); awaiting review/merge.
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 implemented stand-in attack/abilities/tests
 - 2026-11-01 review fixes applied; owner scope change: only no-op-in-state invariants tested for failed casts, no tuning-pinning tests
+- 2026-11-01 re-review follow-ups: autocast heal no-op test, leash invariant tests

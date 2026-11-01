@@ -83,7 +83,7 @@ export interface GunnerState extends KitBase {
   cdFurnace: number;
 }
 
-export function initGunner(_def: GunnerDef): GunnerState {
+export function initGunner(_def: GunnerDef, x = 0, y = 0): GunnerState {
   return {
     kind: 'gunner',
     hold: false,
@@ -98,8 +98,8 @@ export function initGunner(_def: GunnerDef): GunnerState {
     lockTicks: 0,
     ventStep: 0,
     shot: 0,
-    lastX: 0,
-    lastY: 0,
+    lastX: x,
+    lastY: y,
     furnaceTicks: 0,
     cdVent: 0,
     cdSuppress: 0,
@@ -210,12 +210,16 @@ function fireLine(run: GunnerRun, target: Unit, tags: readonly string[]): void {
   const range = effectiveRange(run);
   const ux = d === 0 ? 1 : dx / d;
   const uy = d === 0 ? 0 : dy / d;
-  // The line starts at the shooter's edge, so allies overlapping her body are not hit.
+  // The line starts at the shooter's edge; hits behind that muzzle point (projection < 0) are skipped,
+  // so allies overlapping her body are never hit.
   const from = { x: hero.x + ux * hero.radius, y: hero.y + uy * hero.radius };
   const to = { x: hero.x + ux * range, y: hero.y + uy * range };
   kit.facing = angleTo(hero, target.x, target.y);
   for (const hit of unitsOnSegment(ctx.entities, from, to, def.heat.lineHalfWidth)) {
     if (hit.unit.id === hero.id || hit.unit.kind === 'ancient') {
+      continue;
+    }
+    if ((hit.unit.x - from.x) * ux + (hit.unit.y - from.y) * uy < 0) {
       continue;
     }
     dealDamage(ctx, { src: hero.id, dst: hit.unit.id, amount: def.attack.damage, tags });
@@ -293,7 +297,8 @@ function tickMain(run: GunnerRun): void {
   }
   updateSpin(run, target !== undefined, moving);
   if (target === undefined) {
-    kit.heat = Math.max(0, kit.heat - Math.max(1, Math.round(bp(def.heat.decayPerSecond) / ticks(1))));
+    const decay = Math.round(bp(def.heat.decayPerSecond) / ticks(1));
+    kit.heat = Math.max(0, kit.heat - (decay > 0 ? Math.max(1, decay) : 0));
   }
   syncBand(run);
 }

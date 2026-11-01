@@ -204,6 +204,17 @@ describe('support: heal pulse', () => {
     expect(kitCooldowns(sim, SUPPORT)).toEqual([0, 0, 0, 0]);
   });
 
+  it('autocast with nobody hurt changes no state', () => {
+    const sim = quiet();
+    place(sim, SUPPORT, 0, 0);
+    place(sim, TANK, 2, 0);
+    sim.command(0, { kind: 'autocast', hero: SUPPORT, slot: 0, on: true });
+    const events = stepN(sim, 10);
+    expect(abilityEvents(events, SUPPORT)).toEqual([]);
+    expect(events.filter((e) => e.kind === 'heal')).toEqual([]);
+    expect(kitCooldowns(sim, SUPPORT)).toEqual([0, 0, 0, 0]);
+  });
+
   it('skips heroes beyond the radius', () => {
     const sim = quiet();
     place(sim, SUPPORT, 0, 0);

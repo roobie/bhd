@@ -16,10 +16,10 @@ import { perTick } from '../time.ts';
 import { commandGunner, hashGunner, initGunner, tickGunner } from './gunner.ts';
 import { commandStandin, hashStandin, initStandin, tickStandin } from './standins.ts';
 
-function initKit(def: HeroDef): HeroKitState {
+function initKit(def: HeroDef, x: number, y: number): HeroKitState {
   switch (def.kit) {
     case 'gunner':
-      return initGunner(def);
+      return initGunner(def, x, y);
     case 'standin':
       return initStandin(def);
     default: {
@@ -41,7 +41,7 @@ export function spawnHero(ctx: TickContext, def: HeroDef, x: number, y: number):
     maxHp: def.maxHp,
     armour: def.armour,
     speed: perTick(def.speed),
-    kit: initKit(def),
+    kit: initKit(def, x, y),
   });
   ctx.emit({ tick: ctx.tick, kind: 'spawn', id: e.id, def: e.def, team: e.team });
   return e;
