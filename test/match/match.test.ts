@@ -48,6 +48,11 @@ function oneSeat(
   return { seed: SEED, game: defaultMasterGame(), bots, brains };
 }
 
+/** A `cmd` event other than the autocast bits Match sets on a handover (those are not the bot's decisions). */
+function isBotCmd(e: SimEvent): e is Extract<SimEvent, { kind: 'cmd' }> {
+  return e.kind === 'cmd' && e.cmd.kind !== 'autocast';
+}
+
 const DUPLICATE_ID = /duplicate decision id/u;
 const HOLD_ON = (hero: number): Command => ({ kind: 'hold', hero, on: true });
 
@@ -128,7 +133,9 @@ describe('reaction delay', () => {
       { thinkSeconds, reactionSeconds },
     );
     const events = run(opts, (m) => m.tick >= 200);
-    const applied = events.flatMap((e) => (e.kind === 'cmd' && e.player === 0 ? [e.tick] : []));
+    const applied = events.flatMap((e) =>
+      e.kind === 'cmd' && e.player === 0 && e.cmd.kind !== 'autocast' ? [e.tick] : [],
+    );
     return { decided, applied, ctxTicks };
   }
 
@@ -159,7 +166,7 @@ describe('reaction delay', () => {
       (ctx) => [{ id: 'x.hold', options: [{ id: 'on', value: 1, cost: 0, commands: [HOLD_ON(ctx.me.id)] }] }],
       { thinkSeconds: 0.5, reactionSeconds: 2 },
     );
-    const applied = run(opts, (m) => m.tick >= 200).flatMap((e) => (e.kind === 'cmd' ? [e.tick] : []));
+    const applied = run(opts, (m) => m.tick >= 200).flatMap((e) => (isBotCmd(e) ? [e.tick] : []));
     expect(applied).toEqual([75, 135, 195]);
   });
 
@@ -174,7 +181,7 @@ describe('reaction delay', () => {
       },
       { thinkSeconds: 0.5, reactionSeconds: 2 },
     );
-    return run(opts, (m) => m.tick >= 300).flatMap((e) => (e.kind === 'cmd' ? [{ cmd: e.cmd, tick: e.tick }] : []));
+    return run(opts, (m) => m.tick >= 300).flatMap((e) => (isBotCmd(e) ? [{ cmd: e.cmd, tick: e.tick }] : []));
   }
 
   const MoveA: Command = { kind: 'move', hero: 2, x: 10, y: 10 };

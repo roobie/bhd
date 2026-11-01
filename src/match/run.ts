@@ -41,8 +41,8 @@ export interface GameSpec {
   /** Ticks between `hash` events. */
   readonly hashEvery: number;
   /**
-   * Hero slots (unique, 0-3) with no bot seat: a human drives them through `sim.command`. Absent or
-   * empty means an all-bot game, as before. The reporter never sets it.
+   * Hero slots (unique, 0-3) a human drives through `sim.command` (their bot seats stay silent until
+   * `Match.setDriven` hands them back). Absent or empty means an all-bot game. The reporter never sets it.
    */
   readonly humans?: readonly number[];
   /** A patch on the shipped config; see content/overrides.ts. */
@@ -72,13 +72,12 @@ function botsFor(spec: GameSpec): BotSetup {
   return {
     ...base,
     thinkSeconds: spec.thinkSeconds,
-    seats: base.seats
-      .filter((s) => !(spec.humans ?? []).includes(s.slot))
-      .map((s) => ({
-        ...s,
-        doctrine: spec.doctrines[s.slot] ?? s.doctrine,
-        reactionSeconds: spec.reactionSeconds,
-      })),
+    // Every slot keeps its seat: a human's seat stays silent (`Match.driven`) and a bot takes the hero back on `setDriven`.
+    seats: base.seats.map((s) => ({
+      ...s,
+      doctrine: spec.doctrines[s.slot] ?? s.doctrine,
+      reactionSeconds: spec.reactionSeconds,
+    })),
   };
 }
 
@@ -121,6 +120,7 @@ function matchOf(spec: GameSpec, resolved: RunConfig): Match {
     game: resolved.game,
     bots: resolved.bots,
     hashEvery: spec.hashEvery,
+    ...(spec.humans === undefined ? {} : { driven: spec.humans }),
     ...(resolved.director === undefined ? {} : { director: resolved.director }),
   });
 }

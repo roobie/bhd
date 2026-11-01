@@ -261,6 +261,8 @@ describe('keyAction', () => {
     expect(k('s')).toEqual({ kind: 'stop' });
     expect(k('f')).toEqual({ kind: 'hold' });
     expect(k('h')).toEqual({ kind: 'help' });
+    expect(k('n')).toEqual({ kind: 'callWave' });
+    expect(k('N')).toEqual({ kind: 'callWave' });
     expect(k('p')).toEqual({ kind: 'pause' });
     expect(k(' ')).toEqual({ kind: 'pause' });
     expect(k('Escape')).toEqual({ kind: 'cancel' });

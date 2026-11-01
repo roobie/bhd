@@ -112,6 +112,17 @@
   background: var(--accent);
 }
 
+/* Call-next-wave button: sits beside the countdown, hotkey inline */
+.hud-root .top .callwave {
+  padding: 0 8px;
+  gap: 3px;
+}
+
+.hud-root .top .callwave .hotkey {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
 /* Hero cards: a bottom row in portrait */
 .hud-root .cards {
   position: absolute;
@@ -149,7 +160,24 @@
 }
 
 .hud-root .card.dead {
-  opacity: 0.4;
+  opacity: 0.6;
+}
+
+/* Long names give way to the badge instead of pushing it out of the card */
+.hud-root .card .name .label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A downed hero's respawn countdown, in the card's colour */
+.hud-root .card .respawn {
+  color: var(--c);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud-root .name {
@@ -169,6 +197,7 @@
 }
 
 .hud-root .badge {
+  flex: 0 0 auto;
   margin-left: auto;
   padding: 0 4px;
   border-radius: 3px;
@@ -589,6 +618,35 @@
 
 /* Narrow portrait phones: four abilities and Stop/Hold/Arm must fit 390px; four status pips per card */
 @media (max-width: 430px) {
+  .hud-root .top {
+    gap: 4px;
+    padding: 0 2px 0 6px;
+  }
+
+  .hud-root .top .btn {
+    min-width: 34px;
+    padding: 0 6px;
+  }
+
+  .hud-root .ancient {
+    flex-basis: 14%;
+  }
+
+  /* Four cards share 390px: drop the swatch and shrink the badge so names are not cut */
+  .hud-root .card .name {
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .hud-root .card .name .swatch {
+    display: none;
+  }
+
+  .hud-root .card .name .badge {
+    padding: 1px 3px;
+    font-size: 8px;
+  }
+
   .hud-root .abilities {
     gap: 3px;
     padding: 0 3px;

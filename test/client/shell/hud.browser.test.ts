@@ -51,6 +51,8 @@ it('hud renders cards and ability buttons, and a click dispatches', () => {
   root.querySelectorAll<HTMLButtonElement>('button.card')[1]?.click();
   expect(seen[0]).toEqual({ kind: 'cast', slot: model.bar?.buttons[0]?.slot });
   expect(seen[1]).toEqual({ kind: 'select', slot: 1 });
+  root.querySelector<HTMLButtonElement>('button.callwave')?.click();
+  expect(seen[2]).toEqual({ kind: 'callWave' });
   hud.dispose();
   expect(root.querySelector('.card')).toBeNull();
   root.remove();

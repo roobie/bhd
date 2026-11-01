@@ -12,12 +12,14 @@ const ABILITY_KEYS: readonly string[] = ['q', 'w', 'e', 'r'];
 /** Keys of the non-ability buttons. */
 export const KEY_STOP = 'S';
 export const KEY_HOLD = 'F';
+export const KEY_CALL_WAVE = 'N';
 
 /** Non-ability keys for the help panel's "Keys" row, in the order they read. Keep in step with `keyAction`. */
 export const KEY_HELP: readonly { readonly keys: string; readonly does: string }[] = [
   { keys: '1-4', does: 'select hero' },
   { keys: KEY_STOP, does: 'stop' },
   { keys: KEY_HOLD, does: 'hold fire' },
+  { keys: KEY_CALL_WAVE, does: 'call next wave' },
   { keys: 'Alt+Q/W/E/R', does: 'arm ability' },
   { keys: 'Ctrl+Q/W/E/R', does: 'autocast' },
   { keys: 'Enter', does: 'confirm arm' },
@@ -38,7 +40,7 @@ export interface KeyInput {
 
 /**
  * The keymap, pure: 1-4 select; Q/W/E/R cast slot 0-3 (Ctrl: autocast; Alt: `cast` with `arm: true`); S stop;
- * F hold fire; H help; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
+ * F hold fire; N call the next wave; H help; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
  * other key.
  */
 export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefined {
@@ -61,6 +63,8 @@ export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefin
       return { kind: 'stop' };
     case 'f':
       return { kind: 'hold' };
+    case 'n':
+      return { kind: 'callWave' };
     case 'h':
       return { kind: 'help' };
     case 'p':
