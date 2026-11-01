@@ -141,16 +141,30 @@ The more he draws on the Warp, the stronger he gets and the less control he has.
 
 ## 8. Questions for B (one line each)
 1. Penitent: P1, P2 or P3?
+- P1
 2. Pain as "damage taken, friendly fire ×1.5, heals 25% on him": acceptable?
+- Yes
 3. Martyrdom: can the Gunner's friendly fire kill him, or does he have a 1 hp floor?
+- 1 HP floor
 4. Psyker: Y1, Y2 or Y3? (Y3 adds per-ally Warp.)
+- Y1
 5. Defer Rift backlash (enemy spawns) until after M2?
+- Yes
 6. Gunner slot 2: Suppressing Fire, Redline Surge or Pavise?
+- Pavise
 7. Adopt the status loop: Suppressed → Psyker, Clumped → Penitent, Exposed → Gunner?
+- Yes
 8. Friendly-fire scope: F1, F2 or F3?
+- F2
 9. Status numbers (Marked +25% consumed, Exposed −5 for 3 s, Clumped +30% for 2 s, Suppressed −40% for 3 s): keep, retune or replace?
+- Keep
 10. Can bargains hurt or heal the Ancient (today it takes only leak damage)?
+- Heal, not hurt
 11. Leash: aggro-on-damage, or raise LEASH_RANGE (the effective leash is about 6–8, against 10)?
+- raise
 12. Hero death: removal, a respawn timer, or respawn at the next wave with a scar? And does a team wipe lose the game?
+- Timer based on which wave
 13. Early lull: compress waves 1–5, or shorten the 20 s interval?
+- Allow call early any level, mutators later may increase wave count drastically
 14. M2 kits: the full 3 abilities plus ultimate, or a reduced kit (pull, taunt, Martyrdom) first?
+- Reduced kit first
