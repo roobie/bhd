@@ -169,8 +169,11 @@ export interface Snapshot {
 
 /** A short render-time effect (never fed back into the sim). Times are the app's `nowMs` clock. */
 export interface Effect {
-  /** `hit`: tint the target; `cast`: pulse a ring on the caster; `death`: fade a ghost ring. */
-  readonly kind: 'hit' | 'cast' | 'death';
+  /**
+   * `hit`: tint the target; `cast`: pulse a ring on the caster; `death`: fade a ghost ring; `shot`: a
+   * tracer from (`x`, `y`) to (`toX`, `toY`) coloured by the source (`srcKind`, `srcDef`); `id` is the source.
+   */
+  readonly kind: 'hit' | 'cast' | 'death' | 'shot';
   /** Entity the effect belongs to. */
   readonly id: number;
   readonly x: number;
@@ -178,6 +181,12 @@ export interface Effect {
   readonly radius: number;
   readonly startMs: number;
   readonly durationMs: number;
+  /** `shot` only: where it ends. */
+  readonly toX?: number;
+  readonly toY?: number;
+  /** `shot` only: the source's kind and content id, for its colour. */
+  readonly srcKind?: EntitySnap['kind'];
+  readonly srcDef?: string;
 }
 
 // ---------------------------------------------------------------------------------------------

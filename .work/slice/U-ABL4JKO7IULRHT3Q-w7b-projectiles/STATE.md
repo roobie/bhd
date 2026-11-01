@@ -1,31 +1,33 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-PGMECOYBMCUQRATL
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - ranged hits show a short client-side tracer coloured by the source; melee shows none
+  - sim, events and golden hashes unchanged
+  - invariant tests pass; npm run ci exits 0
 ---
 
 # slice/w7b-projectiles
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Render projectiles (B request). The sim resolves ranged attacks instantly, so tracers are client-only visuals derived from dmg events.
 
 ## Scope
-In: TODO
-Out: TODO
+In: shot effect in snapshot.ts/scene.ts, Effect types, tests.
+Out: sim changes, HUD, presentation, ability line/cone flashes.
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+advanceEffects receives the pre-step snapshot (L-PG6CVIRY2D5M6WAX). dmg carries src and dst; no range in events, so ranged = centre gap above 3 units.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Implemented; CI and visual check.
 
 ## Next
-- TODO
+- Merge.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
@@ -37,6 +39,10 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] learning: dmg events lack attacker range, so client ranged detection is geometric; a sim `shot` event would be more exact (backlog candidate)
+- [ ] backlog: ability line/cone flashes for Gunner overpen and vent
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 phase initialize → execute
+- 2026-11-01 phase execute → finalize
