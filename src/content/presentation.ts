@@ -6,7 +6,7 @@
 // a new hero is playable before it has an entry. Shell code must not switch on any of these ids.
 // Icons are path data (icons.ts); an entry without one renders its glyph text.
 
-import { ABILITY_ICONS, STATUS_ICONS } from './icons.ts';
+import { ABILITY_ICONS, STATUS_ICONS, UI_ICONS } from './icons.ts';
 
 /** How an ability is aimed. `instant` casts on press; the others need a world point or a unit. */
 export type Targeting = 'instant' | 'direction' | 'point' | 'unit';
@@ -65,6 +65,17 @@ export interface Presentation {
   readonly enemies: readonly UnitPresentation[];
 }
 
+/** Strings and icons for the non-ability UI: the fallen state and the call-next-wave control. */
+export const UI_TEXT = {
+  fallen: { label: 'Fallen', icon: UI_ICONS.fallen },
+  callWave: { label: 'Call next wave', key: 'N', icon: UI_ICONS.callWave },
+} as const;
+
+/** The respawn countdown line for a fallen hero; `ticksLeft` and `hz` come from perception and the sim clock. */
+export function respawnText(ticksLeft: number, hz: number): string {
+  return `Returns in ${Math.max(0, Math.ceil(ticksLeft / hz))}s`;
+}
+
 export function defaultPresentation(): Presentation {
   return {
     abilities: [
@@ -93,7 +104,6 @@ export function defaultPresentation(): Presentation {
         targeting: 'instant',
         armable: true,
       },
-      // Penitent and Psyker: step-1 entries with placeholder icons (slice F polishes them).
       {
         effect: 'chain',
         label: 'Chain of Penance',
@@ -134,8 +144,10 @@ export function defaultPresentation(): Presentation {
     ],
     resources: [
       { name: 'heat', label: 'Heat', color: '#e8832a' },
-      { name: 'pain', label: 'Pain', color: '#b3263a' },
+      { name: 'pain', label: 'Pain', color: '#c0172f' },
       { name: 'warp', label: 'Warp', color: '#8f5fd6' },
+      // The Psyker's chance of Discharge as a second bar: sickly yellow-green, apart from Warp violet.
+      { name: 'backlash', label: 'Backlash', color: '#c9d63a' },
     ],
     statuses: [
       {
@@ -151,10 +163,28 @@ export function defaultPresentation(): Presentation {
       { id: 'clumped', label: 'Clumped', glyph: 'Cl', icon: STATUS_ICONS.clumped, color: '#c45fa0', harmful: true },
       { id: 'taunted', label: 'Taunted', glyph: 'Tn', icon: STATUS_ICONS.taunted, color: '#c8a050', harmful: true },
       { id: 'rooted', label: 'Rooted', glyph: 'Rt', icon: STATUS_ICONS.rooted, color: '#8a7a5a', harmful: true },
+      // Kit states (Penitent and Psyker), listed beside the statuses in the legend.
+      { id: 'spent', label: 'Spent', glyph: 'Sp', icon: STATUS_ICONS.spent, color: '#7d7468', harmful: true },
+      {
+        id: 'martyrdom',
+        label: 'Martyrdom',
+        glyph: 'Ma',
+        icon: STATUS_ICONS.martyrdom,
+        color: '#f0c040',
+        harmful: false,
+      },
+      {
+        id: 'discharge',
+        label: 'Discharge',
+        glyph: 'Dc',
+        icon: STATUS_ICONS.discharge,
+        color: '#c9d63a',
+        harmful: true,
+      },
     ],
     heroes: [
       { id: 'gunner', label: 'Gunner', color: '#e8832a' },
-      { id: 'penitent', label: 'Penitent', color: '#b3263a' },
+      { id: 'penitent', label: 'Penitent', color: '#a8302c' },
       { id: 'psyker', label: 'Psyker', color: '#8f5fd6' },
       { id: 'tank', label: 'Tank', color: '#3b82c4' },
       { id: 'ranged', label: 'Ranger', color: '#2fa36b' },

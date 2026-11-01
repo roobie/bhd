@@ -6,7 +6,7 @@
 // whatever the sim reads: the status def for suppressed, but for marked, clumped and taunted the
 // value and duration of the one ability that applies it (standins.ts passes its own); when none or
 // several differing abilities apply it the text drops the numbers. A status nothing applies (today:
-// exposed) has no entry and is not listed. An id without an entry gets no
+// suppressed, B-66KHQJCD5D4IJTCN) has no entry and is not listed. An id without an entry gets no
 // description (the card still shows what perception and presentation know). The text describes what
 // the sim does today (src/sim/heroes/*, combat.ts, statuses.ts); change both together.
 
@@ -15,7 +15,8 @@ import type { PenitentDef } from './heroes/penitent.ts';
 import type { PsykerDef } from './heroes/psyker.ts';
 import type { StandinAbilityDef } from './heroes/standins.ts';
 import type { HeroDef } from './index.ts';
-import type { Targeting } from './presentation.ts';
+import { type Targeting, UI_TEXT } from './presentation.ts';
+import type { RulesDef } from './rules.ts';
 import type { StatusDef } from './types.ts';
 
 type Values = Readonly<Record<string, number | undefined>>;
@@ -45,7 +46,7 @@ interface StatusHelp {
   readonly appliedBy?: StandinAbilityDef['effect'];
   /** Used instead of `text` when `appliedBy` finds no single source: no numbers. */
   readonly bare?: string;
-  readonly values: (def: StatusDef | undefined) => Values;
+  readonly values: (def: StatusDef | undefined, f: StatusFacts) => Values;
 }
 
 /** What a status template may read. */
@@ -64,6 +65,14 @@ function penitentOf(f: AbilityFacts): PenitentDef | undefined {
 
 function psykerOf(f: AbilityFacts): PsykerDef | undefined {
   return f.def?.kit === 'psyker' ? f.def : undefined;
+}
+
+function penitentIn(heroes: readonly HeroDef[]): PenitentDef | undefined {
+  return heroes.find((h): h is PenitentDef => h.kit === 'penitent');
+}
+
+function psykerIn(heroes: readonly HeroDef[]): PsykerDef | undefined {
+  return heroes.find((h): h is PsykerDef => h.kit === 'psyker');
 }
 
 function standinOf<E extends StandinAbilityDef['effect']>(
@@ -106,7 +115,7 @@ const ABILITY_HELP: readonly AbilityHelp[] = [
   },
   {
     effect: 'pavise',
-    text: 'Plant a {width} wide barrier up to {range} away for {duration}s. Enemy melee hits across it are blocked and so is your own line of fire. Cannot be used while locked out.',
+    text: 'Plant a {width} wide barrier up to {range} away for {duration}s. Enemy attacks across it are blocked, and so is your own line of fire, friendly fire included. Cannot be used while locked out.',
     values: (f) => {
       const g = gunnerOf(f);
       return {
@@ -116,31 +125,50 @@ const ABILITY_HELP: readonly AbilityHelp[] = [
       };
     },
   },
-  // Step-1 placeholder wording for the new kits (slice F rewrites it once A and B land their behaviour).
   {
     effect: 'chain',
-    text: 'Taunt every enemy within {radius} for {duration}s and leave them Exposed.',
-    values: (f) => ({ radius: penitentOf(f)?.chain.radius, duration: penitentOf(f)?.chain.tauntSeconds }),
+    text: 'Haul the chain taut: every enemy within {radius} is Taunted for {duration}s and left Exposed, losing {armour} armour for {exposed}s. Sets up the pull and the Martyrdom.',
+    values: (f) => {
+      const exposed = f.statuses.find((x) => x.id === 'exposed');
+      return {
+        radius: penitentOf(f)?.chain.radius,
+        duration: penitentOf(f)?.chain.tauntSeconds,
+        armour: exposed?.value,
+        exposed: exposed?.duration,
+      };
+    },
   },
   {
     effect: 'martyrdom',
-    text: 'For {duration}s taunt everything within {radius}, taking {loss}% of the damage while still banking all of it as Pain. It ends in a nova, then he is Spent for {spent}s.',
+    text: 'For {duration}s every enemy within {radius} is Taunted onto him. He takes only {loss}% of the damage as lost hp, yet banks all of it as Pain. It ends in a nova of {nova}% of the Pain banked, hitting enemies within {novaRadius}. Then he is Spent for {spent}s.',
     values: (f) => {
       const m = penitentOf(f)?.martyrdom;
       return {
         duration: m?.seconds,
         radius: m?.tauntRadius,
         loss: percent(m?.hpLossMult),
+        nova: percent(m?.novaPainMult),
+        novaRadius: m?.novaRadius,
         spent: m?.spentSeconds,
       };
     },
   },
   {
     effect: 'lash',
-    text: 'Pull enemies within {radius} of the aimed point up to {distance} toward it and leave them Clumped for {duration}s. Adds {warp} Warp.',
+    text: 'Hurl a gravitic lash at a point within {range}. Enemies within {radius} are dragged {distance} toward it and left Clumped: +{bonus}% damage from cone, line and splash hits for {duration}s. Adds {warp} Warp. At full Warp the pull widens to {radiusMax}, drags {distanceMax} and the bonus reaches +{bonusMax}%.',
     values: (f) => {
       const l = psykerOf(f)?.lash;
-      return { radius: l?.radius, distance: l?.distance, duration: l?.clumpedSeconds, warp: l?.warpGain };
+      return {
+        range: l?.range,
+        radius: l?.radius,
+        distance: l?.distance,
+        bonus: percent(l?.clumped),
+        duration: l?.clumpedSeconds,
+        warp: l?.warpGain,
+        radiusMax: l === undefined ? undefined : l.radius + l.radiusPerW,
+        distanceMax: l === undefined ? undefined : l.distance + l.distancePerW,
+        bonusMax: l === undefined ? undefined : percent(l.clumped + l.clumpedPerW),
+      };
     },
   },
   {
@@ -187,11 +215,6 @@ const ABILITY_HELP: readonly AbilityHelp[] = [
 
 const STATUS_HELP: readonly StatusHelp[] = [
   {
-    id: 'suppressed',
-    text: 'Moves {slow}% slower for {duration}s.',
-    values: (d) => ({ slow: percent(d?.value), duration: d?.duration }),
-  },
-  {
     id: 'marked',
     appliedBy: 'mark',
     text: 'The next hit taken deals +{bonus}% damage and ends the mark. Lasts {duration}s.',
@@ -217,7 +240,123 @@ const STATUS_HELP: readonly StatusHelp[] = [
     text: 'Cannot move and ignores move commands. A braced Gunner is rooted until she unbraces.',
     values: () => ({}),
   },
+  {
+    id: 'exposed',
+    text: 'Loses {armour} armour for {duration}s, so every hit lands harder. The Penitent applies it with Chain of Penance.',
+    values: (d) => ({ armour: d?.value, duration: d?.duration }),
+  },
+  {
+    id: 'spent',
+    text: 'After Martyrdom the Penitent is Spent for {duration}s: Pain locked at 0, {armour} less armour and no taunt.',
+    values: (_d, f) => {
+      const m = penitentIn(f.heroes)?.martyrdom;
+      return { duration: m?.spentSeconds, armour: m?.spentArmourPenalty };
+    },
+  },
+  {
+    id: 'martyrdom',
+    text: 'Martyrdom is active for {duration}s: enemies are Taunted onto the Penitent, who takes {loss}% of the damage and banks all of it as Pain. Friendly fire cannot drop him below 1 hp.',
+    values: (_d, f) => {
+      const m = penitentIn(f.heroes)?.martyrdom;
+      return { duration: m?.seconds, loss: percent(m?.hpLossMult) };
+    },
+  },
+  {
+    id: 'discharge',
+    text: 'Warp backlash. Casting above {free} Warp risks a Discharge: {base} plus the current Warp as damage to everything within {radius} of the Psyker, allies included.',
+    values: (_d, f) => {
+      const b = psykerIn(f.heroes)?.backlash;
+      return { free: b?.freeBelow, base: b?.baseDamage, radius: b?.radius };
+    },
+  },
 ];
+
+interface ResourceHelp {
+  /** The perception `ResourceView.name`. */
+  readonly name: string;
+  readonly text: string;
+  readonly values: (def: HeroDef | undefined) => Values;
+}
+
+const RESOURCE_HELP: readonly ResourceHelp[] = [
+  {
+    name: 'heat',
+    text: 'Every shot adds heat; it bleeds off while she has nothing to shoot. Above {pierce}% rounds ignore armour, above {overpen}% they overpenetrate and hit allies in the line. At 100% she overheats and cannot fire for {overheat}s.',
+    values: (d) => {
+      const g = d?.kit === 'gunner' ? d : undefined;
+      return {
+        pierce: percent(g?.heat.pierceAbove),
+        overpen: percent(g?.heat.overpenAbove),
+        overheat: g?.heat.overheatSeconds,
+      };
+    },
+  },
+  {
+    name: 'pain',
+    text: 'Banked from every wound he takes (friendly fire counts x{ff}) and drained at {drain}% of the bar per second after {delay}s unhurt. Heals on him restore only {heal}%. Wound-Zeal adds up to +{zeal}% damage as his hp runs out.',
+    values: (d) => {
+      const p = d?.kit === 'penitent' ? d : undefined;
+      return {
+        ff: p?.pain.friendlyFireMult,
+        drain: percent(p?.pain.drainPerSecond),
+        delay: p?.pain.drainDelaySeconds,
+        heal: percent(p?.pain.healMult),
+        zeal: percent(p?.zeal.maxBonus),
+      };
+    },
+  },
+  {
+    name: 'warp',
+    text: 'Each Warp point adds {power}% to his spell power. Basic-attack hits add {hit}; it decays {decay} per second. Past the mark on the bar every cast risks backlash.',
+    values: (d) => {
+      const w = d?.kit === 'psyker' ? d : undefined;
+      return { power: percent(w?.warp.powerPerPoint), hit: w?.warp.perHit, decay: w?.warp.decayPerSecond };
+    },
+  },
+  {
+    name: 'backlash',
+    text: 'The chance a cast Discharges. None up to {free} Warp, then {chance}% for every point above. Discharge hits everyone within {radius}, allies too, for {base} plus his Warp.',
+    values: (d) => {
+      const b = d?.kit === 'psyker' ? d.backlash : undefined;
+      return {
+        free: b?.freeBelow,
+        chance: percent(b?.chancePerPoint),
+        radius: b?.radius,
+        base: b?.baseDamage,
+      };
+    },
+  },
+];
+
+/** The filled description of a hero resource bar; undefined when help has no entry for it. */
+export function describeResource(name: string, def: HeroDef | undefined): string | undefined {
+  const entry = RESOURCE_HELP.find((h) => h.name === name);
+  return entry === undefined ? undefined : fillTemplate(entry.text, entry.values(def));
+}
+
+/** Every resource help entry and what `def` leaves unfilled in it, for invariant tests. */
+export function resourceTemplates(): { name: string; unfilled: (def: HeroDef | undefined) => string[] }[] {
+  return RESOURCE_HELP.map((h) => ({ name: h.name, unfilled: (def) => unfilled(h.text, h.values(def)) }));
+}
+
+/** Help for the call-next-wave control. */
+export function describeCallWave(): string {
+  return `Start the next wave now instead of waiting for the timer (key ${UI_TEXT.callWave.key}). Nothing happens once every wave has been sent.`;
+}
+
+/** Help for the fallen state and its respawn countdown, from the rules. */
+export function describeFallen(rules: RulesDef): string {
+  const { base, perWave, max } = rules.respawn;
+  const wipe = rules.wipeLoses
+    ? ' If every hero is down at once the game is lost.'
+    : ' Only the Ancient falling ends the game.';
+  return (
+    fillTemplate(
+      'A fallen hero returns at the spawn point with full hp. The wait is {base}s plus {perWave}s per wave started, never more than {max}s.',
+      { base, perWave, max },
+    ) + wipe
+  );
+}
 
 /** The aiming line shown on an ability card. */
 export const TARGETING_TEXT: Readonly<Record<Targeting, string>> = {
@@ -296,7 +435,7 @@ function statusText(entry: StatusHelp, f: StatusFacts): string {
   if (entry.appliedBy !== undefined && source === undefined) {
     return entry.bare ?? '';
   }
-  return fillTemplate(entry.text, entry.values(source));
+  return fillTemplate(entry.text, entry.values(source, f));
 }
 
 /** The filled description of a status; undefined when help has no entry for it. */
@@ -321,6 +460,6 @@ export function statusTemplates(facts: StatusFacts): { id: string; unfilled: str
   return STATUS_HELP.map((h) => {
     const source = statusSource(h, facts);
     const bare = h.appliedBy !== undefined && source === undefined;
-    return { id: h.id, unfilled: bare ? [] : unfilled(h.text, h.values(source)) };
+    return { id: h.id, unfilled: bare ? [] : unfilled(h.text, h.values(source, facts)) };
   });
 }

@@ -40,8 +40,8 @@ describe('icons and help cover the shipped content', () => {
   });
 
   it('has a status help entry for every status in the config that something applies', () => {
-    // exposed is defined but no hero ability applies it, so help leaves it out of the legend.
-    const unapplied = new Set(['exposed']);
+    // suppressed is defined but nothing applies it since Pavise (B-66KHQJCD5D4IJTCN), so help leaves it out.
+    const unapplied = new Set(['suppressed']);
     for (const s of game.statuses.filter((x) => !unapplied.has(x.id))) {
       expect(describeStatus(s.id, facts), s.id).toBeDefined();
     }
@@ -93,8 +93,8 @@ describe('templates', () => {
   });
 
   it('track the config: a tuned status duration changes the text', () => {
-    const tuned = game.statuses.map((s) => (s.id === 'suppressed' ? { ...s, duration: 17 } : s));
-    expect(describeStatus('suppressed', { ...facts, statuses: tuned })).toContain('17');
+    const tuned = game.statuses.map((s) => (s.id === 'exposed' ? { ...s, duration: 17 } : s));
+    expect(describeStatus('exposed', { ...facts, statuses: tuned })).toContain('17');
   });
 
   it('take applied statuses from the applying ability, not the status def', () => {

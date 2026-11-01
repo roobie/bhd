@@ -211,8 +211,8 @@ describe('help model', () => {
     const listed = m.help?.statuses.map((s) => s.id) ?? [];
     expect(listed.length).toBeGreaterThan(0);
     expect(listed.length).toBeLessThan(defaultPresentation().statuses.length);
-    // exposed: defined and presented, but no hero ability applies it.
-    expect(listed).not.toContain('exposed');
+    // suppressed: defined and presented, but nothing applies it (B-66KHQJCD5D4IJTCN).
+    expect(listed).not.toContain('suppressed');
     for (const s of m.help?.statuses ?? []) {
       expect(s.text).not.toMatch(BAD);
       expect(s.text.length).toBeGreaterThan(0);
