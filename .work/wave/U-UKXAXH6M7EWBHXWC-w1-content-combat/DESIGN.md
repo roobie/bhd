@@ -60,6 +60,7 @@ commands → waves (spawn) → statuses (expire) → movement → hero kits (res
 - **Projectiles:** not needed for the Gunner kit; instant hits plus segment queries are cheaper and deterministic. Add when a hero needs travel time.
 
 ## Risks & open questions
+- **Ancient takes only `leak` damage and cannot be healed** (lead default after review; §2 mentions the Ancient's health as a cost axis, so B may want ff/bargains to reach it later). Self-hits never apply.
 - **Status semantics beyond Suppressed (slow) are provisional** (Marked, Exposed, Clumped): numbers are free to tune, but the mechanics go to B at the wave report.
 - **Gunner third ability:** Suppressing Fire (B, provisional, revisit later).
 - **Friendly fire** only on damage that carries the `ff` flag; only Gunner overpenetration sets it (§3 default, §10 Q1).

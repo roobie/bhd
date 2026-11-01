@@ -1,13 +1,13 @@
 ---
-phase: initialize
+phase: execute
 parent: U-UKXAXH6M7EWBHXWC
 owner:
   - claude
 created: 2026-11-01
 success_criteria:
-  - 'Three parameterised stand-ins (tank, ranged, support) with basic attacks and generic abilities (taunt, mark, heal pulse, pull); no resources'
-  - 'Clearly marked as placeholders in code and content'
-  - 'Tests per ability; npm run ci green'
+  - Three parameterised stand-ins (tank, ranged, support) with basic attacks and generic abilities (taunt, mark, heal pulse, pull); no resources
+  - Clearly marked as placeholders in code and content
+  - Tests per ability; npm run ci green
 ---
 
 # slice/stand-in-heroes
@@ -24,7 +24,7 @@ Owns only its files in the wave DESIGN ownership table (.work/wave/U-UKXAXH6M7EW
 
 
 ## Now
-Waiting on sim-contracts.
+Sonnet agent implementing in a worktree.
 
 ## Next
 - Start after sim-contracts merges.
@@ -42,3 +42,4 @@ Waiting on sim-contracts.
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 phase initialize → execute
