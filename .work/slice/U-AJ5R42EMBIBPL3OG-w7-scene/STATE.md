@@ -1,42 +1,42 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-WRCOBBQF2BA7YLWH
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-01
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - buildScene emits finite instances with known shape ids for a real perception, in painter order, bounded per entity
+  - bodies, pips and markers honour MIN_BODY_PX via camera.pxPerUnit; unknown hero/enemy/status ids fall back without errors
+  - scene tests pass and npm run ci exits 0
 ---
 
 # slice/w7-scene
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Turn drawn entities, perception and controls into SDF instances so the renderer can draw the match (wave 7a).
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/client/shell/scene.ts, palette.ts, test/client/shell/scene.test.ts.
+Out: intentfx (arming slice), renderer, camera.
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+Contracts in types.ts are fixed. Colours via palette and presentation fallbacks only. No gameplay pinning (D-4E4QRJ7N6LIGZDSD).
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Implemented and tested.
 
 ## Next
-- TODO
+- Merge; verify visually once camera and renderer land.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+7 scene tests; npm run ci exit 0.
 
 ## Harvest
-<!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
-     - [ ] decision: …   → record decision
-     - [ ] learning: …   → record learning
-     - [ ] backlog: …    → record backlog
-     - [ ] process: …    → retrospective (change the process, or drop it)
--->
+- [ ] learning: scene tests mock intentfx via vi.mock while it is a stub; drop the mock once arming lands
+- [ ] backlog: tickF passed to intentInstances is p.tick (SceneInput has no alpha); add a fractional tick to SceneInput for smooth rings
+- [ ] backlog: cone previews use a generic half angle; derive from perception cone data once kit-agnostic
 
 ## Log
 - 2026-11-01 initialized
+- 2026-11-01 phase initialize → execute
+- 2026-11-01 phase execute → finalize
