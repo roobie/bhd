@@ -32,6 +32,7 @@ function camera(pxPerUnit: number): Camera {
     matrix: new Float32Array(9),
     worldToScreen: (v) => ({ x: v.x * pxPerUnit, y: v.y * pxPerUnit }),
     screenToWorld: (v) => ({ x: v.x / pxPerUnit, y: v.y / pxPerUnit }),
+    isMapPoint: () => true,
   };
 }
 
@@ -39,7 +40,17 @@ const controls: ControlState = {
   selected: 0,
   aim: undefined,
   cursor: undefined,
-  arming: { armOn: false, phase: 'off', slot: -1, x: 0, y: 0, fireHalfSeconds: 4, intent: 0, offsetHalfSeconds: 0 },
+  arming: {
+    armOn: false,
+    phase: 'off',
+    slot: -1,
+    x: 0,
+    y: 0,
+    fireHalfSeconds: 4,
+    intent: 0,
+    offsetHalfSeconds: 0,
+    lastPost: undefined,
+  },
   paused: false,
   hint: undefined,
 };

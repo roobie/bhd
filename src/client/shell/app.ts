@@ -98,7 +98,8 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const driven = config.drive;
 
   let match: Match = buildMatch(spec);
-  let sink: CommandSink = options?.sink ?? localSink(match, INPUT_DELAY_TICKS);
+  const makeSink = (m: Match): CommandSink => options?.sink?.(m) ?? localSink(m, INPUT_DELAY_TICKS);
+  let sink: CommandSink = makeSink(match);
   let controls: ControlState | undefined;
   let clock: FrameClock = newFrameClock();
   let prev: Snapshot | undefined;
@@ -134,9 +135,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
 
   function restart(): void {
     match = buildMatch(spec);
-    if (options?.sink === undefined) {
-      sink = localSink(match, INPUT_DELAY_TICKS);
-    }
+    sink = makeSink(match);
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
     prev = takeSnapshot(match.sim, undefined);
@@ -155,7 +154,12 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       restart();
       return;
     }
-    const result = reduce(controls, action, { p: match.perception, driven, ui });
+    const result = reduce(controls, action, {
+      p: match.perception,
+      driven,
+      ui,
+      maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds,
+    });
     const player = controls.selected;
     controls = result.state;
     for (const cmd of result.commands) {
@@ -185,14 +189,26 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     fallback(els.hud, 'createRenderer returned undefined');
     return handle(false);
   }
+  // Teardown is built step by step so a failed setup undoes exactly what it had done.
+  const cleanups: (() => void)[] = [() => renderer.dispose()];
+  teardown = () => {
+    for (const undo of cleanups.splice(0).reverse()) {
+      undo();
+    }
+  };
   try {
     const buffer = createInstanceBuffer();
     restart();
     const hud = createHud(els.hud, {
       dispatch: (a) => dispatch(a),
-      screenToWorld: (p) =>
-        (camera ?? fitCamera(match.sim.game.map, { width: 1, height: 1 }, NO_INSETS)).screenToWorld(p),
+      mapPoint: (p) => {
+        const rect = els.canvas.getBoundingClientRect();
+        const local = { x: p.x - rect.left, y: p.y - rect.top };
+        const cam = camera;
+        return cam?.isMapPoint(local) === true ? cam.screenToWorld(local) : undefined;
+      },
     });
+    cleanups.push(() => hud.dispose());
     const resize = (): void => {
       const width = Math.max(1, els.canvas.clientWidth);
       const height = Math.max(1, els.canvas.clientHeight);
@@ -201,8 +217,37 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       camera = fitCamera(match.sim.game.map, size, hudInsets(size, readSafeInsets(els.hud)));
     };
     resize();
+    // The canvas CSS size is the page's (never an inline px size), so observing the canvas and its
+    // container sees every layout change; window events cover engines that fire no observer.
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(resize);
     observer?.observe(els.canvas);
+    if (els.canvas.parentElement !== null) {
+      observer?.observe(els.canvas.parentElement);
+    }
+    cleanups.push(() => observer?.disconnect());
+    globalThis.addEventListener('resize', resize);
+    globalThis.addEventListener('orientationchange', resize);
+    cleanups.push(() => {
+      globalThis.removeEventListener('resize', resize);
+      globalThis.removeEventListener('orientationchange', resize);
+    });
+    // A device-pixel-ratio change alone (zoom, moving to another screen) moves no box: watch the
+    // current ratio and re-arm the query after each change.
+    let dprQuery: MediaQueryList | undefined;
+    const onDpr = (): void => {
+      resize();
+      watchDpr();
+    };
+    const watchDpr = (): void => {
+      dprQuery?.removeEventListener('change', onDpr);
+      dprQuery =
+        typeof globalThis.matchMedia === 'function'
+          ? globalThis.matchMedia(`(resolution: ${globalThis.devicePixelRatio || 1}dppx)`)
+          : undefined;
+      dprQuery?.addEventListener('change', onDpr);
+    };
+    watchDpr();
+    cleanups.push(() => dprQuery?.removeEventListener('change', onDpr));
     const detach = attachInput({
       canvas: els.canvas,
       camera: () => camera ?? fitCamera(match.sim.game.map, { width: 1, height: 1 }, NO_INSETS),
@@ -251,7 +296,9 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       if (hudDirty || hudTick !== match.tick) {
         hudTick = match.tick;
         hudDirty = false;
-        hud.render(buildHudModel({ p, ui, controls, driven, end }));
+        hud.render(
+          buildHudModel({ p, ui, controls, driven, end, maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds }),
+        );
       }
     };
     const loop = (): void => {
@@ -261,17 +308,12 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       cancelFrame = schedule(loop);
       frame();
     };
-    teardown = () => {
-      detach();
-      observer?.disconnect();
-      hud.dispose();
-      renderer.dispose();
-    };
+    cleanups.push(detach);
     cancelFrame = schedule(loop);
     return handle(true);
   } catch (error) {
-    renderer.dispose();
     cancelFrame();
+    teardown();
     fallback(els.hud, error instanceof Error ? error.message : String(error));
     return handle(false);
   }

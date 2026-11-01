@@ -20,17 +20,28 @@ it('hud renders cards and ability buttons, and a click dispatches', () => {
       selected: 0,
       aim: undefined,
       cursor: undefined,
-      arming: { armOn: false, phase: 'off', slot: -1, x: 0, y: 0, fireHalfSeconds: 4, intent: 0, offsetHalfSeconds: 0 },
+      arming: {
+        armOn: false,
+        phase: 'off',
+        slot: -1,
+        x: 0,
+        y: 0,
+        fireHalfSeconds: 4,
+        intent: 0,
+        offsetHalfSeconds: 0,
+        lastPost: undefined,
+      },
       paused: false,
       hint: undefined,
     },
     driven: [0],
+    maxOffsetSeconds: 5,
     end: undefined,
   });
   const root = document.createElement('div');
   document.body.append(root);
   const seen: UiAction[] = [];
-  const hud = createHud(root, { dispatch: (a) => seen.push(a), screenToWorld: (v) => v });
+  const hud = createHud(root, { dispatch: (a) => seen.push(a), mapPoint: (v) => v });
   hud.render(model);
   expect(root.querySelectorAll('.card').length).toBe(4);
   const buttons = root.querySelectorAll<HTMLButtonElement>('button.ability');

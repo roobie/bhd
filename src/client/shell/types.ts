@@ -58,6 +58,8 @@ export interface Camera {
   readonly worldToScreen: (p: Vec2) => Vec2;
   /** CSS pixels -> world. The exact inverse of `worldToScreen`. */
   readonly screenToWorld: (p: Vec2) => Vec2;
+  /** True when the CSS-pixel point is in the free rectangle (viewport minus HUD insets) and inside the map. */
+  readonly isMapPoint: (p: Vec2) => boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -304,6 +306,8 @@ export interface ArmingState {
   readonly intent: number;
   /** Reserve offset in half seconds, default 0. */
   readonly offsetHalfSeconds: number;
+  /** The last `post` submitted: its hero and the last tick before the board has seen it. */
+  readonly lastPost: { readonly hero: number; readonly untilTick: number } | undefined;
 }
 
 /** A short HUD message ("a second trigger is already armed"). UX only, not a rule. */
@@ -331,6 +335,8 @@ export interface ControlContext {
   /** Hero slots a human drives (commands are only emitted for these, and only while alive). */
   readonly driven: readonly number[];
   readonly ui: Presentation;
+  /** `game.intents.maxOffsetSeconds`: the longest reserve offset the board accepts. */
+  readonly maxOffsetSeconds: number;
 }
 
 export interface ReduceResult {
@@ -382,6 +388,8 @@ export interface IntentFxInput {
   /** Fractional tick for smooth rings (tick + alpha). */
   readonly tickF: number;
   readonly pxPerUnit: number;
+  /** Last hover position in world coordinates (the aim preview follows it). */
+  readonly cursor: Vec2 | undefined;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -503,7 +511,7 @@ export interface ArmPickerModel {
 }
 
 interface EndModel {
-  readonly result: 'win' | 'loss';
+  readonly result: 'win' | 'loss' | 'time';
   readonly wave: number;
 }
 
@@ -526,6 +534,8 @@ export interface HudInput {
   readonly ui: Presentation;
   readonly controls: ControlState;
   readonly driven: readonly number[];
+  /** `game.intents.maxOffsetSeconds`; bounds the reserve offset picker. */
+  readonly maxOffsetSeconds: number;
   /** Set once the match has ended. */
   readonly end: { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks'; readonly wave: number } | undefined;
 }
@@ -533,8 +543,8 @@ export interface HudInput {
 /** What the HUD needs from the shell. */
 export interface HudDeps {
   readonly dispatch: (action: UiAction) => void;
-  /** Current camera conversion, for a drag from an ability button onto the map (`castAt`). */
-  readonly screenToWorld: (p: Vec2) => Vec2;
+  /** For a drag from an ability button onto the map (`castAt`): the world point under a client-pixel point, or undefined when it is not map (HUD, outside the map). */
+  readonly mapPoint: (p: Vec2) => Vec2 | undefined;
 }
 
 /** The mounted HUD (hud.ts). Buttons dispatch `UiAction`s. */
@@ -565,8 +575,8 @@ export interface ShellElements {
 
 /** Injection points so tests control time, the sink and the frame loop. All optional. */
 export interface ShellOptions {
-  /** Replaces `localSink(match, INPUT_DELAY_TICKS)`. */
-  readonly sink?: CommandSink;
+  /** Replaces `localSink(match, INPUT_DELAY_TICKS)`; called with the new match on start and on every restart. */
+  readonly sink?: (match: Match) => CommandSink;
   /** Milliseconds clock; default `performance.now`. The only wall-clock read of the shell. */
   readonly now?: () => number;
   /** Frame scheduler; default `requestAnimationFrame`. Returns a cancel function. */

@@ -35,7 +35,7 @@ function ctxWith(driven: readonly number[], patch?: (p: Perception) => Perceptio
     })),
   );
   const ui: Presentation = { abilities, resources: [], statuses: [], heroes: [], enemies: [] };
-  return { p, driven, ui };
+  return { p, driven, ui, maxOffsetSeconds: 5 };
 }
 
 function withAbilities(patch: (a: Perception['heroes'][number]['abilities'][number]) => object) {
@@ -193,6 +193,13 @@ describe('reduce', () => {
     }
   });
 
+  it('tapping a bot-driven hero moves to it and keeps the selection', () => {
+    const r = run([{ kind: 'primary', x: 0, y: 0, unit: hero1.id }], ctxWith([0]));
+    expect(r.state.selected).toBe(0);
+    expect(r.commands).toHaveLength(1);
+    expect(r.commands[0]).toMatchObject({ kind: 'move' });
+  });
+
   it('tapping an allied hero selects it without a command', () => {
     const r = run([{ kind: 'primary', x: 0, y: 0, unit: hero1.id }], ctxWith([0, hero1.slot]));
     expect(r.state.selected).toBe(hero1.slot);
@@ -266,7 +273,11 @@ describe('attachInput', () => {
     g.addEventListener = target.addEventListener;
     g.removeEventListener = target.removeEventListener;
     const got: UiAction[] = [];
-    const camera = { pxPerUnit: 2, screenToWorld: (p: { x: number; y: number }) => ({ x: p.x / 2, y: p.y / 2 }) };
+    const camera = {
+      pxPerUnit: 2,
+      isMapPoint: () => true,
+      screenToWorld: (p: { x: number; y: number }) => ({ x: p.x / 2, y: p.y / 2 }),
+    };
     const off = attachInput({
       canvas: target as unknown as HTMLCanvasElement,
       camera: () => camera as never,

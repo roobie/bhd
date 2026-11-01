@@ -28,6 +28,7 @@ export function initialArming(): ArmingState {
     fireHalfSeconds: ARM_DEFAULT_HALF_SECONDS,
     intent: 0,
     offsetHalfSeconds: 0,
+    lastPost: undefined,
   };
 }
 
@@ -35,20 +36,26 @@ function clampHalf(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, Math.round(Number.isFinite(n) ? n : lo)));
 }
 
-/** Back to `off`, keeping the arm toggle. */
+/** Back to `off`, keeping the arm toggle and the last post. */
 function backedOut(a: ArmingState): ArmingState {
-  return { ...initialArming(), armOn: a.armOn };
+  return { ...initialArming(), armOn: a.armOn, lastPost: a.lastPost };
 }
 
 function liveHero(ctx: ControlContext, selected: number): HeroView | undefined {
   return ctx.driven.includes(selected) ? ctx.p.heroes.find((h) => h.slot === selected) : undefined;
 }
 
+/** Still open when a command sent now applies (the board takes reserves and counts posts strictly before fireTick). */
 function pending(i: IntentView, tick: number): boolean {
-  return !i.fired && tick < i.fireTick;
+  return !i.fired && i.fireTick > tick + INPUT_DELAY_TICKS;
 }
 
-function hasPendingPost(ctx: ControlContext, hero: HeroView): boolean {
+/** A post by `hero` is on the board, or was sent and has not reached it yet. */
+function hasPendingPost(arming: ArmingState, ctx: ControlContext, hero: HeroView): boolean {
+  const sent = arming.lastPost;
+  if (sent !== undefined && sent.hero === hero.id && ctx.p.tick <= sent.untilTick) {
+    return true;
+  }
   return ctx.p.intents.some((i) => i.by === hero.id && pending(i, ctx.p.tick));
 }
 
@@ -67,14 +74,14 @@ function armableSlot(ctx: ControlContext, hero: HeroView, slot: number): boolean
 
 /** Starts arming `slot`: `instant` abilities go straight to the time picker at the hero. */
 function start(arming: ArmingState, ctx: ControlContext, hero: HeroView, slot: number): ArmStep {
-  if (hasPendingPost(ctx, hero)) {
+  if (hasPendingPost(arming, ctx, hero)) {
     return step(backedOut(arming), { hint: SECOND_POST, clearAim: true });
   }
   const ab = hero.abilities.find((a) => a.slot === slot);
   if (ab === undefined) {
     return unhandled(arming);
   }
-  const instant = abilityPresentation(ctx.ui, ab.effect, ab).targeting === 'instant';
+  const instant = isInstant(ctx, ab);
   const next: ArmingState = {
     ...arming,
     phase: instant ? 'time' : 'aim',
@@ -88,26 +95,33 @@ function start(arming: ArmingState, ctx: ControlContext, hero: HeroView, slot: n
   return step(next, { clearAim: true });
 }
 
+function isInstant(ctx: ControlContext, ab: HeroView['abilities'][number]): boolean {
+  return abilityPresentation(ctx.ui, ab.effect, ab).targeting === 'instant';
+}
+
 function post(arming: ArmingState, ctx: ControlContext, hero: HeroView): ArmStep {
   const done = backedOut(arming);
-  if (hasPendingPost(ctx, hero)) {
+  if (hasPendingPost(arming, ctx, hero)) {
     return step(done, { hint: SECOND_POST, clearAim: true });
   }
   const ab = hero.abilities.find((a) => a.slot === arming.slot);
   if (ab === undefined) {
     return step(done, { clearAim: true });
   }
+  // An instant ability fires where the hero stands, so the point is taken now, not when arming began.
+  const at = isInstant(ctx, ab) ? hero : arming;
   const cmd: Command = {
     kind: 'intent',
     op: 'post',
     hero: hero.id,
     slot: arming.slot,
     intentKind: intentKindOf(abilityPresentation(ctx.ui, ab.effect, ab)),
-    x: arming.x,
-    y: arming.y,
+    x: at.x,
+    y: at.y,
     fireIn: arming.fireHalfSeconds * TICKS_PER_HALF_SECOND,
   };
-  return step(done, { commands: [cmd], clearAim: true });
+  const sent = { hero: hero.id, untilTick: ctx.p.tick + INPUT_DELAY_TICKS };
+  return step({ ...done, lastPost: sent }, { commands: [cmd], clearAim: true });
 }
 
 function reserve(arming: ArmingState, ctx: ControlContext, hero: HeroView, slot: number): ArmStep {
@@ -132,7 +146,7 @@ function reserve(arming: ArmingState, ctx: ControlContext, hero: HeroView, slot:
     hero: hero.id,
     intent: intent.id,
     slot,
-    offset: arming.offsetHalfSeconds * TICKS_PER_HALF_SECOND,
+    offset: Math.min(arming.offsetHalfSeconds, maxOffsetHalf(ctx)) * TICKS_PER_HALF_SECOND,
   };
   return step(done, { commands: [cmd] });
 }
@@ -185,14 +199,23 @@ function reduceCastAt(
   return { ...started, arming: { ...started.arming, phase: 'time', x: action.x, y: action.y } };
 }
 
+/** The longest reserve offset in half seconds, from the content constant. */
+export function maxOffsetHalfSeconds(maxOffsetSeconds: number): number {
+  return Math.max(0, Math.floor(maxOffsetSeconds * 2));
+}
+
+function maxOffsetHalf(ctx: ControlContext): number {
+  return maxOffsetHalfSeconds(ctx.maxOffsetSeconds);
+}
+
 /** `fireTime` and `reserveOffset`: nudge the value of the phase that owns it. */
-function reduceNudge(arming: ArmingState, action: UiAction): ArmStep {
+function reduceNudge(arming: ArmingState, action: UiAction, ctx: ControlContext): ArmStep {
   if (action.kind === 'fireTime' && (arming.phase === 'aim' || arming.phase === 'time')) {
     const half = clampHalf(arming.fireHalfSeconds + action.halfSeconds, ARM_MIN_HALF_SECONDS, ARM_MAX_HALF_SECONDS);
     return step({ ...arming, fireHalfSeconds: half });
   }
   if (action.kind === 'reserveOffset' && arming.phase === 'reserve') {
-    const half = clampHalf(arming.offsetHalfSeconds + action.halfSeconds, 0, ARM_MAX_HALF_SECONDS);
+    const half = clampHalf(arming.offsetHalfSeconds + action.halfSeconds, 0, maxOffsetHalf(ctx));
     return step({ ...arming, offsetHalfSeconds: half });
   }
   return unhandled(arming);
@@ -211,14 +234,14 @@ function reducePhase(arming: ArmingState, action: UiAction, ctx: ControlContext,
     case 'armConfirm':
       return arming.phase === 'time' && hero !== undefined ? post(arming, ctx, hero) : unhandled(arming);
     default:
-      return reduceNudge(arming, action);
+      return reduceNudge(arming, action, ctx);
   }
 }
 
 /**
  * Handles the arming-related part of an action for the selected hero slot `selected`:
  * `armToggle`; `cast` while `armOn` and the ability is armable (starts `aim`, or goes straight to
- * `time` for `instant` targeting at the hero's position); `primary`/`castAt` in `aim` (sets the
+ * `time` for `instant` targeting, posted at the hero's position at confirm); `primary`/`castAt` in `aim` (sets the
  * point, goes to `time`); `fireTime`/`armConfirm` in `time` (confirm emits `intent post {hero, slot,
  * intentKind: intentKindOf(presentation), x, y, fireIn: ticks}`); `pickIntent` (select a bot's
  * intent, phase `reserve`); `cast` in `reserve` (emits `intent reserve {hero, intent, slot,

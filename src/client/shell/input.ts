@@ -105,7 +105,14 @@ export function attachInput(deps: InputDeps): () => void {
     const slopPx = e.pointerType === 'mouse' ? MOUSE_SLOP_PX : TOUCH_SLOP_PX;
     return pickEntity(deps.entities(), at, slopPx / deps.camera().pxPerUnit)?.id;
   };
+  const onMap = (e: PointerEvent): boolean => {
+    const rect = canvas.getBoundingClientRect();
+    return deps.camera().isMapPoint({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
   const primary = (e: PointerEvent): void => {
+    if (!onMap(e)) {
+      return;
+    }
     const at = worldOf(e);
     const unit = pickAt(e, at);
     dispatch(unit === undefined ? { kind: 'primary', ...at } : { kind: 'primary', ...at, unit });
@@ -122,7 +129,7 @@ export function attachInput(deps: InputDeps): () => void {
     }
     if (e.button === 0) {
       primary(e);
-    } else if (e.button === 2) {
+    } else if (e.button === 2 && onMap(e)) {
       dispatch({ kind: 'secondary', ...worldOf(e) });
     }
   };

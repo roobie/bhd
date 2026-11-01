@@ -24,6 +24,7 @@ function camera(): Camera {
     matrix: new Float32Array([s, 0, 0, 0, s, 0, -1, -1, 1]),
     worldToScreen: (p) => p,
     screenToWorld: (p) => p,
+    isMapPoint: () => true,
   };
 }
 
@@ -71,7 +72,7 @@ it('resizeCanvas applies DPR to the backing store', () => {
   const canvas = document.createElement('canvas');
   expect(resizeCanvas(canvas, 50.4, 40, 2)).toEqual({ width: 101, height: 80 });
   expect(canvas.width).toBe(101);
-  expect(canvas.style.width).toBe('50.4px');
+  expect(canvas.style.width).toBe('');
 });
 
 it('the shaders compile and link', () => {

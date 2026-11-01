@@ -190,7 +190,8 @@ export function reduce(state: ControlState, action: UiAction, ctx: ControlContex
   }
   const allyId = action.kind === 'primary' ? action.unit : undefined;
   const ally = ctx.p.heroes.find((h) => h.id === allyId);
-  if (ally !== undefined && next.aim === undefined) {
+  // Only a driven hero takes the selection; a bot's hero is just a point to move to.
+  if (ally !== undefined && next.aim === undefined && ctx.driven.includes(ally.slot)) {
     return { state: withSelected(next, ally.slot), commands: [] };
   }
   const hero = drivenHero(next, ctx);

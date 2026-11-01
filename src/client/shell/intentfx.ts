@@ -1,11 +1,11 @@
 // Scene instances for intents and the arm preview. Owner: w7-arming. Called by scene.ts.
 
-import { heroPresentation } from '../../content/presentation.ts';
+import { abilityPresentation, heroPresentation } from '../../content/presentation.ts';
 import type { IntentView } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
 import { ARM_MAX_HALF_SECONDS } from './arming.ts';
 import { PALETTE, parseHex, withAlpha } from './palette.ts';
-import { type InstanceBuffer, type IntentFxInput, type Rgba, SHAPE } from './types.ts';
+import { type InstanceBuffer, type IntentFxInput, type Rgba, SHAPE, type Vec2 } from './types.ts';
 
 /** Marker radius in world units, floored to this many CSS pixels. */
 const MARKER_UNITS = 0.5;
@@ -99,10 +99,24 @@ function pushPips(input: IntentFxInput, i: IntentView, radius: number, out: Inst
   }
 }
 
+/** Where the armed cast would land: the cursor while aiming, the hero for an instant ability, else the picked point. */
+function previewPoint(input: IntentFxInput): Vec2 {
+  const a = input.arming;
+  if (a.phase === 'aim') {
+    return input.cursor ?? a;
+  }
+  const hero = input.p.heroes.find((h) => h.slot === input.selected);
+  const ab = hero?.abilities.find((x) => x.slot === a.slot);
+  if (hero !== undefined && ab !== undefined && abilityPresentation(input.ui, ab.effect, ab).targeting === 'instant') {
+    return hero;
+  }
+  return a;
+}
+
 /**
  * Appends, in the decal layer: a marker per live intent (point, kind glyph ring, a ring that empties
  * toward `fireTick` using `tickF`, reserver pips in hero colours), and, while `arming.phase` is
- * `aim` or `time`, the preview of the armed cast at (arming.x, arming.y) with its countdown ring.
+ * `aim` or `time`, the preview of the armed cast at the cursor while aiming, then at (arming.x, arming.y) (the hero for an instant ability), with its countdown ring.
  * Sizes honour the pixel floor via `pxPerUnit`. Every float finite.
  */
 export function intentInstances(input: IntentFxInput, out: InstanceBuffer): void {
@@ -119,6 +133,7 @@ export function intentInstances(input: IntentFxInput, out: InstanceBuffer): void
   const a = input.arming;
   if (a.phase === 'aim' || a.phase === 'time') {
     const fill = (a.fireHalfSeconds * TICK_HZ) / 2 / FULL_RING_TICKS;
-    pushMarker(out, { x: a.x, y: a.y, radius, color: PALETTE.aimDecal, fill }, thick);
+    const at = previewPoint(input);
+    pushMarker(out, { x: at.x, y: at.y, radius, color: PALETTE.aimDecal, fill }, thick);
   }
 }

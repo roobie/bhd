@@ -27,13 +27,14 @@ const controls: ControlState = {
     fireHalfSeconds: 4,
     intent: 0,
     offsetHalfSeconds: 0,
+    lastPost: undefined,
   },
   paused: false,
   hint: undefined,
 };
 
 function input(over: Partial<HudInput> = {}): HudInput {
-  return { p: base, ui: defaultPresentation(), controls, driven: [0], end: undefined, ...over };
+  return { p: base, ui: defaultPresentation(), controls, driven: [0], end: undefined, maxOffsetSeconds: 5, ...over };
 }
 
 function withHero(slot: number, patch: Partial<HeroView>): Perception {
@@ -125,10 +126,23 @@ describe('buildHudModel', () => {
     expect(buildHudModel(input()).end).toBeUndefined();
     expect(buildHudModel(input({ end: { reason: 'victory', wave: 3 } })).end).toEqual({ result: 'win', wave: 3 });
     expect(buildHudModel(input({ end: { reason: 'ancient-destroyed', wave: 2 } })).end?.result).toBe('loss');
+    expect(buildHudModel(input({ end: { reason: 'maxTicks', wave: 2 } })).end?.result).toBe('time');
     const live = { text: 'hello', untilTick: base.tick + 5 };
     expect(buildHudModel(input({ controls: { ...controls, hint: live } })).hint).toBe('hello');
     const gone = { text: 'old', untilTick: base.tick };
     expect(buildHudModel(input({ controls: { ...controls, hint: gone } })).hint).toBeUndefined();
+  });
+
+  it('builds hotkeys from the ability slot and bounds the reserve picker by the content maximum', () => {
+    const hero = base.heroes[0] as HeroView;
+    const gap = withHero(0, { abilities: hero.abilities.slice(1) });
+    const keys = buildHudModel(input({ p: gap })).bar?.buttons.map((b) => [b.slot, b.hotkey]);
+    for (const [slot, key] of keys ?? []) {
+      expect(key).toBe('QWERTY'[slot as number]);
+    }
+    const arming = { ...controls.arming, phase: 'reserve' as const };
+    const m = buildHudModel(input({ controls: { ...controls, arming }, maxOffsetSeconds: 3 }));
+    expect(m.picker?.maxSeconds).toBe(3);
   });
 
   it('shows the fire-time picker while arming a time', () => {

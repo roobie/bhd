@@ -59,6 +59,8 @@ export function fitCamera(map: MapDef, viewport: Size, insets: Insets): Camera {
     pxPerUnit = Math.max(Math.min(freeW / mw, freeH / mh), MIN_SCALE);
     m = { a: pxPerUnit, b: 0, c: 0, d: pxPerUnit, e: cx - (mw / 2) * pxPerUnit, f: cy - (mh / 2) * pxPerUnit };
   }
+  const right = viewport.width - insets.right;
+  const bottom = viewport.height - insets.bottom;
   return {
     viewport,
     rotated,
@@ -66,5 +68,12 @@ export function fitCamera(map: MapDef, viewport: Size, insets: Insets): Camera {
     matrix: clipMatrix(m, viewport),
     worldToScreen: (p) => apply(m, p),
     screenToWorld: (p) => invert(m, p),
+    isMapPoint: (p) => {
+      if (p.x < insets.left || p.x > right || p.y < insets.top || p.y > bottom) {
+        return false;
+      }
+      const w = invert(m, p);
+      return w.x >= 0 && w.x <= mw && w.y >= 0 && w.y <= mh;
+    },
   };
 }

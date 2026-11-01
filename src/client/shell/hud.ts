@@ -27,17 +27,18 @@ const DRAG_SLOP_PX = 10;
 /** Re-render cap: the HUD redraws at most 30 times a second. */
 const MIN_RENDER_GAP_MS = 1000 / 30 - 2;
 
+const END_TITLE = { win: 'Victory', loss: 'Defeat', time: 'Time' } as const;
+
 type Dispatch = (action: UiAction) => void;
 
 const pct = (f: number): string => `${(f * 100).toFixed(1)}%`;
 
 function topBarView(t: TopBarModel, dispatch: Dispatch): TemplateResult {
-  const preview = t.previewHidden
-    ? html`<span class="preview-hidden" title="Wave preview hidden">?</span>`
-    : t.preview.map(
-        (c) =>
-          html`<span class="chip" title=${c.label} style=${styleMap({ '--c': c.color })}>${c.label.slice(0, 2)}&times;${c.count}</span>`,
-      );
+  // In wave master mode Perception gives no composition (nobody sees the queue): show no chips.
+  const preview = t.preview.map(
+    (c) =>
+      html`<span class="chip" title=${c.label} style=${styleMap({ '--c': c.color })}>${c.label.slice(0, 2)}&times;${c.count}</span>`,
+  );
   const next = t.nextInSeconds > 0 ? html`<span class="next">${Math.ceil(t.nextInSeconds)}s</span>` : nothing;
   return html`<div class="top">
     <span class="wave">Wave ${t.wave}/${t.total}</span>
@@ -98,11 +99,6 @@ interface Gesture {
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 
-function isMapPoint(x: number, y: number): boolean {
-  const el = document.elementFromPoint(x, y);
-  return el === null || el.closest('button, a, [data-hit]') === null;
-}
-
 function createGestures(deps: HudDeps): {
   down: (slot: number, e: PointerEvent) => void;
   move: (e: PointerEvent) => void;
@@ -152,8 +148,8 @@ function createGestures(deps: HudDeps): {
         swallowClick = true;
       } else if (dragging) {
         swallowClick = true;
-        if (isMapPoint(e.clientX, e.clientY)) {
-          const w = deps.screenToWorld({ x: e.clientX, y: e.clientY });
+        const w = deps.mapPoint({ x: e.clientX, y: e.clientY });
+        if (w !== undefined) {
           deps.dispatch({ kind: 'castAt', slot, x: w.x, y: w.y });
         }
       }
@@ -235,7 +231,7 @@ function endView(model: HudModel, dispatch: Dispatch): TemplateResult | typeof n
     return nothing;
   }
   return html`<div class="end" data-hit role="dialog" aria-label="Match result">
-    <h2>${end.result === 'win' ? 'Victory' : 'Defeat'}</h2>
+    <h2>${END_TITLE[end.result]}</h2>
     <p>Wave ${end.wave}</p>
     <button class="btn primary" type="button" @click=${() => dispatch({ kind: 'restart' })}>Restart</button>
   </div>`;
@@ -258,7 +254,7 @@ function template(model: HudModel, deps: HudDeps, gestures: Gestures): TemplateR
  * Mounts the HUD into `root` (top bar, 4 hero cards, ability bar, intents list via intentsui.ts,
  * end overlay). Buttons dispatch `UiAction`s through `deps`; a long press (500 ms) on an ability
  * button dispatches `autocast`; a drag from a button released over the map dispatches `castAt`
- * with `deps.screenToWorld`. Re-render only changes DOM that changed (lit-html).
+ * with `deps.mapPoint`. Re-render only changes DOM that changed (lit-html).
  */
 export function createHud(root: HTMLElement, deps: HudDeps): Hud {
   const gestures = createGestures(deps);

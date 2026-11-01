@@ -1,7 +1,8 @@
 // The shell mounts with injected time and frame scheduler and disposes cleanly. Without WebGL2 (or
 // while a step-2 module is still a stub) it must show the fallback message instead of crashing.
 
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { acquireContext } from '../../src/client/gl/context.ts';
 import { mountShell } from '../../src/client/shell/app.ts';
 import { defaultShellConfig } from '../../src/client/shell/config.ts';
 
@@ -43,6 +44,53 @@ it('mounts, steps with an injected clock, and disposes cleanly', () => {
   shell.dispose();
   expect(pending).toBeUndefined();
   expect(!shell.rendering || cancelled > 0).toBe(true);
+  shell.dispose();
+  remove();
+});
+
+const hasGl2 = acquireContext(document.createElement('canvas')) !== undefined;
+
+function setRootSize(canvas: HTMLCanvasElement, w: number, h: number): void {
+  const root = canvas.parentElement as HTMLElement;
+  root.style.width = `${w}px`;
+  root.style.height = `${h}px`;
+}
+
+it('follows its container: the canvas backing store tracks a resize', async () => {
+  if (!hasGl2) {
+    return;
+  }
+  const { canvas, hud, remove } = elements();
+  const shell = mountShell({ canvas, hud }, defaultShellConfig(), { now: () => 0, schedule: () => () => undefined });
+  expect(shell.rendering).toBe(true);
+  expect(canvas.style.width).toBe('100%');
+  const dpr = globalThis.devicePixelRatio || 1;
+  setRootSize(canvas, 300, 500);
+  await vi.waitFor(() => {
+    expect([canvas.width, canvas.height]).toEqual([Math.round(300 * dpr), Math.round(500 * dpr)]);
+  });
+  shell.dispose();
+  remove();
+});
+
+it('asks the sink factory for a sink per match, so a restart rebinds it', () => {
+  if (!hasGl2) {
+    return;
+  }
+  const { canvas, hud, remove } = elements();
+  const seen: unknown[] = [];
+  const shell = mountShell({ canvas, hud }, defaultShellConfig(), {
+    now: () => 0,
+    schedule: () => () => undefined,
+    sink: (match) => {
+      seen.push(match);
+      return { submit: () => undefined };
+    },
+  });
+  const first = seen.at(-1);
+  shell.dispatch({ kind: 'restart' });
+  expect(seen.at(-1)).toBe(shell.match());
+  expect(seen.at(-1)).not.toBe(first);
   shell.dispose();
   remove();
 });

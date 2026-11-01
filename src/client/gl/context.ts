@@ -23,7 +23,7 @@ export function acquireContext(canvas: HTMLCanvasElement): WebGL2RenderingContex
   }
 }
 
-/** Sets the canvas CSS size and backing store (`round(css * dpr)` each way); returns the backing size in device pixels. */
+/** Sets the canvas backing store (`round(css * dpr)` each way); the CSS size is the page's business (an inline size would pin it); returns the backing size in device pixels. */
 export function resizeCanvas(
   canvas: HTMLCanvasElement,
   cssWidth: number,
@@ -33,8 +33,6 @@ export function resizeCanvas(
   const scale = dpr > 0 && Number.isFinite(dpr) ? dpr : 1;
   const width = Math.max(1, Math.round(cssWidth * scale));
   const height = Math.max(1, Math.round(cssHeight * scale));
-  canvas.style.width = `${cssWidth}px`;
-  canvas.style.height = `${cssHeight}px`;
   if (canvas.width !== width) {
     canvas.width = width;
   }

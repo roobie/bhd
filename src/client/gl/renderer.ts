@@ -155,6 +155,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | undefined 
         gl.deleteVertexArray(r.vao);
         gl.deleteBuffer(r.vbo);
       }
+      // Free the context now rather than at garbage collection (browsers cap live contexts).
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     },
   };
 }

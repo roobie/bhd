@@ -207,6 +207,23 @@ describe('fitCamera', () => {
   });
 });
 
+describe('Camera.isMapPoint', () => {
+  it('is true only inside the free rectangle and the map', () => {
+    const gm = defaultGame().map;
+    const vp = { width: 800, height: 600 };
+    const ins = { top: 40, right: 0, bottom: 100, left: 200 };
+    for (const view of [vp, { width: 390, height: 844 }]) {
+      const cam = fitCamera(gm, view, ins);
+      const centre = cam.worldToScreen({ x: gm.width / 2, y: gm.height / 2 });
+      expect(cam.isMapPoint(centre)).toBe(true);
+      expect(cam.isMapPoint({ x: ins.left - 1, y: centre.y })).toBe(false);
+      expect(cam.isMapPoint({ x: centre.x, y: view.height - ins.bottom + 1 })).toBe(false);
+      expect(cam.isMapPoint({ x: centre.x, y: ins.top - 1 })).toBe(false);
+      expect(cam.isMapPoint(cam.worldToScreen({ x: -1, y: -1 }))).toBe(false);
+    }
+  });
+});
+
 describe('takeSnapshot and advanceEffects', () => {
   it('lists live entities in ascending id order with sane fields', () => {
     const sim = new Sim({ seed: 1, game: defaultGame() });

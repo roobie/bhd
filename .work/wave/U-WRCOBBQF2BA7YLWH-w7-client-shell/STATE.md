@@ -33,6 +33,7 @@ Step 3 integration done on branch worktree-agent-ac90591c314043633: knip entries
 - Step 1: w7-contracts slice.
 - Step 2: parallel slices w7-gl, w7-viewmath, w7-scene, w7-input, w7-hud, w7-arming, w7-shell.
 - Opus review of step 3, merge, then finalize (promote Harvest, close B-C4FU2FN3T5OXCUTV).
+- Review-fix round done (13 findings); Opus re-review, merge, then finalize.
 - Not yet done: bot-reserves-against-human-armed-pull demo; touch emulation run; firefox/webkit screenshots.
 
 ## Evidence
@@ -57,8 +58,12 @@ Step 3 integration done on branch worktree-agent-ac90591c314043633: knip entries
 - [ ] learning: advanceEffects was wired with the post-step snapshot (death effects would never place); app passes the predecessor
 - [ ] learning: arming offset bounds are 0..5 s (half-seconds 0..10), not the +-5 s the HUD guessed; hud now derives all picker bounds from ARM_*_HALF_SECONDS
 - [ ] learning: safe-area insets must be read through a probe element's computed padding (custom properties holding env() are not resolved)
-- [ ] backlog: wave preview shows "?" in the top bar at the start of the demo; check what Perception offers
-- [ ] backlog: units are small on the landscape fit (heroes ~24 px); consider a larger pixel floor or zoom
+- [ ] decision: wave preview shows only what Perception gives (composition when the schedule is public); in wave master mode (the play.html default) nobody sees the queue, so the top bar shows the countdown and no "?"
+- [ ] backlog: units are small on the landscape fit (heroes ~24 px); the free rect is width-limited by the 196 px card column, so a bigger fit needs a non-rectangular free area or zoom (not done)
+- [ ] decision: a pick switches selection only to a driven hero; a bot's hero is a move target
+- [ ] decision: a map point is inside the camera's free rect and the map; HUD panels (pointer-events none) no longer pass clicks to the map
+- [ ] decision: `ShellOptions.sink` is a factory `(match) => CommandSink`, rebound on every restart
+- [ ] learning: an inline px style on the canvas overrides CSS width and silences the ResizeObserver; resizeCanvas sets only the backing store
 - [ ] backlog: touch emulation, firefox and webkit screenshots not yet taken
 
 ## Log
@@ -66,3 +71,4 @@ Step 3 integration done on branch worktree-agent-ac90591c314043633: knip entries
 - 2026-11-01 design drafted by an Opus planner (purpose, scope, criteria, slices)
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 step 3 integration (knip, scene mock, tickF, effects snapshot, picker bounds, arming reset, safe-area, screenshots)
+- 2026-11-01 review fixes: canvas resize (no inline style, container observer, resize/orientation, DPR query), arming boundary and double-post guard, instant point at confirm, Time result, hotkey by slot, reserve max from content, incremental teardown and loseContext, sink factory, canReserve boundary, compact landscape cards, no "?" preview

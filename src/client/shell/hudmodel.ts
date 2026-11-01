@@ -12,7 +12,7 @@ import {
 } from '../../content/presentation.ts';
 import type { HeroView, IntentView, Perception } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
-import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS } from './arming.ts';
+import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS, maxOffsetHalfSeconds } from './arming.ts';
 import type {
   AbilityBarModel,
   AbilityButtonModel,
@@ -29,6 +29,7 @@ import type {
   StatusPipModel,
   TopBarModel,
 } from './types.ts';
+import { INPUT_DELAY_TICKS } from './types.ts';
 
 const HERO_SLOTS = 4;
 const HOTKEYS = 'QWERTY';
@@ -37,7 +38,6 @@ const DEAD_COLOR = '#555555';
 const FIRE_MIN_SECONDS = ARM_MIN_HALF_SECONDS / 2;
 const FIRE_MAX_SECONDS = ARM_MAX_HALF_SECONDS / 2;
 const OFFSET_MIN_SECONDS = 0;
-const OFFSET_MAX_SECONDS = ARM_MAX_HALF_SECONDS / 2;
 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) {
@@ -165,7 +165,7 @@ function abilityBar(input: HudInput): AbilityBarModel | undefined {
   }
   const enabled = driven.includes(hero.slot);
   const { aim, arming } = controls;
-  const buttons: AbilityButtonModel[] = hero.abilities.map((a, i) => {
+  const buttons: AbilityButtonModel[] = hero.abilities.map((a) => {
     const pres = abilityPresentation(ui, a.effect, a);
     const armingThis = arming.phase !== 'off' && arming.slot === a.slot;
     return {
@@ -173,7 +173,7 @@ function abilityBar(input: HudInput): AbilityBarModel | undefined {
       effect: a.effect,
       label: pres.label,
       glyph: pres.glyph,
-      hotkey: HOTKEYS[i] ?? String(i + 1),
+      hotkey: HOTKEYS[a.slot] ?? String(a.slot + 1),
       targeting: pres.targeting,
       ready: a.ready,
       cooldownFrac: a.cooldownTicks > 0 ? clamp01(a.cooldownLeft / a.cooldownTicks) : 0,
@@ -202,7 +202,7 @@ function intentRows(input: HudInput): IntentRowModel[] {
     const pres = ui.abilities.find((a) => intentKindOf(a) === ix.intentKind);
     const reserved = me !== undefined && ix.reservers.includes(me.id);
     const own = me !== undefined && ix.by === me.id;
-    const open = !ix.fired && p.tick < ix.fireTick;
+    const open = !ix.fired && ix.fireTick > p.tick + INPUT_DELAY_TICKS;
     return {
       id: ix.id,
       label: pres?.label ?? ix.intentKind,
@@ -223,7 +223,7 @@ function intentRows(input: HudInput): IntentRowModel[] {
   return p.intents.map(row);
 }
 
-function picker(controls: ControlState): ArmPickerModel | undefined {
+function picker(controls: ControlState, maxOffsetSeconds: number): ArmPickerModel | undefined {
   const { arming } = controls;
   if (arming.phase === 'time') {
     return {
@@ -238,10 +238,21 @@ function picker(controls: ControlState): ArmPickerModel | undefined {
       mode: 'reserve',
       seconds: arming.offsetHalfSeconds / 2,
       minSeconds: OFFSET_MIN_SECONDS,
-      maxSeconds: OFFSET_MAX_SECONDS,
+      maxSeconds: maxOffsetHalfSeconds(maxOffsetSeconds) / 2,
     };
   }
   return undefined;
+}
+
+function endResult(reason: NonNullable<HudInput['end']>['reason']): 'win' | 'loss' | 'time' {
+  switch (reason) {
+    case 'victory':
+      return 'win';
+    case 'maxTicks':
+      return 'time';
+    default:
+      return 'loss';
+  }
 }
 
 /**
@@ -261,9 +272,9 @@ export function buildHudModel(input: HudInput): HudModel {
     heroes: heroCards(input),
     bar: abilityBar(input),
     intents: intentRows(input),
-    picker: picker(controls),
+    picker: picker(controls, input.maxOffsetSeconds),
     hint,
-    end: end === undefined ? undefined : { result: end.reason === 'victory' ? 'win' : 'loss', wave: end.wave },
+    end: end === undefined ? undefined : { result: endResult(end.reason), wave: end.wave },
   };
 }
 
