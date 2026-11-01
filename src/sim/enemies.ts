@@ -3,7 +3,9 @@
 //  1. Target: the `src` of a live `taunted` status (several: the one lasting longest, ties to the
 //     lower id; a dead or missing taunter is ignored) wins, from any distance. Otherwise the
 //     current target is kept while it is alive and within LEASH_RANGE. Otherwise the nearest hero
-//     within AGGRO_RANGE (ties to the lower id). The leash is also anchored to the lane: a lane
+//     within AGGRO_RANGE (ties to the lower id). A lane enemy only considers heroes it can reach
+//     inside the leash: distance to the lane <= LEASH_RANGE - (attack range + both radii); others
+//     are ignored (no stalling by loitering just beyond the leash). The leash is also anchored to the lane: a lane
 //     enemy more than LEASH_RANGE from the lane polyline (non-taunted) drops its target and
 //     acquires none until it is back, so a hero cannot drag enemies away forever. (Derived from
 //     the position: the entity has no spare field to store the exact point it left the lane.)
@@ -83,12 +85,17 @@ function within(a: Readonly<Point>, b: Readonly<Entity>, range: number): boolean
   return dist2(a, b) <= reach * reach;
 }
 
-/** Nearest live hero whose body is within `range`; ties go to the lower id (ID order, strict <). */
-function nearestHero(ctx: TickContext, from: Readonly<Point>, range: number): Entity | undefined {
+/** Nearest live hero (passing `eligible`) whose body is within `range`; ties go to the lower id (ID order, strict <). */
+function nearestHero(
+  ctx: TickContext,
+  from: Readonly<Point>,
+  range: number,
+  eligible: (h: Readonly<Entity>) => boolean,
+): Entity | undefined {
   let best: Entity | undefined;
   let bestD2 = 0;
   for (const h of ctx.entities.values()) {
-    if (h.kind !== 'hero' || h.hp <= 0 || !within(from, h, range)) {
+    if (h.kind !== 'hero' || h.hp <= 0 || !within(from, h, range) || !eligible(h)) {
       continue;
     }
     const d2 = dist2(from, h);
@@ -118,20 +125,34 @@ function laneDistance(p: Readonly<Point>, lane: readonly Point[]): number {
   return best;
 }
 
-/** Picks the target id (0 for none) for a lane enemy; see the file header. */
-function chooseTarget(ctx: TickContext, e: Readonly<Entity>): number {
+/**
+ * Picks the target id (0 for none) for a lane enemy; see the file header. A lane enemy only
+ * acquires or keeps a hero whose distance to the lane is at most LEASH_RANGE minus the reach it
+ * needs (attack range plus both radii): it can then always get into attack range without leaving
+ * the leash, so a hero loitering just beyond that cannot pin it in place without being hit.
+ */
+function chooseTarget(ctx: TickContext, e: Readonly<Entity>, def: EnemyDef, laneEnemy: boolean): number {
   const taunted = taunter(ctx, e);
   if (taunted !== 0) {
     return taunted;
   }
-  if (e.move.waypoint > 0 && laneDistance(e, ctx.game.map.lane) > LEASH_RANGE) {
+  const { lane } = ctx.game.map;
+  if (laneEnemy && laneDistance(e, lane) > LEASH_RANGE) {
     return 0;
   }
+  const reachable = (h: Readonly<Entity>): boolean =>
+    !laneEnemy || laneDistance(h, lane) <= LEASH_RANGE - (def.attack.range + e.radius + h.radius);
   const current = ctx.entities.get(e.attack.target);
-  if (current !== undefined && current.hp > 0 && current.kind === 'hero' && within(e, current, LEASH_RANGE)) {
+  if (
+    current !== undefined &&
+    current.hp > 0 &&
+    current.kind === 'hero' &&
+    within(e, current, LEASH_RANGE) &&
+    reachable(current)
+  ) {
     return current.id;
   }
-  return nearestHero(ctx, e, AGGRO_RANGE)?.id ?? 0;
+  return nearestHero(ctx, e, AGGRO_RANGE, reachable)?.id ?? 0;
 }
 
 function engage(ctx: TickContext, e: Entity, def: EnemyDef, laneEnemy: boolean): void {
@@ -139,7 +160,7 @@ function engage(ctx: TickContext, e: Entity, def: EnemyDef, laneEnemy: boolean):
     e.attack.cooldown -= 1;
   }
   const had = e.attack.target !== 0;
-  e.attack.target = chooseTarget(ctx, e);
+  e.attack.target = chooseTarget(ctx, e, def, laneEnemy);
   const target = ctx.entities.get(e.attack.target);
   if (target === undefined) {
     if (had && laneEnemy) {

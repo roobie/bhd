@@ -1,6 +1,7 @@
 // The shared determinism scenario. Runs unchanged in Node and in browsers (no Node imports), and
 // both compare its result to golden.ts: that is how "browser matches Node" is proven.
 
+import type { GameConfig } from '../../src/content/index.ts';
 import { defaultGame } from '../../src/content/index.ts';
 import {
   atan2,
@@ -20,13 +21,50 @@ import { StateHasher } from '../../src/sim/hash.ts';
 import { Sim } from '../../src/sim/sim.ts';
 
 export const SEED = 0x5e_ed_12_34;
-export const TICKS = 1500;
+export const TICKS = 1800;
 const HASH_EVERY = 37;
 
 export interface Scripted {
   readonly tick: number;
   readonly player: number;
   readonly cmd: Command;
+}
+
+/**
+ * A derived config, small enough to reach a leak, wave ends and the game's end within TICKS: a
+ * short lane (the default one's last stretch), a weak Ancient, three short waves, and a Gunner
+ * that heats up faster so one run crosses every heat band and overheats.
+ */
+function scenarioGame(): GameConfig {
+  const base = defaultGame();
+  const [gunner, ...rest] = base.heroes;
+  if (gunner?.kit !== 'gunner') {
+    throw new Error('default lineup changed');
+  }
+  return {
+    ...base,
+    map: { ...base.map, lane: base.map.lane.slice(5), ancient: { ...base.map.ancient, maxHp: 8 } },
+    heroes: [{ ...gunner, heat: { ...gunner.heat, perShot: 0.04 } }, ...rest],
+    waves: {
+      firstDelay: 5,
+      interval: 14,
+      waves: [
+        { spawns: [{ def: 'grunt', count: 6, gap: 0.5 }] },
+        {
+          spawns: [
+            { def: 'brute', count: 2, gap: 2 },
+            { def: 'grunt', count: 4, gap: 0.5 },
+          ],
+        },
+        {
+          spawns: [
+            { def: 'runner', count: 6, gap: 0.3 },
+            { def: 'grunt', count: 4, gap: 0.5 },
+          ],
+        },
+      ],
+    },
+  };
 }
 
 // defaultGame() ids: Ancient 1, then the lineup gunner 2, tank 3, ranged 4, support 5; debug spawns
@@ -60,14 +98,32 @@ export const SCRIPT: readonly Scripted[] = [
   // Negative zero: JSON turns it into 0, so the sim must have normalised it before logging.
   { tick: 60, player: 1, cmd: { kind: 'spawn', def: 'runner', x: -0, y: -0 } },
   { tick: 61, player: 1, cmd: { kind: 'move', hero: 5, x: -0, y: 25 } },
+  { tick: 151, player: 1, cmd: { kind: 'move', hero: 5, x: 80, y: 31 } },
   { tick: 61, player: 1, cmd: { kind: 'ability', hero: 4, slot: 1, x: -0, y: -0 } },
   { tick: 90, player: 1, cmd: { kind: 'stop', hero: 2 } },
   { tick: 100, player: 1, cmd: { kind: 'hold', hero: 5, on: false } },
-  { tick: 150, player: 2, cmd: { kind: 'move', hero: 3, x: 75, y: 30 } },
-  { tick: 150, player: 0, cmd: { kind: 'move', hero: 2, x: 62, y: 20.5 } },
-  { tick: 299, player: 1, cmd: { kind: 'hold', hero: 2, on: true } },
-  { tick: 600, player: 1, cmd: { kind: 'hold', hero: 2, on: false } },
-  { tick: 700, player: 2, cmd: { kind: 'ability', hero: 2, slot: 3 } },
+  { tick: 150, player: 2, cmd: { kind: 'move', hero: 3, x: 73.5, y: 32 } },
+  { tick: 150, player: 0, cmd: { kind: 'move', hero: 2, x: 77, y: 32 } },
+  { tick: 299, player: 1, cmd: { kind: 'hold', hero: 4, on: true } },
+  { tick: 600, player: 1, cmd: { kind: 'hold', hero: 4, on: false } },
+  { tick: 830, player: 2, cmd: { kind: 'ability', hero: 2, slot: 3 } },
+  // Stand-in abilities (taunt, mark, heal, pull) and a hot Vent, timed to the waves.
+  { tick: 300, player: 0, cmd: { kind: 'ability', hero: 3, slot: 0 } },
+  { tick: 320, player: 1, cmd: { kind: 'ability', hero: 4, slot: 0 } },
+  { tick: 330, player: 2, cmd: { kind: 'ability', hero: 5, slot: 1, x: 72, y: 33 } },
+  { tick: 400, player: 0, cmd: { kind: 'ability', hero: 5, slot: 0 } },
+  { tick: 545, player: 1, cmd: { kind: 'ability', hero: 2, slot: 1, x: 70, y: 34 } },
+  { tick: 800, player: 0, cmd: { kind: 'ability', hero: 5, slot: 0 } },
+  // Everyone holds fire as the third wave arrives, so it leaks and destroys the weak Ancient
+  // (debug-spawned idle enemies never die, so victory is out of reach: this ends the game).
+  { tick: 1005, player: 1, cmd: { kind: 'move', hero: 2, x: 77, y: 18 } },
+  { tick: 1005, player: 1, cmd: { kind: 'move', hero: 3, x: 73.5, y: 18 } },
+  { tick: 1005, player: 1, cmd: { kind: 'move', hero: 4, x: 76.5, y: 18 } },
+  { tick: 1005, player: 1, cmd: { kind: 'move', hero: 5, x: 80, y: 18 } },
+  { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 2, on: true } },
+  { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 3, on: true } },
+  { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 4, on: true } },
+  { tick: 1010, player: 1, cmd: { kind: 'hold', hero: 5, on: true } },
 ];
 
 export interface ScenarioResult {
@@ -109,7 +165,7 @@ function drive(
   setup: (sim: Sim) => void,
   beforeTick: (sim: Sim, tick: number) => void,
 ): SimEvent[] {
-  const sim = new Sim({ seed, game: defaultGame(), hashEvery: HASH_EVERY });
+  const sim = new Sim({ seed, game: scenarioGame(), hashEvery: HASH_EVERY });
   setup(sim);
   const events: SimEvent[] = [];
   for (let i = 1; i <= ticks; i++) {

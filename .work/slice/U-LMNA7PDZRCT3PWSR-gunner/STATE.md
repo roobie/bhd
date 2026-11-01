@@ -41,11 +41,16 @@ Implemented, `npm run ci` green; awaiting merge/review.
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
 - [ ] decision: Gunner choices (tunable): heat decays only when no target; braced spin never decays, unbraced idle drain 2 s; unbrace = rooted and no fire 1 s; abilities refused while locked out; overpen skips the Ancient; braced cones aim along brace facing; one `resource` event per band change; heat bleeds linearly to 0 during lockout, spin resets on overheat.
-- [ ] learning: float periods (6/0.4 = 15.000000000000002) need an epsilon on cooldown compares or shots slip a tick.
+- [ ] learning: fractional fire periods are not a reason for float epsilons (6/0.4 is exactly 15 in IEEE). Heat in integer basis points and the shot timer in 1/1024 tick keep thresholds exact ("above 60%" means > 6000) and the carry exact.
 - [ ] backlog: autocast mask is stored but not honoured (bots, wave 3).
 - [ ] backlog: entities have no facing; Gunner keeps its own (kit.facing). Perception/bots may want a shared one.
 - [ ] process: scenario.ts hardcodes tick 40 in determinism-node.test.ts; a kit that roots heroes silently breaks the submission-order test.
 
+- Review fixes: heat is integer bp (decay rounds to 33 bp/tick for 1000 bp/s), shot timer in 1/1024 tick (kit.shot, hero.attack.cooldown mirrors it in whole ticks), no epsilons; spin drains only on real movement (position vs kit.lastX/lastY), never braced; overpen line starts at the shooter's edge; idle shot timer clamps to 0. `npm run ci` green (352 node + 75 browser), golden regenerated (scenario now uses a derived short config and covers heat 60/85/100, pierce, overpen incl. ff on a hero, overheat lock, hot Vent, Furnace Heart overpen, taunt, mark, heal, pull+clumped, leak, wave end, game end; checked by a probe, no coverage test by owner decision).
+- Gunner invariant "0-damage hit starts no cooldown" intentionally dropped (noted in test/sim/mechanics.test.ts).
+- Decision candidate: gunner decay per tick is rounded (33 bp for 1000 bp/s, 1% slow); tunable.
+
 ## Log
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
+- 2026-11-01 review fixes applied; owner scope change: no new gameplay-behaviour tests (only engine invariants), so none were added for gunner behaviour

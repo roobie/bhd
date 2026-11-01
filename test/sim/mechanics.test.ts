@@ -155,6 +155,8 @@ describe('taunt aggro', () => {
 });
 
 describe('dead actors', () => {
+  // Note: the Gunner's old invariant (a 0-damage hit starts no cooldown) was intentionally dropped:
+  // the Gunner always banks its shot period, whatever the hit dealt. Only the stub kit below keeps it.
   it('a 0-hp hero does not attack, and a kit does not start a cooldown on a 0-damage hit', () => {
     const sim = new Sim({ seed: 1, game: defaultGame() });
     hero(sim, GUNNER).hp = 0;

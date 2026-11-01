@@ -34,6 +34,8 @@ Implemented and gated (npm run ci green); awaiting review/merge.
 - test/standins/standins.test.ts: 20 tests (taunt vs real enemy aggro, mark 20 -> 17 vs brute, heal caps and skips Ancient, pull then line hit 129 vs 99, cooldown exact to the tick, attack period exact = ticks(1)).
 - Golden regenerated (kit hash gained cooldowns). npm run ci: 325 node + 75 browser tests green.
 
+- Review fixes: heal with nobody hurt and pull with no enemy in radius now return no-cast (no cooldown spent, no event); `?.` dropped from hashStandin and test/sim/hash.test.ts now perturbs real stand-in and Gunner kits (swapping in the other kind's real kit for `kit.kind`), covering cooldowns; autocast now runs before the cooldown countdown so it leaves the same cooldown as a manual cast. `npm run ci` green (352 node + 75 browser).
+
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
      - [ ] decision: …   → record decision
@@ -41,7 +43,7 @@ Implemented and gated (npm run ci green); awaiting review/merge.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
-- [ ] learning: test/sim/hash.test.ts relabels the Gunner's kit as 'standin', so hashStandin must tolerate a kit without cooldowns (`?.`); better to perturb a real stand-in hero there.
+- [x] learning (fixed): test/sim/hash.test.ts relabelled the Gunner's kit as 'standin', so hashStandin must tolerate a kit without cooldowns (`?.`); better to perturb a real stand-in hero there.
 - [ ] backlog: enemies.ts attack cooldown has the same decrement-then-return off-by-one (period ticks+1) as the old stand-in attack; test/sim/heroes.test.ts also encodes +1 for the Gunner.
 - [ ] backlog: wave 3 may want a dedicated pull intent / bot hook; stand-in autocast pull aims at the nearest hostile.
 
@@ -49,3 +51,4 @@ Implemented and gated (npm run ci green); awaiting review/merge.
 - 2026-11-01 initialized
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 implemented stand-in attack/abilities/tests
+- 2026-11-01 review fixes applied; owner scope change: only no-op-in-state invariants tested for failed casts, no tuning-pinning tests

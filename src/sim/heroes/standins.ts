@@ -3,7 +3,8 @@
 // Every field added to StandinState MUST be added to hashStandin (L-53OTZPIIVO2XYNNL).
 // Autocast (KitBase.autocast bit = slot): each tick, an off-cooldown ability with its bit set fires
 // when it has a valid use (taunt: an enemy in radius; mark: a hostile in range; heal: a hurt hero in
-// radius; pull: a hostile in range, pulling toward it).
+// radius; pull: a hostile in range, pulling toward it). A cast with nothing valid to do is refused and
+// costs no cooldown (every ability).
 
 import type { PullAbility, StandinAbilityDef, StandinDef } from '../../content/heroes/standins.ts';
 import type { Point } from '../../content/types.ts';
@@ -89,6 +90,9 @@ function castPull(run: StandinRun, ab: PullAbility, aim: Aim): { target: number;
     return undefined;
   }
   const hit = enemiesInRadius(ctx, point, ab.radius);
+  if (hit.length === 0) {
+    return undefined;
+  }
   for (const e of hit) {
     const entity = ctx.entities.get(e.id);
     if (entity === undefined) {
@@ -128,7 +132,12 @@ function castEffect(run: StandinRun, ab: StandinAbilityDef, aim: Aim): { target:
       return { target: t.id, value: ab.value };
     }
     case 'heal': {
-      const allies = unitsInRadius(ctx.entities, hero, ab.radius, hero.team).filter((e) => e.kind === 'hero');
+      const allies = unitsInRadius(ctx.entities, hero, ab.radius, hero.team).filter(
+        (e) => e.kind === 'hero' && e.hp < e.maxHp,
+      );
+      if (allies.length === 0) {
+        return undefined;
+      }
       let total = 0;
       for (const a of allies) {
         total += heal(ctx, { src: hero.id, dst: a.id, amount: ab.amount, tags: ['ability:heal'] });
@@ -166,26 +175,18 @@ export function commandStandin(run: StandinRun, cmd: HeroCommand): void {
   }
 }
 
-/** Whether autocasting `ab` now would do something worthwhile (heal: only when someone is hurt). */
-function autocastUseful(run: StandinRun, ab: StandinAbilityDef): boolean {
-  if (ab.effect !== 'heal') {
-    return true; // castEffect itself refuses when there is no valid target.
-  }
-  const { ctx, hero } = run;
-  return unitsInRadius(ctx.entities, hero, ab.radius, hero.team).some((e) => e.kind === 'hero' && e.hp < e.maxHp);
-}
-
 function tickAbilities(run: StandinRun): void {
   const { kit, def } = run;
+  // Autocast first, then count down: a cooldown of n ticks cast on tick T is ready on T + n for autocast and manual casts alike.
+  for (const ab of def.abilities) {
+    if ((kit.autocast & (1 << ab.slot)) !== 0) {
+      cast(run, ab.slot, {}); // Refuses (no cooldown spent) when there is nothing valid to do.
+    }
+  }
   for (let slot = 0; slot < SLOTS; slot++) {
     const cd = kit.cooldowns[slot] ?? 0;
     if (cd > 0) {
       kit.cooldowns[slot] = cd - 1;
-    }
-  }
-  for (const ab of def.abilities) {
-    if ((kit.autocast & (1 << ab.slot)) !== 0 && autocastUseful(run, ab)) {
-      cast(run, ab.slot, {});
     }
   }
 }
@@ -211,8 +212,7 @@ export function tickStandin(run: StandinRun): void {
 
 /** Hashes the kit's own fields; hold and autocast are hashed by the dispatcher. */
 export function hashStandin(h: StateHasher, kit: StandinState): void {
-  // `?.`: test/sim/hash.test.ts relabels the Gunner's kit as 'standin' (no cooldowns) to perturb `kind`.
   for (let slot = 0; slot < SLOTS; slot++) {
-    h.u32(kit.cooldowns?.[slot] ?? 0);
+    h.u32(kit.cooldowns[slot] ?? 0);
   }
 }

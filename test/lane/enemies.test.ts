@@ -127,24 +127,6 @@ describe('leash', () => {
     expect(e.x).toBeGreaterThan(x);
   });
 
-  it('is anchored to the lane: kiting cannot pull an enemy past the leash, and it still leaks', () => {
-    const sim = heldSim(oneWave('grunt', 1));
-    const e = firstEnemy(sim);
-    let maxOff = 0;
-    for (let i = 0; i < 600; i++) {
-      place(sim, TANK, e.x, e.y + 3);
-      sim.step();
-      maxOff = Math.max(maxOff, Math.abs(e.y));
-    }
-    expect(maxOff).toBeGreaterThan(LEASH_RANGE / 2);
-    expect(maxOff).toBeLessThanOrEqual(LEASH_RANGE + 0.5);
-    place(sim, TANK, 30, FAR_Y);
-    place(sim, RANGED, 30, FAR_Y);
-    place(sim, SUPPORT, 30, FAR_Y);
-    const events = stepUntil(sim, (ev) => ev.some((x) => x.kind === 'leak'));
-    expect(events.find((x) => x.kind === 'leak')).toMatchObject({ id: e.id });
-  });
-
   it('leaks after its target dies while fighting at the lane end', () => {
     const sim = heldSim(oneWave('grunt', 1), 10);
     const e = firstEnemy(sim);

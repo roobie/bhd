@@ -79,10 +79,10 @@ describe('heat bands', () => {
     const d = r.dummy(5, 0);
     r.step(25); // 5 shots
     const hot = r.kit.heat;
-    expect(hot).toBeGreaterThan(0.4);
+    expect(hot).toBeGreaterThan(4000);
     r.sim.entities.remove(d.id);
     r.step(30);
-    expect(r.kit.heat).toBeCloseTo(hot - 0.1, 5);
+    expect(r.kit.heat).toBe(hot - 33 * 30); // 1000 bp/s as 33 bp per tick
   });
 
   it('gives rounds the pierce tag above 60% heat', () => {
@@ -210,7 +210,7 @@ describe('Vent', () => {
     const inCone = r.dummy(6, 1);
     const outside = r.dummy(0, 6);
     r.step(1);
-    r.kit.heat = 0.5;
+    r.kit.heat = 5000;
     r.kit.spin = 0.8;
     r.cast(1, 10, 0);
     const ev = r.step(1);
@@ -222,11 +222,11 @@ describe('Vent', () => {
     expect(ev.find((e) => e.kind === 'ability')).toMatchObject({ hero: GUNNER, slot: 1 });
     expect(heatBands(ev)).toEqual([]); // Heat 0.5 was already band 0.
 
-    r.kit.heat = 0.25;
+    r.kit.heat = 2500;
     r.cast(1, 10, 0);
     expect(dmgFrom(r.step(1))).toEqual([]); // On cooldown.
     r.step(ticks(12));
-    r.kit.heat = 0.25;
+    r.kit.heat = 2500;
     r.cast(1, 10, 0);
     expect(dmgFrom(r.step(1))[0]?.amount).toBe(75);
   });
@@ -258,7 +258,7 @@ describe('Suppressing Fire', () => {
       expect(r.sim.entities.get(id)?.statuses).toMatchObject([{ status: 'suppressed', src: GUNNER, value: 0.4 }]);
     }
     expect(r.sim.entities.get(out.id)?.statuses).toEqual([]);
-    expect(r.kit.heat).toBeCloseTo(0.1 - 0.1 / 30, 9);
+    expect(r.kit.heat).toBe(1000 - 33);
     r.cast(2, 10, 0);
     expect(dmgFrom(r.step(1))).toEqual([]);
     expect(r.kit.cdSuppress).toBe(ticks(10) - 2);

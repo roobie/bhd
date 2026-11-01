@@ -196,6 +196,14 @@ describe('support: heal pulse', () => {
     expect(abilityEvents(events, SUPPORT)[0]).toMatchObject({ slot: 0, value: 100 });
   });
 
+  it('is a no-op in state when nobody is hurt: no event, no cooldown spent', () => {
+    const sim = quiet();
+    place(sim, SUPPORT, 0, 0);
+    place(sim, TANK, 2, 0);
+    expect(abilityEvents(stepCmd(sim, SUPPORT, 0), SUPPORT)).toEqual([]);
+    expect(kitCooldowns(sim, SUPPORT)).toEqual([0, 0, 0, 0]);
+  });
+
   it('skips heroes beyond the radius', () => {
     const sim = quiet();
     place(sim, SUPPORT, 0, 0);
@@ -247,6 +255,13 @@ describe('support: pull', () => {
     expect(kitCooldowns(sim, SUPPORT)).toEqual([0, 0, 0, 0]);
   });
 
+  it('is a no-op in state with no enemy in radius: no event, no cooldown spent', () => {
+    const sim = quiet();
+    place(sim, SUPPORT, 0, 0);
+    expect(abilityEvents(stepCmd(sim, SUPPORT, 1, { x: 5, y: 0 }), SUPPORT)).toEqual([]);
+    expect(kitCooldowns(sim, SUPPORT)).toEqual([0, 0, 0, 0]);
+  });
+
   it('with a target and no point, pulls toward that unit', () => {
     const sim = quiet();
     place(sim, SUPPORT, 0, 0);
@@ -277,6 +292,7 @@ describe('cooldowns', () => {
   it('slots are independent and a missing slot is a no-op', () => {
     const sim = quiet();
     place(sim, SUPPORT, 0, 0);
+    unit(sim, SUPPORT).hp = 100; // Heal needs someone hurt.
     spawn(sim, 'grunt', 3, 0);
     expect(abilityEvents(stepCmd(sim, SUPPORT, 0), SUPPORT)).toHaveLength(1);
     expect(abilityEvents(stepCmd(sim, SUPPORT, 1, { x: 3, y: 0 }), SUPPORT)).toHaveLength(1);
@@ -314,17 +330,6 @@ describe('autocast', () => {
     const casts = abilityEvents(events, TANK);
     expect(casts).toHaveLength(2);
     expect((casts[1]?.tick ?? 0) - (casts[0]?.tick ?? 0)).toBe(ticks(8));
-  });
-
-  it('heal pulse autocasts only when a hero in radius is hurt', () => {
-    const sim = quiet();
-    place(sim, SUPPORT, 0, 0);
-    place(sim, TANK, 2, 0);
-    sim.command(0, { kind: 'autocast', hero: SUPPORT, slot: 0, on: true });
-    expect(abilityEvents(stepN(sim, 5), SUPPORT)).toEqual([]);
-    unit(sim, TANK).hp = 500;
-    expect(abilityEvents(stepN(sim, 2), SUPPORT)).toHaveLength(1);
-    expect(unit(sim, TANK).hp).toBe(580);
   });
 });
 
