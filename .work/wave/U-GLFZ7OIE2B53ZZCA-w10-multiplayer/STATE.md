@@ -26,7 +26,8 @@ Out: host migration, adaptive input delay, matchmaking, wave-master human seat (
 Star topology with the host as sequencer. Bots are not networked: every peer runs the same Match; seat and policy changes travel as control commands. No gameplay pinning (D-4E4QRJ7N6LIGZDSD). Determinism is cross-runtime equality (D-V4TA7WE5J4QC24D3). Sonnet implements in worktrees, Opus reviews, only the lead pushes.
 
 ## Now
-Step 1 lead contract.
+Step 1 merged (b036d81). Slices A, D, E1 merged (f9b79e8). B, C and E2 are running; C and E2 got the step-1 review relay (H1 bot-card accept rule, H3 TickDriver setPaused/dispose/dump/onNotice, M1 peer command allowlist, M2 R1 wording, M3 networked guard).
+Step-3 carry-overs from the step-1 review: H2 wire messages pick/refuse/end (E1 used `lobby` as the pick request; a refusal is local only), M4 add `src/net` lockstep files to the fingerprint, L1 hero-slot constant for drive, L2 hash driven and policy at checkpoints, L3/L4 `start` spec validation and seats vs humans agreement, L6 comment on duplicate heroes, move TickDriver to `src/net/types.ts`.
 
 ## Next
 - Step 2 slices A, B, C, D, E1, E2 in parallel.
