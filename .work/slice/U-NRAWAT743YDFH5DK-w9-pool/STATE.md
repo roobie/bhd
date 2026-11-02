@@ -1,34 +1,35 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-IUFI7QQSGH4543TP
 owner:
   - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'defaultBargains() returns the six approved bargains and validates through validateGame'
+  - 'pool invariants test passes; npm run ci exits 0'
 ---
 
 # slice/w9-pool
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Ship B's initial bargain pool as content, plus the one kit flag the vocabulary could not express.
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/content/bargains/pool.ts, its test, gunner overpenAllies flag.
+Out: turning bargains on in defaultGame (step 3).
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+CONTRACT.md Effect vocabulary; no gameplay pinning.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; in finalize.
 
 ## Next
-- TODO
+- Integrator wires defaultBargains() into defaultGame; drop the knip pool.ts ignore then.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+npm run ci exit 0 (log w9-B-ci.log).
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -40,3 +41,4 @@ TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a hi
 
 ## Log
 - 2026-11-02 initialized
+- 2026-11-02 executed: pool + overpenAllies flag + tests; ci 0

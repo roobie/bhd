@@ -5,6 +5,7 @@
   "ignoreIssues": {
     "src/reporter/types.ts": ["exports", "types"],
     "src/reporter/store.ts": ["exports"],
+    "src/content/bargains/pool.ts": ["exports"],
     "src/content/bargains.ts": ["exports", "types"],
     "src/sim/bargains.ts": ["types"],
     "src/sim/combat.ts": ["exports"],
