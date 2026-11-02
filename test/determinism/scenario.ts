@@ -211,32 +211,47 @@ export function runMasterSim(seed: number, ticks: number): SimEvent[] {
   );
 }
 
-/** The scenario game with the test-only bargain pool (the shipped one is slice B's). */
+/** Seconds an offer stays open in the bargain run: short, so the unanswered offer lapses within the run. */
+const BARGAIN_WINDOW = 4;
+
+/** The scenario game (four plain waves that end one after another, a tougher Ancient) with the test-only bargain pool (the shipped one is slice B's). */
 function bargainsScenarioGame(): GameConfig {
-  return { ...defaultGame(), bargains: testBargains() };
+  const base = scenarioGame();
+  return {
+    ...base,
+    map: { ...base.map, ancient: { ...base.map.ancient, maxHp: 400 } },
+    waves: { ...base.waves, waves: [1, 2, 3, 4].map(() => ({ spawns: [{ def: 'grunt', count: 4, gap: 0.5 }] })) },
+    bargains: { ...testBargains(), afterWaves: [1, 2, 3], cards: 5, windowSeconds: BARGAIN_WINDOW },
+  };
 }
 
-/** Bargain commands at fixed ticks: accept, decline, and ones that resolve nothing (unknown offer, unknown card, repeats). */
-const BARGAIN_SCRIPT: readonly Scripted[] = [
-  { tick: 30, player: 2, cmd: { kind: 'bargain', op: 'accept', offer: 1, card: 'test-barrel' } },
-  { tick: 40, player: 3, cmd: { kind: 'bargain', op: 'decline', offer: 1 } },
-  { tick: 50, player: 3, cmd: { kind: 'bargain', op: 'accept', offer: 99, card: 'nonesuch' } },
-  { tick: 60, player: 4, cmd: { kind: 'bargain', op: 'decline', offer: 2 } },
-  { tick: 60, player: 5, cmd: { kind: 'bargain', op: 'decline', offer: 2 } },
-];
+/**
+ * Answers the offers as they open, from the sim's own state (an offer's tick and cards depend on the
+ * seeded draw): offer 1 is accepted (the timed card if it was drawn), offer 2 is declined, offer 3 and
+ * later are left to lapse. Also fires commands that resolve nothing (unknown offer and card, a repeat).
+ */
+function answerOffers(sim: Sim, tick: number): void {
+  for (const offer of sim.bargains?.offers ?? []) {
+    if (tick !== offer.expiresAt - Math.round(BARGAIN_WINDOW * 30) + 5) {
+      continue;
+    }
+    const card = offer.cards.find((c) => c.bargain === 'test-fleeting') ?? offer.cards[0];
+    if (offer.id === 1 && card !== undefined) {
+      submit(sim, { tick, player: 2, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: card.bargain } });
+      submit(sim, { tick, player: 3, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
+    } else if (offer.id === 2) {
+      submit(sim, { tick, player: 4, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
+      submit(sim, { tick, player: 5, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: 'nonesuch' } });
+    }
+  }
+  if (tick === 3) {
+    submit(sim, { tick, player: 3, cmd: { kind: 'bargain', op: 'accept', offer: 99, card: 'nonesuch' } });
+  }
+}
 
-/** Runs `BARGAIN_SCRIPT` on a fresh sim whose game has bargains configured. */
-function runBargainSim(seed: number, ticks: number): SimEvent[] {
-  return drive(
-    { seed, game: bargainsScenarioGame() },
-    ticks,
-    (sim) => {
-      for (const s of BARGAIN_SCRIPT) {
-        submit(sim, s, s.tick);
-      }
-    },
-    () => undefined,
-  );
+/** Runs the scenario game with bargains configured, answering offers as they open. */
+export function runBargainSim(seed: number, ticks: number): SimEvent[] {
+  return drive({ seed, game: bargainsScenarioGame() }, ticks, () => undefined, answerOffers);
 }
 
 interface MatchResult {

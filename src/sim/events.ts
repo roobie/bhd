@@ -150,7 +150,8 @@ type BargainOp = 'offer' | 'accept' | 'decline' | 'expire' | 'end';
  * - `offer`: an offer opened after wave `wave`; `cards` are the `BargainDef.id`s on it, `until` the tick it lapses.
  * - `accept`: `card` taken; `hero` is the entity id of the hero it benefits (0 for a team card).
  * - `decline`: refused by command (`card` and `hero` absent).
- * - `expire`: the window lapsed unresolved (counts as a decline).
+ * - `expire`: the window lapsed unresolved (counts as a decline). With `card` and `hero` set (and no `end`) it is a
+ *   timed bargain (`durationWaves`) running out instead; `offer` is the offer it came from.
  * - `end`: the offer is closed (follows every accept, decline and expire).
  * Fields are added, never renamed; fields not listed for an op are absent.
  */

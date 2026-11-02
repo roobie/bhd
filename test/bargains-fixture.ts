@@ -38,8 +38,15 @@ export function testBargains(): BargainsDef {
         costs: [
           { kind: 'waveExtra', target: 'team', def: 'runner', count: 2 },
           { kind: 'masterBudget', target: 'team', value: 3 },
-          { kind: 'def', target: 'team', path: 'maxHp', op: 'mul', value: 1.1, enemy: 'grunt' },
         ],
+      },
+      {
+        // Timed: covers the one wave after its offer, then the base values return.
+        id: 'test-fleeting',
+        scope: 'team',
+        durationWaves: 1,
+        gains: [{ kind: 'def', target: 'team', path: 'maxHp', op: 'mul', value: 1.5 }],
+        costs: [{ kind: 'taken', target: 'team', value: 1.25 }],
       },
     ],
   };

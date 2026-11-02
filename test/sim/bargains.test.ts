@@ -99,7 +99,7 @@ describe('presence flag and equivalence', () => {
 
   it('bargains configured but nothing offered: same events as bargains off, state hash differs only by the flag', () => {
     const off = new Sim({ seed: 9, game: defaultGame() });
-    const on = new Sim({ seed: 9, game: withBargains() });
+    const on = new Sim({ seed: 9, game: withBargains({ afterWaves: [99] }) });
     for (let i = 0; i < 400; i++) {
       const strip = (s: Sim): unknown[] => s.step().filter((e) => e.kind !== 'hash');
       expect(strip(on)).toEqual(strip(off));
@@ -118,12 +118,17 @@ describe('validateGame: bargains', () => {
     ['unknown hero def path', { kind: 'def', target: 'self', path: 'zeal.nonesuch', op: 'mul', value: 2 }],
     ['non-numeric def path', { kind: 'def', target: 'self', path: 'kit', op: 'mul', value: 2 }],
     ['inherited def path', { kind: 'def', target: 'self', path: 'constructor', op: 'mul', value: 2 }],
-    ['unknown enemy def', { kind: 'def', target: 'team', path: 'maxHp', op: 'mul', value: 2, enemy: 'nonesuch' }],
-    ['unknown enemy def path', { kind: 'def', target: 'team', path: 'nonesuch', op: 'mul', value: 2, enemy: 'grunt' }],
+    ['an enemy def patch', { kind: 'def', target: 'team', path: 'maxHp', op: 'mul', value: 2, enemy: 'grunt' }],
     [
       'leak damage (hurts the Ancient)',
       { kind: 'def', target: 'team', path: 'leakDamage', op: 'mul', value: 2, enemy: 'grunt' },
     ],
+    ['array length as a path', { kind: 'def', target: 'team', path: 'attack.length', op: 'mul', value: 2 }],
+    [
+      'a path only the card kit has, on team',
+      { kind: 'def', target: 'team', path: 'heat.decayPerSecond', op: 'mul', value: 0 },
+    ],
+    ['unknown target', { kind: 'dealt', target: 'everyone', value: 2 } as unknown as Effect],
     ['ancientHeal of 0', { kind: 'ancientHeal', target: 'team', value: 0 }],
     ['negative ancientHeal (a hurt)', { kind: 'ancientHeal', target: 'team', value: -0.1 }],
     ['ancientHeal above max hp', { kind: 'ancientHeal', target: 'team', value: 2 }],
@@ -136,11 +141,29 @@ describe('validateGame: bargains', () => {
     expect(() => validateGame(withEffect(effect))).toThrow(CONFIG);
   });
 
-  it('accepts a positive ancientHeal and a known enemy patch', () => {
+  it('accepts a positive ancientHeal and a hero patch', () => {
     expect(() => validateGame(withEffect({ kind: 'ancientHeal', target: 'team', value: 0.25 }))).not.toThrow();
     expect(() =>
-      validateGame(withEffect({ kind: 'def', target: 'team', path: 'maxHp', op: 'add', value: 5, enemy: 'brute' })),
+      validateGame(withEffect({ kind: 'def', target: 'team', path: 'maxHp', op: 'add', value: 5 })),
     ).not.toThrow();
+  });
+
+  it('rejects a self target on a team-scope bargain, and a bad scope or kit', () => {
+    const team = { id: 'x', scope: 'team', gains: [{ kind: 'dealt', target: 'self', value: 2 }], costs: [] } as const;
+    expect(() => validateGame(withBargains({ pool: [team] }))).toThrow(CONFIG);
+    const hero = { id: 'y', scope: 'hero', kit: 'wizard', gains: [], costs: [] };
+    expect(() => validateGame(withBargains({ pool: [hero as unknown as BargainsDef['pool'][number]] }))).toThrow(
+      CONFIG,
+    );
+    const scope = { id: 'z', scope: 'party', gains: [], costs: [] };
+    expect(() => validateGame(withBargains({ pool: [scope as unknown as BargainsDef['pool'][number]] }))).toThrow(
+      CONFIG,
+    );
+    expect(() => validateGame(withBargains({ windowSeconds: Number.POSITIVE_INFINITY }))).toThrow();
+  });
+
+  it('rejects an over-long card id in a command', () => {
+    expect(isValidCommand({ kind: 'bargain', op: 'accept', offer: 1, card: 'x'.repeat(65) })).toBe(false);
   });
 
   it('rejects bad offer rules and pools', () => {
