@@ -8,7 +8,7 @@ import { initPenitent } from '../../src/sim/heroes/penitent.ts';
 import { initPsyker } from '../../src/sim/heroes/psyker.ts';
 import { initStandin } from '../../src/sim/heroes/standins.ts';
 import { Sim } from '../../src/sim/sim.ts';
-import { testBargains } from '../bargains-fixture.ts';
+import { noBargains, testBargains } from '../bargains-fixture.ts';
 
 type Tree = Record<string, unknown>;
 
@@ -258,7 +258,7 @@ describe('state hash covers every field', () => {
   it('changes when any bargains field changes, rng words included', () => {
     const game = { ...defaultGame(), bargains: testBargains() };
     const bargainsBase = hashOf(fixture(game));
-    expect(bargainsBase).not.toBe(base);
+    expect(bargainsBase).not.toBe(hashOf(fixture(noBargains())));
     const paths: string[][] = [];
     leafPaths(fixture(game).bargains, [], paths);
     expect(paths.map((p) => p.join('.'))).toEqual(

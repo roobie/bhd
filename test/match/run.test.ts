@@ -111,4 +111,10 @@ describe('humans', () => {
     }
     expect(seen).toEqual([3]);
   });
+
+  it('bargain policy defaults to human when a human plays and to bots otherwise, and can be set', () => {
+    expect(buildMatch(spec()).bargainPolicy).toBe('bots');
+    expect(buildMatch(spec({ humans: [0] })).bargainPolicy).toBe('human');
+    expect(buildMatch(spec({ humans: [0], bargainPolicy: 'bots' })).bargainPolicy).toBe('bots');
+  });
 });

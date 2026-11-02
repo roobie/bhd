@@ -2,13 +2,15 @@
 // backlashes (count and damage, friendly fire included). docs/METRICS.md lists the assumptions.
 
 import type { GameLog, MetricDef } from '../types.ts';
+import { heroDefAt } from './effective.ts';
 import { aliveSpans, buildIndex, overlap } from './gameindex.ts';
 
 /** Warp at or above this is "high" when the game has no psyker def (the design's 50). */
 const DEFAULT_THRESHOLD = 50;
 
-function threshold(log: GameLog): number {
-  const def = log.header.resolved.game.heroes.find((h) => h.kit === 'psyker');
+/** The backlash threshold of psyker entity `id` at `tick`: its effective def (accepted bargains patched in). */
+function threshold(log: GameLog, id: number, tick: number): number {
+  const def = heroDefAt(log, id, 'psyker', tick);
   return def?.kit === 'psyker' ? def.backlash.freeBelow : DEFAULT_THRESHOLD;
 }
 
@@ -25,7 +27,6 @@ export const psykerWarpHigh: MetricDef = {
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
-    const limit = threshold(log);
     let high = 0;
     let alive = 0;
     for (const p of ix.heroes.filter((h) => h.def === 'psyker')) {
@@ -34,12 +35,12 @@ export const psykerWarpHigh: MetricDef = {
       let at = p.spawnTick;
       for (const e of log.events) {
         if (e.kind === 'resource' && e.hero === p.id && e.resource === 'warp') {
-          high += band >= limit ? overlap(spans, at, e.tick) : 0;
+          high += band >= threshold(log, p.id, at) ? overlap(spans, at, e.tick) : 0;
           ({ band } = e);
           at = Math.max(at, e.tick);
         }
       }
-      high += band >= limit ? overlap(spans, at, ix.endTick) : 0;
+      high += band >= threshold(log, p.id, at) ? overlap(spans, at, ix.endTick) : 0;
       alive += overlap(spans, p.spawnTick, ix.endTick);
     }
     return alive > 0 ? { high: high / alive } : {};

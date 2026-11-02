@@ -41,7 +41,8 @@ function scan(events: readonly SimEvent[]): Bargains {
   const byId = new Map<number, Offer>();
   const accepts: Accept[] = [];
   for (const e of events) {
-    if (e.kind !== 'bargain') {
+    // An `expire` that carries a `card` is a timed bargain ending, not an offer window lapsing.
+    if (e.kind !== 'bargain' || (e.op === 'expire' && e.card !== undefined)) {
       continue;
     }
     const o = byId.get(e.offer);
@@ -145,7 +146,10 @@ export const bargainExpire: MetricDef = {
 function resolutionTicks(events: readonly SimEvent[]): Map<number, string> {
   const ops = new Map<number, string>();
   for (const e of events) {
-    if (e.kind === 'bargain' && (e.op === 'accept' || e.op === 'decline' || e.op === 'expire')) {
+    if (
+      e.kind === 'bargain' &&
+      (e.op === 'accept' || e.op === 'decline' || (e.op === 'expire' && e.card === undefined))
+    ) {
       ops.set(e.tick, e.op === 'accept' ? 'accept' : 'decline');
     }
   }

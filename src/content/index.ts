@@ -2,6 +2,7 @@
 // the reporter can compare two configs without a code change. `defaultGame()` is the shipping
 // config. Content is authored in seconds / per-second units (see types.ts).
 
+import { defaultBargains } from './bargains/pool.ts';
 import type { BargainsDef } from './bargains.ts';
 import { validateBargains } from './bargains.ts';
 import type { MasterDef } from './director.ts';
@@ -44,7 +45,7 @@ export interface GameConfig {
    * schedule mode (the waves' own compositions spawn).
    */
   readonly master?: MasterDef;
-  /** Set = bargains on (sim/bargains.ts). Unset = off. Absent from `defaultGame()` until wave 9 step 3. */
+  /** Set = bargains on (sim/bargains.ts). Unset = off. On in `defaultGame()`. */
   readonly bargains?: BargainsDef;
 }
 
@@ -68,6 +69,7 @@ export function defaultGame(): GameConfig {
     heroes: [gunnerDef(), penitentDef(), psykerDef(), supportSeat()],
     intents: defaultIntents(),
     rules: defaultRules(),
+    bargains: defaultBargains(),
   };
 }
 

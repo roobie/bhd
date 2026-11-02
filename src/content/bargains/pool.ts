@@ -84,7 +84,7 @@ const callTheHorde: BargainDef = {
   ],
 };
 
-/** The shipped bargain rules. Not on in `defaultGame` yet (step 3 turns it on). */
+/** The shipped bargain rules (on in `defaultGame`). */
 export function defaultBargains(): BargainsDef {
   return {
     afterWaves: [3, 6, 9, 12],

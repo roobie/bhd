@@ -36,6 +36,7 @@ Step 1 engine-prep contract in progress.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
+- Step 3 integration: npm run ci exit 0. 100-pair batches (quick vs 6a9b06d; evaluate vs declineAll; evaluate vs acceptAll). bargain.ancientViolations 0 in all three and over 240 full logs. outcome.wave: base 14.58, evaluate 14.21, declineAll 14.60, acceptAll 14.31. ancientHp[end]: base 0.283, evaluate 0.205, declineAll 0.267, acceptAll 0.323. evaluate accept rate by card (of games offering it): iron-discipline 1.00, hair-shirt 0.47, open-the-eye 0.34, blood-tithe 0.006, unvented-barrel 0, call-the-horde 0. Evaluate declines 0.33 of offers (0.18 at w3, 0.60 at w9, 0.84 at w12); expiry 0.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -44,9 +45,11 @@ Step 1 engine-prep contract in progress.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
+- [ ] backlog: evaluate scorer never takes unvented-barrel or call-the-horde and almost never blood-tithe (removed knob or extra runners outweigh the gain; Ancient is near full) and always takes iron-discipline: pool/weight tuning, not a scorer bug
 - [ ] decision: B (2026-11-02) chose all recommendations: offers after waves 3/6/9/12, 3 cards + Decline, 20 s window, clock keeps running (B1); team offer, hero-bound cards, benefiting hero's player accepts, solo picks all with opt-in bots-pick, wave master gets budget (B2); wide costs (self, teammates, enemy side), permanent (B3/B4); the six-bargain pool in PLAN §B5 (B5); decline heals the Ancient 4% (B6)
 
 ## Log
+- 2026-11-02 step 3 integration: bargains on in defaultGame/defaultBotSetup, solo bargainPolicy + shell toggle, shared effectiveDef, card text, evidence, screenshots
 - 2026-11-01 initialized
 - 2026-11-02 Opus plan; B answered all design questions
 - 2026-11-02 phase initialize → execute

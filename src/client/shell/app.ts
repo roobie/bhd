@@ -99,6 +99,8 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   // One configured hero is a solo game: selecting another hero takes it over (the others become bots).
   const solo = config.drive.length === 1;
   let driven: readonly number[] = config.drive;
+  // The "Bots pick bargains" toggle: off = a human decides every offer. It survives a restart.
+  let botsPick = false;
 
   let match: Match = buildMatch(spec);
   const makeSink = (m: Match): CommandSink => options?.sink?.(m) ?? localSink(m, INPUT_DELAY_TICKS);
@@ -139,6 +141,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   function restart(): void {
     match = buildMatch(spec);
     driven = config.drive;
+    match.setBargainPolicy(botsPick ? 'bots' : 'human');
     sink = makeSink(match);
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
@@ -179,6 +182,12 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     }
     if (action.kind === 'restart') {
       restart();
+      return;
+    }
+    if (action.kind === 'bargainBots') {
+      botsPick = action.on;
+      match.setBargainPolicy(botsPick ? 'bots' : 'human');
+      hudDirty = true;
       return;
     }
     takeOver(action);
@@ -345,6 +354,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
             controls,
             driven,
             end,
+            botsPick,
             maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds,
             game: match.sim.game,
           }),

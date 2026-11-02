@@ -1,6 +1,7 @@
 // Pure: Perception + presentation + controls -> HudModel. Owner: w7-hud.
 // Kit-agnostic: nothing here switches on a hero, kit, ability, status or resource name.
 
+import { defNumberAt } from '../../content/bargains.ts';
 import {
   describeAbility,
   describeBargain,
@@ -24,7 +25,15 @@ import {
   statusPresentation,
   UI_TEXT,
 } from '../../content/presentation.ts';
-import type { CardView, HeroView, IntentView, OfferView, Perception, TakenView } from '../../perception/types.ts';
+import type {
+  CardView,
+  EffectView,
+  HeroView,
+  IntentView,
+  OfferView,
+  Perception,
+  TakenView,
+} from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
 import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS, maxOffsetHalfSeconds } from './arming.ts';
 import { BARGAIN_CARD_KEYS, KEY_BARGAIN_DECLINE } from './input.ts';
@@ -174,20 +183,41 @@ function benefitLabel(p: Perception, ui: Presentation, card: CardView): string {
   return def === undefined ? 'A hero' : heroPresentation(ui, def).label;
 }
 
+/** What card text reads besides the card: perception (who the heroes are), presentation and the game's hero defs. */
+type TextWorld = Pick<HudInput, 'p' | 'ui' | 'game'>;
+
+/** The unpatched hero-def number a `self` effect starts from: the benefiting hero's base def; unknown for other targets. */
+function baseOf(world: TextWorld, benefit: number): (e: EffectView) => number | undefined {
+  const { p, game } = world;
+  const defId = p.heroes.find((h) => h.id === benefit)?.def ?? p.fallen.find((f) => f.id === benefit)?.def;
+  const def = game?.heroes.find((d) => d.id === defId);
+  return (e) => (e.kind === 'def' && e.target === 'self' && def !== undefined ? defNumberAt(def, e.path) : undefined);
+}
+
 function bargainLines(
-  ui: Presentation,
-  card: { readonly scope: 'hero' | 'team'; readonly gains: CardView['gains']; readonly costs: CardView['costs'] },
+  world: TextWorld,
+  card: {
+    readonly scope: 'hero' | 'team';
+    readonly hero: number;
+    readonly gains: CardView['gains'];
+    readonly costs: CardView['costs'];
+  },
 ): { gains: readonly string[]; costs: readonly string[] } {
-  return describeBargain(card, { scope: card.scope, enemy: (id) => enemyPresentation(ui, id).label });
+  return describeBargain(card, {
+    scope: card.scope,
+    enemy: (id) => enemyPresentation(world.ui, id).label,
+    base: baseOf(world, card.hero),
+  });
 }
 
 /** Pips for the accepted bargains that apply to `h`, with a tooltip of their gains and costs. */
-function bargainPips(h: HeroView, p: Perception, ui: Presentation): BargainPipModel[] {
+function bargainPips(h: HeroView, world: TextWorld): BargainPipModel[] {
+  const { p, ui } = world;
   return h.bargains.map((id) => {
     const pres = bargainPresentation(ui, id);
     const taken = p.bargains.taken.find((t) => t.bargain === id);
     const lines =
-      taken === undefined ? undefined : bargainLines(ui, { scope: taken.hero === 0 ? 'team' : 'hero', ...taken });
+      taken === undefined ? undefined : bargainLines(world, { scope: taken.hero === 0 ? 'team' : 'hero', ...taken });
     const tooltip = [
       pres.label,
       ...(lines?.gains.map((g) => `+ ${g}`) ?? []),
@@ -225,7 +255,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
       respawnSeconds: undefined,
       respawnLabel: undefined,
       fallenLabel: '',
-      bargains: bargainPips(h, p, ui),
+      bargains: bargainPips(h, input),
     });
   }
   return cards;
@@ -268,7 +298,7 @@ function helpBargains(input: HudInput): HelpBargainsModel | undefined {
     return undefined;
   }
   const taken = p.bargains.taken.map((t: TakenView) => {
-    const lines = bargainLines(ui, { scope: t.hero === 0 ? 'team' : 'hero', ...t });
+    const lines = bargainLines(input, { scope: t.hero === 0 ? 'team' : 'hero', ...t });
     const hero = p.heroes.find((h) => h.id === t.hero) ?? p.fallen.find((f) => f.id === t.hero);
     return {
       label: bargainPresentation(ui, t.bargain).label,
@@ -424,7 +454,7 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
   const heal = game?.bargains?.declineAncientHeal ?? 0;
   const cards: BargainCardModel[] = o.cards.map((c, i) => {
     const pres = bargainPresentation(ui, c.bargain);
-    const lines = bargainLines(ui, c);
+    const lines = bargainLines(input, c);
     return {
       id: c.bargain,
       label: pres.label,
@@ -458,7 +488,11 @@ function bargainModel(input: HudInput): BargainHudModel | undefined {
     return undefined;
   }
   const sent = input.controls.bargainSent ?? [];
-  return { offers: open.map((o) => offerModel(input, o, sent)) };
+  return {
+    offers: open.map((o) => offerModel(input, o, sent)),
+    botsPick: input.botsPick === true,
+    botsPickLabel: UI_TEXT.bargain.botsPick,
+  };
 }
 
 /**

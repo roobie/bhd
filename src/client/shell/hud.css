@@ -723,6 +723,21 @@
   pointer-events: none;
 }
 
+.hud-root .bpick {
+  pointer-events: auto;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #ffffff30;
+  border-radius: 8px;
+  background: rgb(14 14 18);
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .hud-root .bargain-offer {
   pointer-events: auto;
   border: 1px solid var(--accent);

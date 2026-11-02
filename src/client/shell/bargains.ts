@@ -80,6 +80,14 @@ function offerView(o: BargainOfferModel, dispatch: Dispatch, expanded: boolean):
 export function bargainPanelView(model: BargainHudModel, dispatch: Dispatch, expanded: boolean): TemplateResult {
   return html`<div class="bargains" data-hit role="region" aria-label="Bargain offers">
     ${model.offers.map((o) => offerView(o, dispatch, expanded))}
+    <label class="bpick">
+      <input
+        type="checkbox"
+        .checked=${model.botsPick}
+        @change=${(e: Event) => dispatch({ kind: 'bargainBots', on: (e.target as HTMLInputElement).checked })}
+      />
+      ${model.botsPickLabel}
+    </label>
   </div>`;
 }
 

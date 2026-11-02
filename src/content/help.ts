@@ -11,7 +11,8 @@
 // the sim does today (src/sim/heroes/*, combat.ts, statuses.ts); change both together.
 
 import type { EffectView, HeroView, TakenView } from '../perception/types.ts';
-import { applyDefPatches, type BargainsDef, type Effect, type EffectTarget } from './bargains.ts';
+import { BARGAIN_PATHS, type PathText, showUnit } from './bargains/text.ts';
+import { type AppliedEffects, type BargainsDef, type Effect, type EffectTarget, effectiveDef } from './bargains.ts';
 import type { GunnerDef } from './heroes/gunner.ts';
 import type { PenitentDef } from './heroes/penitent.ts';
 import type { PsykerDef } from './heroes/psyker.ts';
@@ -477,6 +478,8 @@ export interface BargainFacts {
   readonly scope: 'hero' | 'team';
   /** The display name of an enemy def id. */
   readonly enemy: (id: string) => string;
+  /** The unpatched number an effect starts from (a hero-def path for the hero the card benefits); absent or undefined = unknown (text is relative then). */
+  readonly base?: (e: EffectView) => number | undefined;
 }
 
 const CAMEL_BOUNDARY = /(?<a>[a-z0-9])(?<b>[A-Z])/gu;
@@ -519,14 +522,54 @@ const MULTIPLIER_NAMES: Readonly<Record<string, string>> = {
   respawn: 'Respawn time',
 };
 
+const ZERO_TEXT: Readonly<Record<string, string>> = {
+  dealt: 'Deals no damage',
+  taken: 'Takes no damage',
+  healTaken: 'Cannot be healed',
+  respawn: 'Respawns at once',
+};
+
+/** A patch with a known base: the sentence from the real numbers. */
+function patchFrom(e: EffectView, text: PathText, from: number): string {
+  const to = e.op === 'add' ? from + e.value : from * e.value;
+  if (Math.abs(to) < ZERO && text.zero !== undefined) {
+    return text.zero;
+  }
+  const [now, was] = [showUnit(text.unit, to), showUnit(text.unit, from)];
+  return text.say === undefined ? `${text.label} ${now} (was ${was})` : text.say(now, was);
+}
+
+/** A hero-def patch: the path's phrasing from content/bargains/text.ts, with the real numbers when the base is known. */
+function heroPatchBody(e: EffectView, facts: BargainFacts): string {
+  const text = BARGAIN_PATHS[e.path];
+  if (text === undefined) {
+    const name = pathName(e.path);
+    return e.op === 'add' ? signed(name, e.value) : multiplier(name, e.value);
+  }
+  const from = facts.base?.(e);
+  if (from !== undefined) {
+    return patchFrom(e, text, from);
+  }
+  if (e.op === 'mul') {
+    return e.value === 0 && text.zero !== undefined ? text.zero : multiplier(text.label, e.value);
+  }
+  return `${text.label} ${e.value >= 0 ? '+' : '-'}${showUnit(text.unit, Math.abs(e.value))}`;
+}
+
+/** Below this a patched value counts as 0. */
+const ZERO = 1e-9;
+
 function effectBody(e: EffectView, facts: BargainFacts): string {
   const known = MULTIPLIER_NAMES[e.kind];
   if (known !== undefined) {
-    return multiplier(known, e.value);
+    return e.value === 0 && ZERO_TEXT[e.kind] !== undefined ? (ZERO_TEXT[e.kind] ?? '') : multiplier(known, e.value);
   }
   switch (e.kind) {
     case 'def': {
-      const name = e.def === '' ? pathName(e.path) : `${facts.enemy(e.def)} ${pathName(e.path).toLowerCase()}`;
+      if (e.def === '') {
+        return heroPatchBody(e, facts);
+      }
+      const name = `${facts.enemy(e.def)} ${pathName(e.path).toLowerCase()}`;
       return e.op === 'add' ? signed(name, e.value) : multiplier(name, e.value);
     }
     case 'ancientHeal':
@@ -589,37 +632,28 @@ export function describeBargainRules(b: BargainsDef): readonly (readonly [string
   ];
 }
 
-/** The hero-def patches of an accepted bargain that apply to `hero` (enemy patches are not the hero's). */
-function heroPatches(taken: TakenView, hero: HeroView): Effect[] {
-  const patches: Effect[] = [];
+/** The hero-def patches of a taken bargain (enemy patches are not the hero's), as sim `Effect`s. */
+function appliedOf(taken: TakenView): AppliedEffects {
+  const effects: Effect[] = [];
   for (const e of [...taken.gains, ...taken.costs]) {
-    if (e.kind !== 'def' || e.def !== '' || (e.op !== 'mul' && e.op !== 'add')) {
-      continue;
-    }
-    // 'self' is the benefiting hero (everyone on a team card), 'allies' everyone else, 'team' everyone.
-    const applies =
-      e.target === 'team' ||
-      (e.target === 'self' && (taken.hero === 0 || taken.hero === hero.id)) ||
-      (e.target === 'allies' && taken.hero !== hero.id);
-    if (applies) {
-      patches.push({ kind: 'def', target: e.target, path: e.path, op: e.op, value: e.value });
+    if (e.kind === 'def' && e.def === '' && (e.op === 'mul' || e.op === 'add')) {
+      effects.push({ kind: 'def', target: e.target, path: e.path, op: e.op, value: e.value });
     }
   }
-  return patches;
+  return { hero: taken.hero, effects };
 }
 
-/** `def` with the accepted bargains that apply to `hero` patched in, so help numbers reflect them. */
+/**
+ * `def` with the accepted bargains patched in, so help numbers reflect them. Same function the sim
+ * uses (`effectiveDef` in bargains.ts): who a patch reaches is decided there and nowhere else.
+ */
 export function effectiveHeroDef(
   def: HeroDef | undefined,
   taken: readonly TakenView[],
   hero: HeroView | undefined,
 ): HeroDef | undefined {
-  if (def === undefined || hero === undefined || hero.bargains.length === 0) {
+  if (def === undefined || hero === undefined || taken.length === 0) {
     return def;
   }
-  const mine = taken.filter((t) => hero.bargains.includes(t.bargain));
-  return applyDefPatches(
-    def,
-    mine.flatMap((t) => heroPatches(t, hero)),
-  );
+  return effectiveDef(def, taken.map(appliedOf), hero.id);
 }

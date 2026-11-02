@@ -11,6 +11,7 @@
 // The merged game goes through `validateGame`. Nothing here mutates its inputs.
 
 import type { BotSetup } from './bots.ts';
+import { validateBots } from './bots.ts';
 import type { DirectorDef } from './director.ts';
 import type { GameConfig } from './index.ts';
 import { validateGame } from './index.ts';
@@ -127,6 +128,7 @@ function merge(base: unknown, patch: unknown, path: readonly string[], kit: Json
 export function applyOverrides(base: RunConfig, overrides: ConfigOverrides | undefined): RunConfig {
   if (overrides === undefined) {
     validateGame(base.game);
+    validateBots(base.bots);
     return base;
   }
   for (const key of Object.keys(overrides)) {
@@ -151,5 +153,6 @@ export function applyOverrides(base: RunConfig, overrides: ConfigOverrides | und
     ...(director === undefined ? {} : { director: director as DirectorDef }),
   };
   validateGame(out.game);
+  validateBots(out.bots);
   return out;
 }

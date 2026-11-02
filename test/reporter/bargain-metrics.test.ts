@@ -11,6 +11,7 @@ import type { GameEnd, GameSpec } from '../../src/match/run.ts';
 import { RUN_ABI } from '../../src/match/run.ts';
 import type { LogHeader } from '../../src/replay/log.ts';
 import { ancientViolations } from '../../src/reporter/metrics/bargain.ts';
+import { heroDefAt } from '../../src/reporter/metrics/effective.ts';
 import { computeMetrics, METRICS } from '../../src/reporter/metrics/registry.ts';
 import type { GameLog, MetricDef } from '../../src/reporter/types.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
@@ -103,6 +104,43 @@ describe('bargain metrics', () => {
     expect(metric('bargain.expire').compute(log).all).toBeCloseTo(1 / 3);
   });
 
+  it('an expire that carries a card is a timed bargain ending, not an offer lapsing', () => {
+    const timed = logOf([
+      ...SPAWNS,
+      ...OFFERED,
+      { tick: 1600, kind: 'bargain', op: 'expire', offer: 1, card: 'test-tithe', hero: 0 },
+    ]);
+    expect(metric('bargain.expire').compute(timed)).toEqual(metric('bargain.expire').compute(log));
+    expect(metric('bargain.decline').compute(timed)).toEqual(metric('bargain.decline').compute(log));
+  });
+
+  it('hero def reads follow accepted bargains and their timed ending', () => {
+    const accept = (card: string, hero: number): SimEvent => ({
+      tick: 300,
+      kind: 'bargain',
+      op: 'accept',
+      offer: 1,
+      card,
+      hero,
+    });
+    const patched = logOf([...SPAWNS, accept('test-hair-shirt', 3)]);
+    const base = heroDefAt(logOf(SPAWNS), 3, 'penitent', 400);
+    const at = (tick: number) => heroDefAt(patched, 3, 'penitent', tick);
+    expect(at(299)).toEqual(base);
+    const [now, was] = [at(300), base];
+    if (now?.kit !== 'penitent' || was?.kit !== 'penitent') {
+      throw new Error('no penitent def');
+    }
+    expect(now.zeal.maxBonus).toBeGreaterThan(was.zeal.maxBonus);
+    expect(heroDefAt(patched, 2, 'gunner', 400)).toEqual(heroDefAt(logOf(SPAWNS), 2, 'gunner', 400));
+    const ended = logOf([
+      ...SPAWNS,
+      accept('test-hair-shirt', 3),
+      { tick: 500, kind: 'bargain', op: 'expire', offer: 1, card: 'test-hair-shirt', hero: 3 },
+    ]);
+    expect(heroDefAt(ended, 3, 'penitent', 600)).toEqual(base);
+  });
+
   it('files Ancient heals by the resolution of the same tick', () => {
     expect(metric('bargain.ancientHealed').compute(log)).toEqual({ decline: 14, accept: 50, other: 0, total: 64 });
   });
@@ -181,17 +219,22 @@ describe('Ancient invariant', () => {
   });
 });
 
+const POLICY_ERROR = /bargain policy/u;
+
 describe('bargain policy override files', () => {
-  const base = {
-    game: { ...defaultGame(), bargains: testBargains() },
-    bots: { ...defaultBotSetup(), bargain: { policy: 'evaluate' as const } },
-  };
+  const base = { game: defaultGame(), bots: defaultBotSetup() };
 
   it.each([
     ['declineAll', 'bargains-decline'],
     ['acceptAll', 'bargains-accept'],
   ])('%s applies once the defaults carry the bargain keys', (policy, name) => {
     const overrides = JSON.parse(readFileSync(`scenarios/${name}.json`, 'utf8')) as ConfigOverrides;
-    expect(applyOverrides(base, overrides).bots.bargain?.policy).toBe(policy);
+    const out = applyOverrides(base, overrides);
+    expect(out.bots.bargain?.policy).toBe(policy);
+    expect(out.game.bargains).toBeDefined();
+  });
+
+  it('rejects an unknown policy', () => {
+    expect(() => applyOverrides(base, { bots: { bargain: { policy: 'sometimes' } } })).toThrow(POLICY_ERROR);
   });
 });

@@ -117,11 +117,11 @@ function offerFor(p: Perception): OfferView {
 }
 
 describe('bargainDecisions: shape', () => {
-  it('is empty without an open offer and for seats other than the first living hero', () => {
+  it('is empty without an open offer, one decision with one (the Match picks which seat asks)', () => {
     const p = base();
     expect(bargainDecisions(ctxOf(p), 'evaluate')).toEqual([]);
     const open = withOffers(p, [offerFor(p)]);
-    expect(bargainDecisions(ctxOf(open, 1), 'evaluate')).toEqual([]);
+    expect(bargainDecisions(ctxOf(open, 1), 'evaluate')).toHaveLength(1);
     expect(bargainDecisions(ctxOf(open, 0), 'evaluate')).toHaveLength(1);
   });
 
@@ -288,6 +288,54 @@ describe('Match bargain round', () => {
     }
     return { events, decisionIds };
   }
+
+  function resolvers(m: Match, until: number): Set<number> {
+    const players = new Set<number>();
+    while (!m.ended && m.tick < until) {
+      for (const e of m.step()) {
+        if (e.kind === 'cmd' && e.cmd.kind === 'bargain') {
+          players.add(e.player);
+        }
+      }
+    }
+    return players;
+  }
+
+  function solo(over: Partial<MatchOptions>): Match {
+    return new Match({
+      seed: SEED,
+      game: { ...defaultGame(), bargains: testBargains() },
+      bots: defaultBotSetup(),
+      ...over,
+    });
+  }
+
+  it('a driven seat never decides: the lowest bot seat does', () => {
+    const players = resolvers(solo({ driven: [0], bargainPolicy: 'bots' }), 1800);
+    expect(players.size).toBeGreaterThan(0);
+    expect([...players]).toEqual([1]);
+  });
+
+  it('setBargainPolicy hands offers to the bots only from then on, and is deterministic', () => {
+    const play = (): string => {
+      const m = solo({ driven: [0], bargainPolicy: 'human' });
+      const log: unknown[] = [];
+      while (!m.ended && m.tick < 1800) {
+        if (m.tick === 300) {
+          m.setBargainPolicy('bots');
+        }
+        for (const e of m.step()) {
+          log.push(e);
+        }
+      }
+      return JSON.stringify(log);
+    };
+    expect(play()).toBe(play());
+    const m = solo({ driven: [0], bargainPolicy: 'human' });
+    expect(resolvers(m, 400)).toEqual(new Set());
+    m.setBargainPolicy('bots');
+    expect(m.bargainPolicy).toBe('bots');
+  });
 
   it('human and off never put bargain decisions or commands through the bots', () => {
     for (const policy of ['human', 'off'] as const) {

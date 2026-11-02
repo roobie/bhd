@@ -8,7 +8,7 @@ import { defaultGame, validateGame } from '../../src/content/index.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import { canonicalCommand, isValidCommand } from '../../src/sim/commands.ts';
 import { Sim } from '../../src/sim/sim.ts';
-import { testBargains } from '../bargains-fixture.ts';
+import { noBargains, testBargains } from '../bargains-fixture.ts';
 
 function withBargains(over: Partial<BargainsDef> = {}): GameConfig {
   return { ...defaultGame(), bargains: { ...testBargains(), ...over } };
@@ -93,12 +93,12 @@ describe('commands that resolve nothing', () => {
 
 describe('presence flag and equivalence', () => {
   it('a game with bargains has bargain state; one without has none', () => {
-    expect(new Sim({ seed: 1, game: defaultGame() }).bargains).toBeUndefined();
+    expect(new Sim({ seed: 1, game: noBargains() }).bargains).toBeUndefined();
     expect(new Sim({ seed: 1, game: withBargains() }).bargains).toBeDefined();
   });
 
   it('bargains configured but nothing offered: same events as bargains off, state hash differs only by the flag', () => {
-    const off = new Sim({ seed: 9, game: defaultGame() });
+    const off = new Sim({ seed: 9, game: noBargains() });
     const on = new Sim({ seed: 9, game: withBargains({ afterWaves: [99] }) });
     for (let i = 0; i < 400; i++) {
       const strip = (s: Sim): unknown[] => s.step().filter((e) => e.kind !== 'hash');
