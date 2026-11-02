@@ -250,7 +250,7 @@ function fire(run: GunnerRun, target: Unit): void {
   const overpen = furnace || kit.heat > bp(def.heat.overpenAbove);
   const pierceTags = pierce ? ['pierce'] : [];
   if (overpen) {
-    fireLine(run, target, ['ff', 'line', 'overpen', ...pierceTags]);
+    fireLine(run, target, [...(def.heat.overpenAllies > 0 ? ['ff'] : []), 'line', 'overpen', ...pierceTags]);
   } else {
     dealDamage(ctx, { src: hero.id, dst: target.id, amount: def.attack.damage, tags: pierceTags });
   }

@@ -31,6 +31,8 @@ interface HeatDef {
   readonly pierceAbove: number;
   /** Above this heat, rounds overpenetrate: a line hit that includes allies (`ff`). */
   readonly overpenAbove: number;
+  /** 1 = the overpenetration line hits allies (`ff`), 0 = it spares them. A knob a bargain patches (Iron Discipline). */
+  readonly overpenAllies: number;
   /** Overheat (heat reaches 100%): no fire for this long; heat bleeds off linearly to zero. */
   readonly overheatSeconds: number;
   /** Half the width of the overpenetration line. */
@@ -100,6 +102,7 @@ export function gunnerDef(): GunnerDef {
       decayPerSecond: 0.1,
       pierceAbove: 0.6,
       overpenAbove: 0.85,
+      overpenAllies: 1,
       overheatSeconds: 4,
       lineHalfWidth: 0.4,
     },
