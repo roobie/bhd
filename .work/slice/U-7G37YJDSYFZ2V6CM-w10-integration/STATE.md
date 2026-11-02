@@ -34,7 +34,7 @@ Opus review fixes (H1, H2, M1 to M7, L1 to L7) done in this branch; waiting for 
 - Lead: merge, ask B to deploy the Worker, set the TURN secrets and `ALLOWED_ORIGINS` (unset = every origin).
 
 ## Evidence
-See the wave STATE.md Evidence section. Review fixes: `npm run ci` green; test/net halts every peer at the host's pause tick (seeds 21-23); flood, oversized-seal, racing-accept, pause-input tests; rtc fake-timer tests; broadcast lock-election tests; ws events; lobby recovery.
+See the wave STATE.md Evidence section. Review fixes: `npm run ci` green; two-tab chromium run PASS, both peers halted at the same tick (605 / 605; the script waits 1.2 s before the resume because of the 1 per second toggle limit); test/net halts every peer at the host's pause tick (seeds 21-23); flood, oversized-seal, racing-accept, pause-input tests; rtc fake-timer tests; broadcast lock-election tests; ws events; lobby recovery.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
