@@ -58,6 +58,35 @@ export function serialiseShellHash(c: ShellConfig): string {
   return params.toString().replaceAll('%2C', ',');
 }
 
+const ROOM_RE = /^[A-Za-z0-9_-]{1,32}$/u;
+const LOCAL_ROOM = /^local-/iu;
+const MAX_NAME = 32;
+const CONTROL = /\p{Cc}/gu;
+
+/** Multiplayer parameters of the URL: `#room=ABCD&name=Ada`. No `room` means solo. */
+export interface RoomConfig {
+  readonly room: string | undefined;
+  readonly name: string;
+}
+
+/** Room codes are upper case; `local-*` rooms (BroadcastChannel testing) are lower case. */
+function normaliseRoom(text: string): string | undefined {
+  const t = text.trim();
+  if (!ROOM_RE.test(t)) {
+    return undefined;
+  }
+  return LOCAL_ROOM.test(t) ? t.toLowerCase() : t.toUpperCase();
+}
+
+/** `#room=ABCD&name=Ada` (or the same in a `?query`) -> RoomConfig. Never throws. */
+export function parseRoomConfig(hash: string, search = ''): RoomConfig {
+  const params = new URLSearchParams(hash.replace(HASH_PREFIX, ''));
+  const query = new URLSearchParams(search);
+  const get = (k: string): string => params.get(k) ?? query.get(k) ?? '';
+  const name = get('name').replace(CONTROL, '').trim().slice(0, MAX_NAME);
+  return { room: normaliseRoom(get('room')), name: name === '' ? 'Player' : name };
+}
+
 /** The GameSpec a shell config plays: the run defaults, every doctrine of the shipped bots, `humans` = `drive`. */
 export function shellSpec(c: ShellConfig): GameSpec {
   return {
