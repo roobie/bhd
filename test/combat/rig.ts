@@ -1,4 +1,5 @@
 import { defaultGame } from '../../src/content/index.ts';
+import { createMods } from '../../src/sim/bargains.ts';
 import type { TickContext } from '../../src/sim/context.ts';
 import type { Entity, NewEntity } from '../../src/sim/entities.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
@@ -30,6 +31,8 @@ export function rig(): Rig {
     waves: sim.waves,
     intents: sim.intents,
     master: sim.master,
+    bargains: sim.bargains,
+    mods: createMods(sim.game, sim.bargains),
     cast: () => false,
     ancientId: 1,
     killers: new Map<number, number>(),

@@ -7,8 +7,8 @@
 // Systems skip dead actors: a hero at 0 hp (not yet removed by the deaths system) does nothing. A new kit adds a case here.
 
 import type { HeroDef } from '../../content/index.ts';
-import { findById } from '../../content/types.ts';
 import { deriveRng } from '../../detmath/index.ts';
+import { heroDef } from '../bargains.ts';
 import type { HeroCommand } from '../commands.ts';
 import type { Hooks, TickContext } from '../context.ts';
 import type { Entity, HeroKitState } from '../entities.ts';
@@ -65,7 +65,8 @@ export function spawnHero(ctx: TickContext, def: HeroDef, x: number, y: number):
 }
 
 function runKit(ctx: TickContext, hero: Entity, run: (kit: HeroKitState, def: HeroDef) => void): void {
-  const def = findById(ctx.game.heroes, hero.def);
+  // The effective def: bargains may have patched the base one.
+  const def = heroDef(ctx, hero);
   if (def !== undefined && hero.kit !== undefined) {
     run(hero.kit, def);
   }

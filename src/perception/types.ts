@@ -4,6 +4,7 @@
 // Hero bots see what a player sees; the master's budget and queue are in `MasterView`, which only
 // the Director gets (see `perceiveMaster`).
 
+import type { EffectKind, EffectTarget } from '../content/bargains.ts';
 import type { Point } from '../content/types.ts';
 
 export interface StatusView {
@@ -120,6 +121,8 @@ export interface HeroView {
    * without a target and for stand-ins.
    */
   readonly lineAllies: readonly number[];
+  /** Ids of the accepted bargains that apply to this hero (its own and the team's), in acceptance order. */
+  readonly bargains: readonly string[];
   readonly gunner?: GunnerView;
 }
 
@@ -230,6 +233,53 @@ export interface TeamView {
   readonly livesLost: number;
 }
 
+/** One effect of a bargain card, copied from content as plain data. Fields that do not apply to the kind are ''. */
+export interface EffectView {
+  readonly kind: EffectKind;
+  readonly target: EffectTarget;
+  /** Multiplier, fraction or amount, as the `Effect` kind defines (`count` for `waveExtra`). */
+  readonly value: number;
+  /** `def` effects: the dotted def path; else ''. */
+  readonly path: string;
+  /** `def` effects: `mul` or `add`; else ''. */
+  readonly op: 'mul' | 'add' | '';
+  /** The enemy def a `def` effect patches, or the enemy a `waveExtra` adds; else ''. */
+  readonly def: string;
+}
+
+/** A card on an open offer. */
+export interface CardView {
+  /** `BargainDef.id`. */
+  readonly bargain: string;
+  readonly scope: 'hero' | 'team';
+  /** Entity id of the hero it benefits, 0 for a team card. */
+  readonly hero: number;
+  readonly gains: readonly EffectView[];
+  readonly costs: readonly EffectView[];
+}
+
+/** An open bargain offer: resolve it with a `bargain` command before `expiresAt`. */
+export interface OfferView {
+  readonly id: number;
+  /** The wave whose end opened it. */
+  readonly wave: number;
+  /** First tick the offer is no longer open. */
+  readonly expiresAt: number;
+  readonly ticksLeft: number;
+  readonly cards: readonly CardView[];
+}
+
+/** An accepted bargain. */
+export interface TakenView {
+  readonly bargain: string;
+  readonly offer: number;
+  /** Entity id of the hero it benefits, 0 for a team card. */
+  readonly hero: number;
+  readonly tick: number;
+  readonly gains: readonly EffectView[];
+  readonly costs: readonly EffectView[];
+}
+
 export interface Perception {
   readonly tick: number;
   /** Ascending by slot. */
@@ -245,6 +295,8 @@ export interface Perception {
   /** Live intents, ascending by id. */
   readonly intents: readonly IntentView[];
   readonly team: TeamView;
+  /** Bargains; both lists are empty when the game has none. */
+  readonly bargains: { readonly open: readonly OfferView[]; readonly taken: readonly TakenView[] };
 }
 
 /** What only the Director sees (wave master mode). */

@@ -22,6 +22,7 @@
 
 import type { MasterDef } from '../content/director.ts';
 import type { WaveDef } from '../content/types.ts';
+import { grantBudget } from './bargains.ts';
 import type { SummonCommand } from './commands.ts';
 import type { TickContext } from './context.ts';
 import type { StateHasher } from './hash.ts';
@@ -99,7 +100,7 @@ export function takePending(ctx: TickContext): WaveDef {
   master.lastStart = ctx.tick;
   const n = ctx.waves.n + 1;
   master.started.push({ n, composition: taken.map((g) => ({ def: g.def, count: g.count })) });
-  master.budget += budgetFor(def, n + 1);
+  master.budget += budgetFor(def, n + 1) + grantBudget(ctx);
   return { spawns: taken.map((g) => ({ def: g.def, count: g.count, gap: def.gap })) };
 }
 

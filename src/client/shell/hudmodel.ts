@@ -365,6 +365,7 @@ export function buildHudModel(input: HudInput): HudModel {
     hint,
     help: helpModel(input),
     end: end === undefined ? undefined : { result: endResult(end.reason), wave: end.wave },
+    bargain: undefined,
   };
 }
 

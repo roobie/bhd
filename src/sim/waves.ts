@@ -5,10 +5,13 @@
 // its units have spawned and every one of them is gone: killed or leaked (missing, or at 0 hp).
 // Waves may overlap; each ends on its own. The game's 'victory' waits for the last wave's end.
 // In wave master mode (`game.master`, see master.ts) the schedule supplies only the clock and the count.
+// Bargains (bargains.ts) hook in at three places: `bargainExtras` (extra groups in `startWave`; the `end` event lists only
+// the scheduled groups), `wavesPaused` (the clock waits) and, in master mode, `grantBudget` (master.ts).
 // The scheduler state is hashed here (`hashWaves`) because it is not an entity field.
 
 import type { WaveDef } from '../content/types.ts';
 import { findById } from '../content/types.ts';
+import { bargainExtras, wavesPaused } from './bargains.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import type { StateHasher } from './hash.ts';
@@ -75,15 +78,17 @@ export function startWave(ctx: TickContext, wave: WaveDef): void {
   const w = ctx.waves;
   w.n += 1;
   w.lastStart = ctx.tick;
+  // Bargain extras (accepted `waveExtra` effects) join the wave after its own groups.
+  const groups = [...wave.spawns, ...bargainExtras(ctx)];
   ctx.emit({
     tick: ctx.tick,
     kind: 'wave',
     n: w.n,
     phase: 'start',
-    composition: wave.spawns.map((g) => ({ def: g.def, count: g.count })),
+    composition: groups.map((g) => ({ def: g.def, count: g.count })),
   });
   let unspawned = 0;
-  for (const g of wave.spawns) {
+  for (const g of groups) {
     for (let i = 0; i < g.count; i++) {
       w.queue.push({ at: ctx.tick + ticks(g.gap * i), def: g.def, wave: w.n });
       unspawned += 1;
@@ -174,7 +179,7 @@ function spawnDue(ctx: TickContext): void {
 export function waveSystem(ctx: TickContext): void {
   const w = ctx.waves;
   const next = ctx.game.waves.waves[w.n];
-  if (next !== undefined && ctx.tick >= w.nextAt) {
+  if (next !== undefined && ctx.tick >= w.nextAt && !wavesPaused(ctx)) {
     // Master mode: the schedule is only the clock; the pending queue is the wave.
     startWave(ctx, ctx.master === undefined ? next : takePending(ctx));
   }

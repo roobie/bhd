@@ -6,11 +6,13 @@
 
 import type { Point } from '../content/types.ts';
 import { findById } from '../content/types.ts';
+import { bargainExtras, heroDef } from '../sim/bargains.ts';
 import type { Entity } from '../sim/entities.ts';
 import { isDowned, respawnLeft } from '../sim/respawn.ts';
 import type { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
 import { canCallWave } from '../sim/waves.ts';
+import { heroBargains, perceiveBargains } from './bargains.ts';
 import { buildClumps } from './clumps.ts';
 import { findComboWindows } from './combos.ts';
 import { gunnerParts } from './kits/gunner.ts';
@@ -91,7 +93,8 @@ function enemyViews(sim: Sim): EnemyView[] {
 }
 
 function heroParts(sim: Sim, e: Readonly<Entity>): HeroParts | undefined {
-  const def = findById(sim.game.heroes, e.def);
+  // The effective def, so kit views reflect accepted bargains.
+  const def = heroDef(sim, e);
   const { kit } = e;
   if (def?.kit === 'gunner' && kit?.kind === 'gunner') {
     return gunnerParts(sim, e, def, kit);
@@ -138,6 +141,7 @@ function heroViews(sim: Sim, enemies: readonly EnemyView[], memory: PerceptionMe
       hold: e.kit.hold,
       autocast: e.kit.autocast,
       lineAllies: parts.lineAllies,
+      bargains: heroBargains(sim, e.id),
       ...(parts.gunner === undefined ? {} : { gunner: parts.gunner }),
     };
     out.push(view);
@@ -223,10 +227,17 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
       total: sim.game.waves.waves.length,
       nextAt: sim.waves.nextAt,
       canCall: canCallWave(sim),
-      preview: sim.master === undefined ? (next?.spawns ?? []).map((g) => ({ def: g.def, count: g.count })) : [],
+      preview:
+        sim.master === undefined
+          ? [...(next?.spawns ?? []), ...(next === undefined ? [] : bargainExtras(sim))].map((g) => ({
+              def: g.def,
+              count: g.count,
+            }))
+          : [],
     },
     intents: intentViews(sim),
     team: teamView(heroes, fallen, memory),
+    bargains: perceiveBargains(sim),
   };
 }
 

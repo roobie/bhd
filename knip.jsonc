@@ -4,6 +4,11 @@
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
     "src/reporter/types.ts": ["exports", "types"],
-    "src/reporter/store.ts": ["exports"]
+    "src/reporter/store.ts": ["exports"],
+    "src/content/bargains.ts": ["exports", "types"],
+    "src/sim/bargains.ts": ["types"],
+    "src/sim/combat.ts": ["exports"],
+    "src/perception/types.ts": ["types"],
+    "src/client/shell/types.ts": ["types"]
   }
 }

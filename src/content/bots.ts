@@ -34,6 +34,9 @@ interface Seat {
   readonly reactionSeconds: number;
 }
 
+/** How bot seats treat bargain offers: score the cards, refuse every offer, or take the first card of every offer. */
+export type BargainBotPolicy = 'evaluate' | 'declineAll' | 'acceptAll';
+
 export interface BotSetup {
   /** Think cadence for all seats; a seat thinks on ticks divisible by `ticks(thinkSeconds)`. */
   readonly thinkSeconds: number;
@@ -41,6 +44,8 @@ export interface BotSetup {
   readonly doctrines: readonly Doctrine[];
   /** Base weights, keys as in content/bots/*.ts; a doctrine's `weights` override per key. */
   readonly kitWeights: Readonly<Record<string, number>>;
+  /** Bargain behaviour of the bot seats; absent = `evaluate`. Used when `MatchOptions.bargainPolicy` is `bots`. */
+  readonly bargain?: { readonly policy: BargainBotPolicy };
 }
 
 function holdTheLine(): Doctrine {

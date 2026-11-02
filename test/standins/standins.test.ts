@@ -2,6 +2,7 @@
 // real enemy aggro, heal capping, pull + Clumped, cooldowns and attack period exactness.
 
 import { describe, expect, it } from 'vitest';
+import { createMods } from '../../src/sim/bargains.ts';
 import { dealDamage } from '../../src/sim/combat.ts';
 import type { TickContext } from '../../src/sim/context.ts';
 import type { Entity } from '../../src/sim/entities.ts';
@@ -58,6 +59,8 @@ function ctxOf(sim: Sim): TickContext {
     waves: sim.waves,
     intents: sim.intents,
     master: sim.master,
+    bargains: sim.bargains,
+    mods: createMods(sim.game, sim.bargains),
     cast: () => false,
     ancientId: ANCIENT,
     killers: new Map<number, number>(),
@@ -333,6 +336,7 @@ describe('cooldowns', () => {
         rng: s.rng,
         intents: s.intents,
         master: s.master,
+        bargains: s.bargains,
       });
     expect(hash(a)).toBe(hash(b));
     unitKit(a, TANK);

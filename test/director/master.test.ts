@@ -186,6 +186,7 @@ describe('hash', () => {
         rng: sim.rng,
         intents: sim.intents,
         master: sim.master,
+        bargains: sim.bargains,
       });
     const base = hash();
     const leaves: { obj: { [k: string]: number }; key: string }[] = [

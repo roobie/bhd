@@ -7,6 +7,8 @@
 import type { Rng } from '../detmath/index.ts';
 import type { IntentBoard } from '../intents/board.ts';
 import { boardUsed, hashIntents } from '../intents/board.ts';
+import type { BargainState } from './bargains.ts';
+import { hashBargains } from './bargains.ts';
 import type { EntityStore } from './entities.ts';
 import { ENTITY_KIND_CODE, MOVE_MODE_CODE } from './entities.ts';
 import { hashKit } from './heroes/index.ts';
@@ -94,13 +96,14 @@ interface HashedState {
   readonly rng: Rng;
   readonly intents: IntentBoard;
   readonly master: MasterState | undefined;
+  readonly bargains: BargainState | undefined;
 }
 
 /**
  * Canonical hash of game state, in a fixed order: tick, ended flag, entity store (next ID, count,
  * then each entity in ID order: id, kind, def, team, x, y, radius, hp, maxHp, armour, speed,
  * statuses, move, attack, kit, prop), wave scheduler, sim RNG state, then the intents board (a presence byte,
- * then the board once used) and the wave master state (a presence byte, then the state). Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
+ * then the board once used), the wave master state and the bargain state (each a presence byte, then the state). Floats by exact bits (also tick counts that could turn fractional, e.g. cooldowns and `until`); kinds and
  * move modes through append-only code tables; content ids (def, status) as text. Pending commands
  * are excluded on purpose: in lockstep, future inputs arrive at different times on different peers
  * without being a desync.
@@ -140,6 +143,10 @@ export function stateHash(s: HashedState): string {
   h.bool(s.master !== undefined);
   if (s.master !== undefined) {
     hashMaster(h, s.master);
+  }
+  h.bool(s.bargains !== undefined);
+  if (s.bargains !== undefined) {
+    hashBargains(h, s.bargains);
   }
   return h.digest();
 }

@@ -60,6 +60,7 @@ function hero(slot: number, id: number): HeroView {
     hold: false,
     autocast: 0,
     lineAllies: [],
+    bargains: [],
   } as HeroView;
 }
 

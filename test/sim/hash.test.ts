@@ -8,6 +8,7 @@ import { initPenitent } from '../../src/sim/heroes/penitent.ts';
 import { initPsyker } from '../../src/sim/heroes/psyker.ts';
 import { initStandin } from '../../src/sim/heroes/standins.ts';
 import { Sim } from '../../src/sim/sim.ts';
+import { testBargains } from '../bargains-fixture.ts';
 
 type Tree = Record<string, unknown>;
 
@@ -65,6 +66,21 @@ function fixture(game = defaultGame()): Sim {
     sim.master.pending.push({ def: 'grunt', count: 2 });
     sim.master.started.push({ n: 1, composition: [{ def: 'brute', count: 1 }] });
   }
+  if (sim.bargains !== undefined) {
+    // Populated by hand so every leaf (an offer with cards, a taken bargain) exists to perturb.
+    sim.bargains.nextOffer = 3;
+    sim.bargains.opened = 1;
+    sim.bargains.offers.push({
+      id: 2,
+      wave: 1,
+      expiresAt: 90,
+      cards: [
+        { bargain: 'test-barrel', hero: GUNNER },
+        { bargain: 'test-tithe', hero: 0 },
+      ],
+    });
+    sim.bargains.taken.push({ bargain: 'test-horde', offer: 1, hero: 0, tick: 5 });
+  }
   return sim;
 }
 
@@ -77,6 +93,7 @@ function hashOf(sim: Sim, over: { tick?: number; ended?: boolean } = {}): string
     rng: sim.rng,
     intents: sim.intents,
     master: sim.master,
+    bargains: sim.bargains,
   });
 }
 
@@ -235,6 +252,29 @@ describe('state hash covers every field', () => {
       const sim = fixture(defaultMasterGame());
       perturb(sim.master as unknown as Tree, path);
       expect(hashOf(sim), path.join('.')).not.toBe(masterBase);
+    }
+  });
+
+  it('changes when any bargains field changes, rng words included', () => {
+    const game = { ...defaultGame(), bargains: testBargains() };
+    const bargainsBase = hashOf(fixture(game));
+    expect(bargainsBase).not.toBe(base);
+    const paths: string[][] = [];
+    leafPaths(fixture(game).bargains, [], paths);
+    expect(paths.map((p) => p.join('.'))).toEqual(
+      expect.arrayContaining([
+        'nextOffer',
+        'opened',
+        'offers.0.expiresAt',
+        'offers.0.cards.1.hero',
+        'taken.0.bargain',
+        'taken.0.tick',
+      ]),
+    );
+    for (const path of paths) {
+      const sim = fixture(game);
+      perturb(sim.bargains as unknown as Tree, path);
+      expect(hashOf(sim), path.join('.')).not.toBe(bargainsBase);
     }
   });
 

@@ -39,12 +39,33 @@ export function heal(ctx: TickContext, spec: HealSpec): number {
   ) {
     return 0;
   }
-  const healed = Math.min(ctx.hooks.healTaken(ctx, target, spec.amount), target.maxHp - target.hp);
+  const received = ctx.hooks.healTaken(ctx, target, spec.amount) * ctx.mods.heal(target, spec.amount);
+  const healed = Math.min(received, target.maxHp - target.hp);
   if (healed <= 0) {
     return 0;
   }
   target.hp += healed;
   ctx.emit({ tick: ctx.tick, kind: 'heal', src: spec.src, dst: spec.dst, amount: healed });
+  return healed;
+}
+
+/**
+ * The one way a bargain touches the Ancient (D-2PNKLSQWVJEBSWPI: it can be healed, never hurt).
+ * Restores up to `amount` hp (capped at max hp), emits `heal` (`src` 0, `dst` the Ancient) and
+ * returns what was restored. Kit hooks and `ctx.mods.heal` do not apply. No-op once the Ancient is
+ * dead or for a non-positive amount. `heal()` keeps refusing the Ancient.
+ */
+export function healAncient(ctx: TickContext, amount: number): number {
+  const ancient = ctx.entities.get(ctx.ancientId);
+  if (ancient === undefined || ancient.hp <= 0 || !(amount > 0)) {
+    return 0;
+  }
+  const healed = Math.min(amount, ancient.maxHp - ancient.hp);
+  if (healed <= 0) {
+    return 0;
+  }
+  ancient.hp += healed;
+  ctx.emit({ tick: ctx.tick, kind: 'heal', src: 0, dst: ancient.id, amount: healed });
   return healed;
 }
 
@@ -69,9 +90,9 @@ function isFriendly(ctx: TickContext, spec: DamageSpec, victim: Readonly<Entity>
   return attacker !== undefined && attacker.team === victim.team;
 }
 
-/** Marked, Clumped and armour applied to a non-leak hit (steps 3-5 of the pipeline). */
-function modify(ctx: TickContext, spec: DamageSpec, victim: Entity): number {
-  let { amount } = spec;
+/** Marked, Clumped and armour applied to a non-leak hit (steps 3-5 of the pipeline), starting from `start`. */
+function modify(ctx: TickContext, spec: DamageSpec, victim: Entity, start: number): number {
+  let amount = start;
   if (hasStatus(victim, 'marked')) {
     amount *= 1 + Math.max(0, statusValue(victim, 'marked'));
     removeStatus(ctx, victim.id, 'marked');
@@ -100,13 +121,14 @@ function modify(ctx: TickContext, spec: DamageSpec, victim: Entity): number {
  * 2. Friendly fire: a hit with src === dst never applies, even with `ff` (lead default,
  *    provisional, same DESIGN.md Risks). Otherwise, if src and dst are on the same team (a self hit included) the hit is dropped
  *    unless the tags contain `ff`. An unknown src (e.g. 0) counts as hostile.
+ *    Bargains (`ctx.mods.dealt`) scale the amount here, before Marked.
  * 3. Marked on the victim: amount *= 1 + max Marked value, then all Marked instances are consumed
  *    (removeStatus, so `status` off events fire). One hit gets the bonus, whichever tags it has.
  * 4. Clumped on the victim: if the hit has a `line`, `cone` or `splash` tag, amount *= 1 + max
  *    Clumped value. Not consumed; it expires on its own.
  * 5. Armour: effective = max(0, armour - max Exposed value). Unless the hit has the `pierce` tag,
  *    amount = max(amount - effective, amount * 0.2): armour never removes more than 80% of a hit.
- * 6. Props are never damaged. The `damageTaken` hook (kit of the victim) then sets the final amount
+ * 6. Bargains (`ctx.mods.taken`) scale the amount after armour. Props are never damaged. The `damageTaken` hook (kit of the victim) then sets the final amount
  *    and a `minHp` floor that applies to same-team (`ff`) hits only; the `dmg` event carries the hp
  *    actually lost. Leak damage skips the hook. Its output is clamped to finite and >= 0.
  *    Overkill is not trimmed: without a floor the `dmg` amount is the full hit even when it exceeds
@@ -121,9 +143,12 @@ export function dealDamage(ctx: TickContext, spec: DamageSpec): number {
   if (!leak && (victim.kind === 'ancient' || victim.kind === 'prop' || blockedByTeam(ctx, spec, victim))) {
     return 0;
   }
-  let amount = leak ? spec.amount : modify(ctx, spec, victim);
+  let { amount } = spec;
   let floor = 0;
   if (!leak) {
+    // Bargain modifiers: `dealt` before Marked, `taken` after armour, both before the kit hook.
+    amount = modify(ctx, spec, victim, amount * ctx.mods.dealt(ctx.entities.get(spec.src), spec));
+    amount *= ctx.mods.taken(victim, spec);
     const taken = ctx.hooks.damageTaken(ctx, { victim, spec, raw: amount, amount });
     // A kit hook must not be able to poison hp: non-finite or negative output counts as 0.
     amount = Number.isFinite(taken.amount) ? Math.max(0, taken.amount) : 0;

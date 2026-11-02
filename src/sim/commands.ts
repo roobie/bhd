@@ -3,7 +3,7 @@
 // Validation is shape only; commands naming missing entities or bad targets are semantic no-ops
 // (still logged). No ownership checks until wave 10.
 //
-// Wave-master and intents commands are routed to sim/master.ts and intents/board.ts.
+// Wave-master, intents and bargain commands are routed to sim/master.ts, intents/board.ts and sim/bargains.ts.
 //
 // Adding a command: extend the union, `isValidCommand`, `canonicalCommand` and `applyCommand`
 // (exhaustiveness checks catch kinds, not new optional fields) and the scenario in
@@ -11,6 +11,7 @@
 
 import { findById } from '../content/types.ts';
 import { applyIntentCommand } from '../intents/board.ts';
+import { applyBargainCommand } from './bargains.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import { commandHero, spawnHero } from './heroes/index.ts';
@@ -110,10 +111,26 @@ interface SendCommand {
   readonly kind: 'send';
 }
 
+/**
+ * Resolves a bargain offer (src/sim/bargains.ts): `accept` takes card `card` (a `BargainDef.id` on
+ * the offer), `decline` refuses them all. The first valid resolution of an offer wins; an unknown
+ * offer or card, or an offer already resolved, is a logged no-op. No ownership check until wave 10.
+ */
+export type BargainCommand =
+  | { readonly kind: 'bargain'; readonly op: 'accept'; readonly offer: number; readonly card: string }
+  | { readonly kind: 'bargain'; readonly op: 'decline'; readonly offer: number };
+
 /** The commands that address one hero. */
 export type HeroCommand = MoveCommand | StopCommand | HoldCommand | AbilityCommand | AutocastCommand;
 
-export type Command = HeroCommand | IntentCommand | SummonCommand | SendCommand | CallWaveCommand | SpawnCommand;
+export type Command =
+  | HeroCommand
+  | IntentCommand
+  | BargainCommand
+  | SummonCommand
+  | SendCommand
+  | CallWaveCommand
+  | SpawnCommand;
 
 function isId(n: unknown): boolean {
   return typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
@@ -157,6 +174,17 @@ function isIntentShape(cmd: IntentCommand): boolean {
   }
 }
 
+function isBargainShape(cmd: BargainCommand): boolean {
+  switch (cmd.op) {
+    case 'accept':
+      return isId(cmd.offer) && typeof cmd.card === 'string' && cmd.card.length > 0;
+    case 'decline':
+      return isId(cmd.offer);
+    default:
+      return false;
+  }
+}
+
 function isAbilityShape(cmd: AbilityCommand): boolean {
   const hasX = cmd.x !== undefined;
   const hasY = cmd.y !== undefined;
@@ -183,6 +211,8 @@ export function isValidCommand(cmd: Command): boolean {
       return isId(cmd.hero) && isSlot(cmd.slot) && typeof cmd.on === 'boolean';
     case 'intent':
       return isIntentShape(cmd);
+    case 'bargain':
+      return isBargainShape(cmd);
     case 'summon':
       return (
         typeof cmd.def === 'string' &&
@@ -267,6 +297,10 @@ export function canonicalCommand(cmd: Command): Command {
       return { kind: 'autocast', hero: cmd.hero + 0, slot: cmd.slot + 0, on: cmd.on };
     case 'intent':
       return canonicalIntent(cmd);
+    case 'bargain':
+      return cmd.op === 'accept'
+        ? { kind: 'bargain', op: 'accept', offer: cmd.offer + 0, card: cmd.card }
+        : { kind: 'bargain', op: 'decline', offer: cmd.offer + 0 };
     case 'summon':
       return { kind: 'summon', def: cmd.def, count: cmd.count + 0 };
     case 'send':
@@ -302,6 +336,10 @@ export function applyCommand(ctx: TickContext, cmd: Command): void {
   }
   if (cmd.kind === 'intent') {
     applyIntentCommand(ctx, cmd);
+    return;
+  }
+  if (cmd.kind === 'bargain') {
+    applyBargainCommand(ctx, cmd);
     return;
   }
   if (cmd.kind === 'summon') {

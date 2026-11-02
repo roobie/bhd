@@ -490,6 +490,7 @@ describe('board state is hashed', () => {
       rng: r.sim.rng,
       intents: r.sim.intents,
       master: r.sim.master,
+      bargains: r.sim.bargains,
     });
   }
 

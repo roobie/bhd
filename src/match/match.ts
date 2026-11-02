@@ -24,10 +24,11 @@
 // Brains receive the cached Perception and MasterView deep-frozen (always on: the objects are
 // small plain data built once per think tick, so freezing them costs next to nothing).
 
+import { bargainDecisions } from '../bots/bargain.ts';
 import { defaultBrains } from '../bots/brains.ts';
-import type { Bot, BrainTable, Decision, InFlight, SeatInfo } from '../bots/types.ts';
+import type { Bot, BotCtx, BrainTable, Decision, InFlight, SeatInfo } from '../bots/types.ts';
 import { decide } from '../bots/utility.ts';
-import type { BotSetup, Doctrine } from '../content/bots.ts';
+import type { BargainBotPolicy, BotSetup, Doctrine } from '../content/bots.ts';
 import type { DirectorDef } from '../content/director.ts';
 import type { GameConfig } from '../content/index.ts';
 import type { PerceptionDef } from '../content/perception.ts';
@@ -65,6 +66,11 @@ export interface MatchOptions {
   readonly hashEvery?: number;
   /** Slots a human plays from tick 0 (seats for them stay silent); see `Match.setDriven`. */
   readonly driven?: readonly number[];
+  /**
+   * Who resolves bargain offers: `bots` (default) the bot seats, per `bots.bargain.policy`; `human`
+   * nobody here (the shell sends the commands); `off` nobody, offers just lapse.
+   */
+  readonly bargainPolicy?: 'bots' | 'human' | 'off';
 }
 
 /** What the viewer shows for one decision of a seat. */
@@ -147,7 +153,8 @@ function pacing(player: number, thinkSeconds: number, reactionSeconds: number): 
 
 /**
  * The dedupe channel of a command: what a later command on the same channel supersedes. Hero
- * commands: kind + hero (+ slot for abilities and autocast); intents: op + hero. A summon has no
+ * commands: kind + hero (+ slot for abilities and autocast); intents: op + hero; bargains: the offer
+ * (`bargain:<offer>`, so an accept and a decline of one offer supersede each other). A summon has no
  * channel: two summons are two purchases.
  */
 function channelOf(cmd: Command): string | undefined {
@@ -163,6 +170,8 @@ function channelOf(cmd: Command): string | undefined {
     case 'stop':
     case 'hold':
       return `${cmd.kind}:${cmd.hero}`;
+    case 'bargain':
+      return `bargain:${cmd.offer}`;
     case 'send':
     case 'spawn':
       return cmd.kind;
@@ -227,12 +236,18 @@ function heroIds(sim: Sim): number[] {
   return out;
 }
 
+/** The bots' bargain policy, undefined when a human or nobody resolves offers. */
+function bargainPolicyOf(options: MatchOptions): BargainBotPolicy | undefined {
+  return (options.bargainPolicy ?? 'bots') === 'bots' ? (options.bots.bargain?.policy ?? 'evaluate') : undefined;
+}
+
 export class Match {
   readonly sim: Sim;
   readonly seed: number;
   readonly #memory: PerceptionMemory;
   readonly #seats: Seat[] = [];
   readonly #director: DirectorSeat | undefined;
+  readonly #bargainPolicy: BargainBotPolicy | undefined;
   #cached: Perception | undefined;
   #masterCached: { readonly tick: number; readonly view: MasterView | undefined } | undefined;
 
@@ -275,6 +290,7 @@ export class Match {
     this.#seats.sort((a, b) => a.slot - b.slot);
     this.#startDriven(drivenAtStart);
     this.#director = directorSeat(options.director, seed, game);
+    this.#bargainPolicy = bargainPolicyOf(options);
   }
 
   get tick(): number {
@@ -415,7 +431,7 @@ export class Match {
       seat.prev.clear();
       return;
     }
-    const decisions = seat.bot.think({
+    const ctx: BotCtx = {
       p,
       me,
       doctrine: seat.doctrine,
@@ -423,7 +439,11 @@ export class Match {
       delay: seat.delay,
       tick,
       inFlight: inFlight(seat, tick),
-    });
+    };
+    const decisions = [
+      ...seat.bot.think(ctx),
+      ...(this.#bargainPolicy === undefined ? [] : bargainDecisions(ctx, this.#bargainPolicy)),
+    ];
     const views: DecisionView[] = [];
     const seen = new Map<string, string>();
     const ids = new Set<string>();
