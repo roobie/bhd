@@ -1,42 +1,41 @@
 ---
-phase: initialize
+phase: execute
 parent: U-GLFZ7OIE2B53ZZCA
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 2, 3 and 4 peers over the seeded loopback hub (latency, jitter, cross-peer reorder) produce identical hash sequences, equal to replayInputs(spec, hostSeals)
+  - Pause, resume, a drive handover, a policy toggle and a drop behave the same on every peer; a host drop ends the game for clients
+  - A stray sim.command on one peer is detected at the next checkpoint, halts everyone, and the dumps plus `bhd desync` localise it
+  - npm run ci green
 ---
 
 # slice/w10-lockstep-core
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+The lockstep core of wave 10: host sequencer, client driver, input log, desync tooling.
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/net/{lockstep,inputlog,driver,desync}.ts, src/reporter/desynccmd.ts (+ registration in cli.ts, usage line in args.ts), test/net/{hub,harness,lockstep.test,desync.test}, test/reporter/desynccmd.test.ts, `isPeerCommand` in net/types.ts.
+Out: lobby, shell wiring, rtc, signalling, Match changes.
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+Rule R1; no gameplay pinning. Host seals tick T in beforeStep(T); pause is a boundary in the ordered stream.
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; awaiting merge.
 
 ## Next
-- TODO
+- Lead: integration (shell wiring, cross-runtime scenario segment, bargain-accept positive path with a real offer).
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+npm run ci exit 0 (1108 node tests, 135 browser tests).
 
 ## Harvest
-<!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
-     - [ ] decision: …   → record decision
-     - [ ] learning: …   → record learning
-     - [ ] backlog: …    → record backlog
-     - [ ] process: …    → retrospective (change the process, or drop it)
--->
+- [ ] learning: pause needs no wire change: the host broadcasts `pause` right after its last seal and the link is ordered, so each client halts at the highest tick it holds.
+- [ ] learning: a dump alone cannot show a stray sim.command in a seal-replay; the log therefore records the peer's `cmd` events and `bhd desync` diffs them against the replay of its seals.
 
 ## Log
 - 2026-11-02 initialized
+- 2026-11-02 built, tested, CI green

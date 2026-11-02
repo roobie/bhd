@@ -1,0 +1,154 @@
+// Loopback harness for the lockstep tests: a hub that implements `Transport` for N peers with seeded
+// latency and jitter, reliable and ordered per link (so reordering only happens across peers), a
+// virtual clock, and a `Session` that runs one Match per peer the way the shell does (a wall-clock
+// target, gated by the driver). Messages go through encodeMsg / decodeMsg, so the wire format is
+// exercised too. Nothing here is gameplay: scripted inputs are arbitrary legal commands.
+
+import { defaultConfig } from '../../src/client/config.ts';
+import { specFromConfig } from '../../src/client/setup.ts';
+import type { Match } from '../../src/match/match.ts';
+import type { GameSpec } from '../../src/match/run.ts';
+import { buildMatch } from '../../src/match/run.ts';
+import { netDriver } from '../../src/net/driver.ts';
+import type { LockstepDriver } from '../../src/net/lockstep.ts';
+import type { PeerId } from '../../src/net/types.ts';
+import type { Command } from '../../src/sim/commands.ts';
+import { Hub, type Latency, type Port, rng } from './hub.ts';
+
+const FRAME_MS = 1000 / 30;
+
+export interface PeerRig {
+  readonly id: PeerId;
+  readonly slot: number;
+  readonly match: Match;
+  readonly driver: LockstepDriver;
+  readonly port: Port;
+  /** Steps taken in the most recent frame (catch-up shows as > 1). */
+  lastSteps: number;
+  dropped: boolean;
+}
+
+export interface SessionOptions {
+  readonly peers: number;
+  readonly seed: number;
+  readonly latency: Latency;
+  readonly delay?: number;
+  /** Chance per frame that a peer sends a scripted input. */
+  readonly inputRate?: number;
+}
+
+const CATCH_UP_CAP = 8;
+
+function stepPeer(p: PeerRig, target: number): void {
+  let steps = 0;
+  while (steps < CATCH_UP_CAP && p.match.tick < Math.min(target, p.driver.steppable())) {
+    p.driver.beforeStep(p.match.tick + 1);
+    const events = p.match.step();
+    p.driver.afterStep(events);
+    steps += 1;
+  }
+  p.lastSteps = steps;
+}
+
+/** One networked game over the hub: peer 0 is the host. Hero slot i is played by peer i. */
+export class Session {
+  readonly hub: Hub;
+  readonly spec: GameSpec;
+  readonly peers: PeerRig[] = [];
+  readonly delay: number;
+  readonly #rand: () => number;
+  readonly #inputRate: number;
+  #frame = 0;
+  /** The host's wall-clock target tick; it stops stepping at it. */
+  hostTarget = 0;
+
+  constructor(o: SessionOptions) {
+    this.hub = new Hub(o.seed, o.latency);
+    this.#rand = rng(o.seed ^ 0x5a_5a);
+    this.#inputRate = o.inputRate ?? 0.15;
+    this.delay = o.delay ?? 3;
+    const humans = Array.from({ length: o.peers }, (_, i) => i);
+    this.spec = {
+      ...specFromConfig({ ...defaultConfig(), seed: o.seed }),
+      mode: 'schedule',
+      maxTicks: 100_000,
+      hashEvery: 30,
+      humans,
+    };
+    const ids = humans.map((i) => `p${i}`);
+    for (const id of ids.slice(1)) {
+      this.hub.connect('p0', id);
+    }
+    const start = { spec: this.spec, seats: ids.map((peer, i) => ({ peer, players: [i] })), delay: this.delay };
+    ids.forEach((id, slot) => {
+      const match = buildMatch(this.spec);
+      const port = this.hub.port(id);
+      const driver = netDriver({ transport: port, start, host: 'p0', now: () => this.hub.now })(match);
+      this.peers.push({ id, slot, match, driver, port, lastSteps: 0, dropped: false });
+    });
+  }
+
+  get host(): PeerRig {
+    return this.peers[0] as PeerRig;
+  }
+
+  /** Scripted human input: an arbitrary legal move for the peer's hero. */
+  #script(p: PeerRig): void {
+    if (this.#rand() >= this.#inputRate || p.dropped) {
+      return;
+    }
+    const hero = p.match.perception.heroes.find((h) => h.slot === p.slot);
+    if (hero === undefined) {
+      return;
+    }
+    const cmd: Command = { kind: 'move', hero: hero.id, x: this.#rand() * 40, y: this.#rand() * 40 };
+    p.driver.submit(p.slot, cmd);
+  }
+
+  /** One frame (1/30 s): deliver due messages, then each peer scripts and steps, in a seeded order. */
+  frame(hostMayStep = true): void {
+    this.#frame += 1;
+    this.hub.advance(this.#frame * FRAME_MS);
+    const order = this.peers.filter((p) => !p.dropped).sort(() => this.#rand() - 0.5);
+    for (const p of order) {
+      if (p === this.host) {
+        if (hostMayStep) {
+          this.#script(p);
+          this.hostTarget = Math.max(this.hostTarget, this.#frame);
+          stepPeer(p, this.hostTarget);
+        }
+      } else {
+        this.#script(p);
+        stepPeer(p, Number.POSITIVE_INFINITY);
+      }
+    }
+  }
+
+  /** Runs frames until the host reaches `tick` (or `maxFrames` pass). */
+  runUntil(tick: number, onFrame?: (frame: number) => void, maxFrames = tick * 40): void {
+    for (let i = 0; i < maxFrames && this.host.match.tick < tick; i++) {
+      this.frame();
+      onFrame?.(this.#frame);
+    }
+  }
+
+  /** Stops the host and lets the others catch up with it (and the hub empty). */
+  drain(maxFrames = 600): void {
+    for (let i = 0; i < maxFrames; i++) {
+      this.frame(false);
+      if (this.peers.every((p) => p.dropped || p.match.tick >= this.host.match.tick)) {
+        this.frame(false);
+        return;
+      }
+    }
+  }
+
+  cut(p: PeerRig): void {
+    p.dropped = true;
+    this.hub.cut(p.id);
+  }
+
+  get frames(): number {
+    return this.#frame;
+  }
+}

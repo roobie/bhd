@@ -302,9 +302,26 @@ function buildStart(r: Raw): WireMsg | undefined {
     : undefined;
 }
 
+/** The command kinds a peer may send as input. Everything else (control, spawn, summon, send) is the host's or a test rig's. */
+const PEER_COMMANDS: readonly string[] = [
+  'move',
+  'stop',
+  'hold',
+  'ability',
+  'autocast',
+  'intent',
+  'bargain',
+  'callWave',
+];
+
+/** True when `cmd` is a command a peer may submit through the host (a hero player 0-3 sends it). */
+export function isPeerCommand(cmd: Command): boolean {
+  return PEER_COMMANDS.includes(cmd.kind);
+}
+
 function buildInput(r: Raw): WireMsg | undefined {
   const cmd = command(r.cmd);
-  return isPlayer(r.player) && cmd !== undefined && isTick(r.wantTick)
+  return isPlayer(r.player) && r.player < HERO_SLOTS && cmd !== undefined && isPeerCommand(cmd) && isTick(r.wantTick)
     ? { t: 'input', player: r.player, cmd, wantTick: r.wantTick }
     : undefined;
 }
