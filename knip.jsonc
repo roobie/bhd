@@ -6,7 +6,8 @@
     "src/reporter/worker.ts!",
     // Wave 10 stubs until their slices land and something imports them.
     "src/net/{rtc,lockstep,inputlog}.ts!",
-    "src/net/signal/memory.ts!"
+    "src/net/signal/{memory,ws,broadcast}.ts!",
+    "worker/index.ts!"
   ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
@@ -16,6 +17,10 @@
     "src/net/rtc.ts": ["exports", "types"],
     "src/net/lockstep.ts": ["exports", "types"],
     "src/net/inputlog.ts": ["exports", "types"],
-    "src/net/signal/memory.ts": ["exports", "types"]
+    "src/net/signal/memory.ts": ["exports", "types"],
+    "src/net/signal/ws.ts": ["exports", "types"],
+    "src/net/signal/broadcast.ts": ["exports", "types"],
+    "worker/room.ts": ["exports", "types"],
+    "worker/turn.ts": ["exports", "types"]
   }
 }

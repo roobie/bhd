@@ -1,34 +1,36 @@
 ---
-phase: initialize
+phase: execute
 parent: U-GLFZ7OIE2B53ZZCA
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'Room machine, worker, ws/broadcast/memory signalling exist with tests; npm run ci exits 0'
 ---
 
 # slice/w10-signalling
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Rooms, relay and presence for multiplayer connection setup, plus TURN credentials.
 
 ## Scope
-In: TODO
-Out: TODO
+In: worker/**, src/net/signal/*, test/net/{room,signal}.test.ts
+Out: deploying the worker (never done by the agent); types.ts changes (none made)
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Contract: src/net/types.ts Signalling. No new deps; CF types declared by hand.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; awaiting integration.
 
 ## Next
-- TODO
+- Integrator: merge, deploy worker by hand
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
+
+- ci exit 0 on branch
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
