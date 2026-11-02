@@ -215,11 +215,20 @@ describe('bot bargain ownership', () => {
     const m = match({ bargainPolicy: 'bots' });
     const log = stepTo(m, 2400);
     const accepts = log.filter((e) => e.kind === 'cmd' && e.cmd.kind === 'bargain' && e.cmd.op === 'accept');
-    // A bargain event names the accepted card's hero; its player must be that hero's slot or the card is a team one.
     const taken = log.filter((e) => e.kind === 'bargain' && e.op === 'accept');
-    expect(taken.length).toBeLessThanOrEqual(accepts.length);
-    for (const e of accepts) {
-      expect(e.kind === 'cmd' && e.player >= 0 && e.player < 4).toBe(true);
+    expect(accepts.length, 'the bots took at least one card').toBeGreaterThan(0);
+    expect(taken.length).toBe(accepts.length);
+    const { heroes, fallen } = m.perception;
+    const slotOf = (id: number): number | undefined => [...heroes, ...fallen].find((h) => h.id === id)?.slot;
+    for (const t of taken) {
+      if (t.kind !== 'bargain' || t.hero === undefined || t.hero === 0) {
+        continue;
+      }
+      // The accept that took a hero's card was submitted as that hero's slot.
+      const cmd = accepts.find(
+        (e) => e.kind === 'cmd' && e.tick === t.tick && e.cmd.kind === 'bargain' && e.cmd.offer === t.offer,
+      );
+      expect(cmd?.kind === 'cmd' ? cmd.player : -1).toBe(slotOf(t.hero));
     }
   });
 });

@@ -1,7 +1,7 @@
 // Pure room state machine for signalling (wave 10 slice A). No sockets, clocks or randomness:
 // every operation returns the outgoing messages as data, the Durable Object adapter delivers them.
 
-import type { SignalPayload } from '../src/net/types.ts';
+import type { IceServer, SignalPayload } from '../src/net/types.ts';
 
 /** Most peers one room holds. */
 export const MAX_ROOM_PEERS = 5;
@@ -13,7 +13,14 @@ const MAX_SIGNAL_DATA = 16_384;
 
 /** Server to client. */
 export type ServerMsg =
-  | { readonly t: 'joined'; readonly self: string; readonly host: string; readonly peers: readonly string[] }
+  | {
+      readonly t: 'joined';
+      readonly self: string;
+      readonly host: string;
+      readonly peers: readonly string[];
+      /** STUN / TURN servers for WebRTC. Only members of a room get them (there is no public `/turn`). */
+      readonly iceServers?: readonly IceServer[];
+    }
   | { readonly t: 'signal'; readonly from: string; readonly payload: SignalPayload }
   | { readonly t: 'presence'; readonly peer: string; readonly state: 'join' | 'leave' }
   /** The host left: the room is over and takes no new joins. */
@@ -110,6 +117,40 @@ export function relaySignal(room: Room, from: string, to: string, payload: Signa
     return [{ to: from, msg: { t: 'error', reason: 'no such peer' } }];
   }
   return [{ to, msg: { t: 'signal', from, payload } }];
+}
+
+/** `out` with `iceServers` added to every `joined` message in it. */
+export function withIceServers(out: readonly Outgoing[], iceServers: readonly IceServer[]): readonly Outgoing[] {
+  return out.map((o) => (o.msg.t === 'joined' ? { to: o.to, msg: { ...o.msg, iceServers } } : o));
+}
+
+/** Sends every message in `out`; a socket that throws is skipped and does not stop the rest (L3). Returns the receivers that failed. */
+export function deliverAll(out: readonly Outgoing[], send: (to: string, text: string) => void): string[] {
+  const failed: string[] = [];
+  for (const o of out) {
+    try {
+      send(o.to, JSON.stringify(o.msg));
+    } catch {
+      failed.push(o.to);
+    }
+  }
+  return failed;
+}
+
+/**
+ * Whether a request from `origin` may use the worker. `allowed` is the `ALLOWED_ORIGINS` env value, a
+ * comma separated list of origins; unset (or empty, or `*`) allows every origin. A listed origin must
+ * match exactly; a request without an Origin header (not a browser page) is refused when a list is set.
+ */
+export function originAllowed(allowed: string | undefined, origin: string | null): boolean {
+  const list = (allowed ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '');
+  if (list.length === 0 || list.includes('*')) {
+    return true;
+  }
+  return origin !== null && list.includes(origin);
 }
 
 /** Validates a parsed client message; never throws. */

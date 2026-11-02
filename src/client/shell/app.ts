@@ -21,7 +21,7 @@ import { fitCamera } from './camera.ts';
 import { shellSpec } from './config.ts';
 import { initialControls, reduce } from './controls.ts';
 import { localDriver } from './driver.ts';
-import { DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame, stepBudget } from './frame.ts';
+import { canStep as canStepTick, DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame, stepBudget } from './frame.ts';
 import { createHud } from './hud.ts';
 import { buildHudModel, hudInsets } from './hudmodel.ts';
 import { attachInput } from './input.ts';
@@ -127,6 +127,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   let notices: (NetNotice & { readonly untilMs: number })[] = [];
   let pausedBy: number | undefined;
   let endedBy: DriverInfo['endedBy'];
+  let endReason: string | undefined;
   let unsubscribe: () => void = () => undefined;
   let lastStatus: string | undefined;
   let frameAlpha = 0;
@@ -202,6 +203,10 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       case 'hostLeft':
         endedBy = 'host-left';
         break;
+      case 'broken':
+        endedBy = 'broken';
+        endReason = n.reason;
+        break;
       case 'calledWave':
         notify('call', n.by);
         break;
@@ -218,6 +223,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     notices = [];
     pausedBy = undefined;
     endedBy = undefined;
+    endReason = undefined;
     // A fresh solo match at tick 0: this is its initial configuration, not a mid-game change. In
     // networked play the spec carries the policy and the shell does not override it.
     if (!coop) {
@@ -282,7 +288,8 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   function togglePause(): boolean {
-    driver.setPaused(driver.status() !== 'paused', driven[0] ?? 0);
+    // A client told to pause may still be stepping to the pause tick: that already counts as paused.
+    driver.setPaused(!(driver.status() === 'paused' || pausedBy !== undefined), driven[0] ?? 0);
     hudDirty = true;
     return true;
   }
@@ -396,7 +403,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   function canStep(): boolean {
-    return match.tick < driver.steppable() && driver.status() === 'running';
+    return canStepTick(match.tick, driver.steppable()) && driver.status() === 'running';
   }
 
   /** The networked part of the HUD input; absent in solo. */
@@ -404,8 +411,13 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     const status = driver.status();
     const net: HudNetInput = {
       status,
-      info: { ...(pausedBy === undefined ? {} : { pausedBy }), ...(endedBy === undefined ? {} : { endedBy }) },
-      canDump: driver.dump() !== undefined,
+      info: {
+        ...(pausedBy === undefined ? {} : { pausedBy }),
+        ...(endedBy === undefined ? {} : { endedBy }),
+        ...(endReason === undefined ? {} : { endReason }),
+      },
+      // Encoding the dump costs the whole log, so only a desynced game offers it, and it is built on click.
+      canDump: status === 'desynced',
       notices,
     };
     return {

@@ -2,7 +2,7 @@
 // speaks `ServerMsg` / `ClientMsg` from `worker/room.ts`.
 
 import type { ServerMsg } from '../../../worker/room.ts';
-import type { PeerId, RoomInfo, Signalling, SignalPayload, Unsubscribe } from '../types.ts';
+import type { PeerId, RoomInfo, SignalEvent, Signalling, SignalPayload, Unsubscribe } from '../types.ts';
 
 /** The slice of the WebSocket API used here, so tests can pass a fake. */
 export interface SocketLike {
@@ -39,17 +39,68 @@ export function createWsSignalling(base: string, opts: WsOptions = {}): Signalli
   let sock: SocketLike | undefined;
   let closed = false;
 
-  const handle = (m: ServerMsg): void => {
-    if (m.t === 'signal') {
-      for (const cb of [...signalCbs]) {
-        cb(m.from, m.payload);
-      }
-    } else if (m.t === 'presence') {
-      peers = m.state === 'join' ? [...peers, m.peer] : peers.filter((p) => p !== m.peer);
-      for (const cb of [...presenceCbs]) {
-        cb(m.peer, m.state);
+  const eventCbs = new Set<(e: SignalEvent) => void>();
+  const emit = (e: SignalEvent): void => {
+    if (!closed) {
+      for (const cb of [...eventCbs]) {
+        cb(e);
       }
     }
+  };
+
+  const handle = (m: ServerMsg): void => {
+    switch (m.t) {
+      case 'host-left':
+        emit({ kind: 'host-left' });
+        break;
+      case 'error':
+        emit({ kind: 'error', detail: m.reason });
+        break;
+      case 'signal':
+        for (const cb of [...signalCbs]) {
+          cb(m.from, m.payload);
+        }
+        break;
+      case 'presence':
+        peers = m.state === 'join' ? [...peers, m.peer] : peers.filter((p) => p !== m.peer);
+        for (const cb of [...presenceCbs]) {
+          cb(m.peer, m.state);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  /** Wires one socket: the first `joined` resolves, an early error or close rejects, later ones are events (L4). */
+  const wire = (s: SocketLike, resolve: (info: RoomInfo) => void, reject: (e: Error) => void): void => {
+    let joined = false;
+    const fail = (kind: SignalEvent['kind'], detail: string): void => {
+      if (joined) {
+        emit({ kind, detail });
+      } else {
+        reject(new Error(detail));
+      }
+    };
+    s.onmessage = (ev) => {
+      const m = parseServerMsg(ev.data);
+      if (joined) {
+        handle(m);
+      } else if (m.t === 'joined') {
+        joined = true;
+        peers = [...m.peers];
+        resolve({
+          self: m.self,
+          host: m.host,
+          peers: m.peers,
+          ...(m.iceServers === undefined ? {} : { iceServers: m.iceServers }),
+        });
+      } else if (m.t === 'error') {
+        reject(new Error(m.reason));
+      }
+    };
+    s.onerror = () => fail('error', 'signalling connection failed');
+    s.onclose = () => fail('closed', 'signalling closed');
   };
 
   return {
@@ -63,24 +114,7 @@ export function createWsSignalling(base: string, opts: WsOptions = {}): Signalli
       const url = `${base.replace(HTTP, 'ws').replace(TRAILING_SLASH, '')}/ws/${encodeURIComponent(room)}`;
       const s = open(url);
       sock = s;
-      return new Promise<RoomInfo>((resolve, reject) => {
-        let joined = false;
-        s.onmessage = (ev) => {
-          const m = parseServerMsg(ev.data);
-          if (joined) {
-            handle(m);
-          } else if (m.t === 'joined') {
-            joined = true;
-            peers = [...m.peers];
-            resolve({ self: m.self, host: m.host, peers: m.peers });
-          } else if (m.t === 'error') {
-            reject(new Error(m.reason));
-          }
-        };
-        s.onerror = () => reject(new Error('signalling connection failed'));
-        // Rejecting after a resolve is a no-op, so no `joined` check is needed.
-        s.onclose = () => reject(new Error('signalling closed'));
-      });
+      return new Promise<RoomInfo>((resolve, reject) => wire(s, resolve, reject));
     },
     relay(to, payload) {
       if (sock !== undefined && !closed) {
@@ -95,10 +129,15 @@ export function createWsSignalling(base: string, opts: WsOptions = {}): Signalli
       presenceCbs.add(cb);
       return () => presenceCbs.delete(cb);
     },
+    onEvent(cb): Unsubscribe {
+      eventCbs.add(cb);
+      return () => eventCbs.delete(cb);
+    },
     close() {
       closed = true;
       signalCbs.clear();
       presenceCbs.clear();
+      eventCbs.clear();
       peers = [];
       sock?.close();
     },

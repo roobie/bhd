@@ -152,6 +152,8 @@ async function main(): Promise<void> {
       `paused within the input delay of each other (${frozen[0]} / ${frozen[1]})`,
     );
     await b.screenshot({ path: join(shotDir, `paused-joiner-${browserName}.png`) });
+    // The host takes at most one pause or resume per peer per second (L5): let the gap pass.
+    await new Promise((r) => setTimeout(r, 1200));
     await b.evaluate(() => (globalThis as unknown as { __bhdCoop: Hook }).__bhdCoop.shell.dispatch({ kind: 'pause' }));
     await waitFor(
       'both running again',

@@ -6,6 +6,8 @@
 
 import { defaultConfig } from '../../src/client/config.ts';
 import { specFromConfig } from '../../src/client/setup.ts';
+import { canStep, DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame, stepBudget } from '../../src/client/shell/frame.ts';
+import type { FrameClock } from '../../src/client/shell/types.ts';
 import type { ConfigOverrides } from '../../src/content/overrides.ts';
 import type { Match } from '../../src/match/match.ts';
 import type { GameSpec } from '../../src/match/run.ts';
@@ -29,6 +31,8 @@ export interface PeerRig {
   /** Steps taken in the most recent frame (catch-up shows as > 1). */
   lastSteps: number;
   dropped: boolean;
+  /** The shell's frame clock for this peer. */
+  clock: FrameClock;
 }
 
 export interface SessionOptions {
@@ -42,11 +46,16 @@ export interface SessionOptions {
   readonly overrides?: ConfigOverrides;
 }
 
-const CATCH_UP_CAP = 8;
-
-function stepPeer(p: PeerRig, target: number): void {
+/**
+ * One frame of the shell's step loop for a peer, through the same pure functions the shell uses
+ * (`planFrame`, `stepBudget`, `canStep`), so a halting bug in the shell's rule shows up here (M2).
+ */
+function stepPeer(p: PeerRig, nowMs: number): void {
+  const plan = planFrame(p.clock, nowMs, { ...DEFAULT_FRAME_OPTIONS, paused: p.driver.status() === 'paused' });
+  p.clock = plan.clock;
+  const budget = stepBudget(plan.steps, p.match.tick, p.driver.steppable());
   let steps = 0;
-  while (steps < CATCH_UP_CAP && p.match.tick < Math.min(target, p.driver.steppable())) {
+  while (steps < budget && !p.match.ended && canStep(p.match.tick, p.driver.steppable())) {
     p.driver.beforeStep(p.match.tick + 1);
     const events = p.match.step();
     p.driver.afterStep(events);
@@ -64,8 +73,6 @@ export class Session {
   readonly #rand: () => number;
   readonly #inputRate: number;
   #frame = 0;
-  /** The host's wall-clock target tick; it stops stepping at it. */
-  hostTarget = 0;
 
   constructor(o: SessionOptions) {
     this.hub = new Hub(o.seed, o.latency);
@@ -90,7 +97,7 @@ export class Session {
       const match = buildMatch(this.spec);
       const port = this.hub.port(id);
       const driver = netDriver({ transport: port, start, host: 'p0', now: () => this.hub.now })(match);
-      this.peers.push({ id, slot, match, driver, port, lastSteps: 0, dropped: false });
+      this.peers.push({ id, slot, match, driver, port, lastSteps: 0, dropped: false, clock: newFrameClock() });
     });
   }
 
@@ -116,17 +123,13 @@ export class Session {
     this.#frame += 1;
     this.hub.advance(this.#frame * FRAME_MS);
     const order = this.peers.filter((p) => !p.dropped).sort(() => this.#rand() - 0.5);
+    const nowMs = this.#frame * FRAME_MS;
     for (const p of order) {
-      if (p === this.host) {
-        if (hostMayStep) {
-          this.#script(p);
-          this.hostTarget = Math.max(this.hostTarget, this.#frame);
-          stepPeer(p, this.hostTarget);
-        }
-      } else {
-        this.#script(p);
-        stepPeer(p, Number.POSITIVE_INFINITY);
+      if (p === this.host && !hostMayStep) {
+        continue;
       }
+      this.#script(p);
+      stepPeer(p, nowMs);
     }
   }
 

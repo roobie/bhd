@@ -2,7 +2,7 @@
 // a fake socket wired to the room machine, and BroadcastChannel tabs.
 
 import { describe, expect, it } from 'vitest';
-import { createBroadcastSignalling } from '../../src/net/signal/broadcast.ts';
+import { createBroadcastSignalling, type LockManagerLike } from '../../src/net/signal/broadcast.ts';
 import { createMemorySignalling } from '../../src/net/signal/memory.ts';
 import { createWsSignalling, type SocketLike } from '../../src/net/signal/ws.ts';
 import type { SignalPayload } from '../../src/net/types.ts';
@@ -130,5 +130,107 @@ describe('broadcast signalling', () => {
 
   it('refuses non-local rooms', async () => {
     await expect(createBroadcastSignalling().join('ABCD')).rejects.toThrow();
+  });
+
+  /** A tiny Web Locks stand-in shared by the tabs of one test. */
+  function fakeLocks(): LockManagerLike {
+    const held = new Set<string>();
+    return {
+      request: async (name, _options, callback) => {
+        if (held.has(name)) {
+          return callback(null);
+        }
+        held.add(name);
+        try {
+          return await callback({ name });
+        } finally {
+          held.delete(name);
+        }
+      },
+    };
+  }
+
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  for (const [label, makeLocks] of [
+    ['with locks', fakeLocks],
+    ['without locks', () => null],
+  ] as const) {
+    it(`a tab that joins after the host left does not join the dead host (${label})`, async () => {
+      const locks = makeLocks();
+      const room = `local-dead-${label.replace(' ', '-')}`;
+      const a = createBroadcastSignalling({ id: 'A', settleMs: 20, locks });
+      const b = createBroadcastSignalling({ id: 'B', settleMs: 20, locks });
+      await a.join(room);
+      expect((await b.join(room)).host).toBe('A');
+      a.close(); // the host leaves, B stays
+      await wait(40);
+      const c = createBroadcastSignalling({ id: 'C', settleMs: 20, locks });
+      const info = await c.join(room);
+      expect(info.host).not.toBe('A');
+      expect(info.peers).toContain('B');
+      b.close();
+      c.close();
+    });
+  }
+
+  it('two tabs opened in the same instant elect exactly one host (locks)', async () => {
+    const locks = fakeLocks();
+    const tabs = ['A', 'B', 'C'].map((id) => createBroadcastSignalling({ id, settleMs: 20, locks }));
+    const infos = await Promise.all(tabs.map((t) => t.join('local-race')));
+    const hosts = new Set(infos.map((i) => i.host));
+    expect(hosts.size).toBe(1);
+    expect(infos.filter((i) => i.host === i.self)).toHaveLength(1);
+    for (const t of tabs) {
+      t.close();
+    }
+  });
+});
+
+describe('ws signalling events', () => {
+  function socketPair() {
+    let sock: (SocketLike & { push: (m: unknown) => void }) | undefined;
+    return {
+      open: () => {
+        const s = {
+          onopen: null,
+          onmessage: null as SocketLike['onmessage'],
+          onclose: null as SocketLike['onclose'],
+          onerror: null as SocketLike['onerror'],
+          send: () => undefined,
+          close: () => undefined,
+          push: (m: unknown) => s.onmessage?.({ data: JSON.stringify(m) }),
+        };
+        sock = s;
+        return s;
+      },
+      get sock() {
+        return sock;
+      },
+    };
+  }
+
+  it('hands the ICE servers of the joined message to the caller', async () => {
+    const pair = socketPair();
+    const sig = createWsSignalling('https://w.example', pair);
+    const joining = sig.join('ABCD');
+    const ice = [{ urls: 'turn:t', username: 'u', credential: 'c' }];
+    pair.sock?.push({ t: 'joined', self: 's1', host: 's1', peers: [], iceServers: ice });
+    expect((await joining).iceServers).toEqual(ice);
+  });
+
+  it('surfaces host-left, errors and a closed socket after the join', async () => {
+    const pair = socketPair();
+    const sig = createWsSignalling('https://w.example', pair);
+    const joining = sig.join('ABCD');
+    pair.sock?.push({ t: 'joined', self: 's1', host: 'h', peers: ['h'] });
+    await joining;
+    const events: string[] = [];
+    sig.onEvent?.((e) => events.push(e.kind));
+    pair.sock?.push({ t: 'host-left', host: 'h' });
+    pair.sock?.push({ t: 'error', reason: 'no such peer' });
+    pair.sock?.onerror?.();
+    pair.sock?.onclose?.();
+    expect(events).toEqual(['host-left', 'error', 'error', 'closed']);
   });
 });

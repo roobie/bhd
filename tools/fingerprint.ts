@@ -17,6 +17,10 @@ export const NET_FINGERPRINT_FILES: readonly string[] = [
   'src/net/lockstep.ts',
   'src/net/inputlog.ts',
   'src/net/driver.ts',
+  // The shell's step loop and the co-op wiring decide what a peer steps and when (L6).
+  'src/client/shell/app.ts',
+  'src/client/shell/coop.ts',
+  'src/client/shell/frame.ts',
 ];
 
 function sourceFiles(dir: string, prefix: string): string[] {

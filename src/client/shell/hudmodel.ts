@@ -468,6 +468,7 @@ const NET_TEXT = {
   ],
   hostLeft: ['The host left', 'The session is over.'],
   closed: ['Session ended', 'The session is over.'],
+  broken: ['Connection broken', 'The host sent a message this build cannot read, so the session is over.'],
 } as const;
 
 /** "Ana (Gunner)": a slot's player name and hero, whichever are known. */
@@ -515,6 +516,10 @@ function blocking(input: HudInput, net: HudNetInput): Blocking | undefined {
         : undefined;
     }
     case 'ended': {
+      if (net.info.endedBy === 'broken') {
+        const why = net.info.endReason === undefined ? '' : ` (${net.info.endReason})`;
+        return { kind: 'ended', title: NET_TEXT.broken[0], detail: `${NET_TEXT.broken[1]}${why}` };
+      }
       const [title, detail] = net.info.endedBy === 'host-left' ? NET_TEXT.hostLeft : NET_TEXT.closed;
       return { kind: 'ended', title, detail };
     }

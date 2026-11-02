@@ -10,10 +10,10 @@
 // signalling and the room stay up across games.
 
 import { netDriver } from '../../net/driver.ts';
-import { createRtcTransport, type IceServer } from '../../net/rtc.ts';
+import { createRtcTransport } from '../../net/rtc.ts';
 import { createBroadcastSignalling, isLocalRoom } from '../../net/signal/broadcast.ts';
 import { createWsSignalling } from '../../net/signal/ws.ts';
-import type { PeerId, Signalling, Transport, WireMsg } from '../../net/types.ts';
+import type { IceServer, PeerId, Signalling, Transport, WireMsg } from '../../net/types.ts';
 import { mountShell } from './app.ts';
 import type { FeedbackSink } from './feedbackSink.ts';
 import { type LobbyHandle, mountLobby } from './lobby.ts';
@@ -60,28 +60,23 @@ const NO_SIGNAL =
   'No signalling server is configured for this build, so only local rooms (room=local-NAME, two tabs of one browser) work. ' +
   'Set VITE_BHD_SIGNAL at build time or open the page with #signal=https://your-worker.example.';
 
-const HTTP_ORIGIN = /^ws/u;
+/** A peer whose link is up but that never got into the lobby is dropped after this long (M3). */
+const ACCEPT_GRACE_MS = 10_000;
 
-/** The ICE servers the worker mints (`GET /turn`); public STUN alone when it cannot be reached. */
-async function fetchIce(origin: string): Promise<readonly IceServer[] | undefined> {
-  try {
-    const res = await fetch(`${origin.replace(HTTP_ORIGIN, 'http')}/turn`);
-    const body = (await res.json()) as { iceServers?: unknown };
-    return Array.isArray(body.iceServers) ? (body.iceServers as IceServer[]) : undefined;
-  } catch {
-    return undefined;
-  }
+/** Broadcast signalling for local rooms; otherwise the ws server at `origin` (its `joined` carries the ICE servers). */
+function openSignalling(room: string, origin: string | undefined): Signalling {
+  return isLocalRoom(room) || origin === undefined ? createBroadcastSignalling() : createWsSignalling(origin);
 }
 
-/** Broadcast signalling for local rooms; otherwise the ws server (and its TURN credentials) at `origin`. */
-async function openSignalling(
-  room: string,
-  origin: string | undefined,
-): Promise<{ readonly signalling: Signalling; readonly ice: readonly IceServer[] }> {
-  if (isLocalRoom(room) || origin === undefined) {
-    return { signalling: createBroadcastSignalling(), ice: [] };
+/** The display name of each hero slot's player, from the lobby's names. */
+function slotNames(start: Start, known: ReadonlyMap<PeerId, string>): string[] {
+  const names: string[] = ['', '', '', ''];
+  for (const seat of start.seats) {
+    for (const slot of seat.players) {
+      names[slot] = known.get(seat.peer) ?? `Player ${slot + 1}`;
+    }
   }
-  return { signalling: createWsSignalling(origin), ice: (await fetchIce(origin)) ?? [] };
+  return names;
 }
 
 function showError(root: HTMLElement, title: string, message: string): void {
@@ -116,6 +111,27 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
   let feedback: FeedbackSink | undefined;
   let { canvas, hud } = deps.els;
   let games = 0;
+  /** Host: the peers seated in the running game; only they may end it. */
+  let seated = new Set<PeerId>();
+  const graceTimers = new Map<PeerId, ReturnType<typeof setTimeout>>();
+
+  function kick(peer: PeerId): void {
+    transport?.disconnect?.(peer);
+  }
+
+  /** Host: a peer that is connected but not accepted into the lobby soon is cut loose. */
+  function watchAcceptance(peer: PeerId): void {
+    clearTimeout(graceTimers.get(peer));
+    graceTimers.set(
+      peer,
+      setTimeout(() => {
+        graceTimers.delete(peer);
+        if (phase === 'lobby' && connected.has(peer) && lobby?.lobby.view().names.has(peer) !== true) {
+          kick(peer);
+        }
+      }, ACCEPT_GRACE_MS),
+    );
+  }
 
   function enterLobby(): void {
     const t = transport;
@@ -132,10 +148,14 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
       fingerprint: deps.fingerprint,
       send: (peer, msg) => t.send(peer, msg),
       broadcast: (msg) => t.broadcast(msg),
+      kick,
     });
     lobby.onStart((start) => startGame(start));
     for (const peer of connected) {
       lobby.peerUp(peer);
+      if (self === host) {
+        watchAcceptance(peer);
+      }
     }
   }
 
@@ -162,16 +182,12 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
     if (t === undefined || view === undefined) {
       return;
     }
-    const names: string[] = ['', '', '', ''];
-    for (const seat of start.seats) {
-      for (const slot of seat.players) {
-        names[slot] = view.names.get(seat.peer) ?? `Player ${slot + 1}`;
-      }
-    }
+    const names = slotNames(start, view.names);
     lobby?.dispose();
     lobby = undefined;
     deps.lobbyRoot.hidden = true;
     phase = 'game';
+    seated = new Set(start.seats.map((s) => s.peer));
     const spec = { ...start.spec, networked: true };
     const humans = spec.humans ?? [];
     const mine = start.seats.find((s) => s.peer === self)?.players ?? [];
@@ -203,6 +219,20 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
     shell = opened;
     if (driver !== undefined) {
       deps.onGame?.({ shell: opened, driver });
+    }
+    if (!opened.rendering) {
+      leaveUnplayable(t, driver);
+    }
+  }
+
+  /** No WebGL: this peer cannot play, so it leaves the game rather than stall the others (L2). */
+  function leaveUnplayable(t: Transport, driver: { dispose: () => void } | undefined): void {
+    if (driver !== undefined) {
+      driver.dispose();
+    } else if (self === host) {
+      t.broadcast({ t: 'bye' });
+    } else {
+      t.send(host, { t: 'bye' });
     }
   }
 
@@ -240,7 +270,8 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
 
   function onMessage(from: PeerId, msg: WireMsg): void {
     if (msg.t === 'end') {
-      if (phase === 'game' && (self === host || from === host)) {
+      // The host honours `end` only from a seated peer; a client only from the host (M3).
+      if (phase === 'game' && (self === host ? seated.has(from) : from === host)) {
         backToLobby(self === host);
       }
     } else if (phase === 'lobby') {
@@ -253,8 +284,13 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
   function onPeer(peer: PeerId, state: 'up' | 'down'): void {
     if (state === 'up') {
       connected.add(peer);
+      if (self === host && phase === 'lobby') {
+        watchAcceptance(peer);
+      }
     } else {
       connected.delete(peer);
+      clearTimeout(graceTimers.get(peer));
+      graceTimers.delete(peer);
     }
     if (phase === 'lobby') {
       if (state === 'up') {
@@ -274,10 +310,23 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
       return;
     }
     try {
-      const { signalling: sig, ice } = await openSignalling(deps.room, deps.signalOrigin);
-      signalling = sig;
+      signalling = openSignalling(deps.room, deps.signalOrigin);
       const info = await signalling.join(deps.room);
       ({ self, host } = info);
+      const ice = info.iceServers ?? [];
+      // A lost signalling server only matters while we are still in the lobby: games run on the data channels.
+      signalling.onEvent?.((e) => {
+        if (phase === 'lobby' && (e.kind === 'host-left' || e.kind === 'closed')) {
+          lobby?.dispose();
+          lobby = undefined;
+          showError(
+            deps.lobbyRoot,
+            'Disconnected',
+            e.kind === 'host-left' ? 'The host left the room.' : 'The connection to the signalling server was lost.',
+          );
+          phase = 'closed';
+        }
+      });
       const options = ice.length > 0 ? { iceServers: ice } : {};
       transport =
         deps.createTransport?.(self, host, signalling, ice) ??
@@ -295,6 +344,10 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
     ready: connect(),
     dispose() {
       phase = 'closed';
+      for (const timer of graceTimers.values()) {
+        clearTimeout(timer);
+      }
+      graceTimers.clear();
       lobby?.dispose();
       closeGame();
       transport?.close();

@@ -33,6 +33,7 @@ interface Event {
 export interface Port extends Transport {
   readonly messages: Set<(from: PeerId, msg: WireMsg) => void>;
   readonly peers: Set<(peer: PeerId, state: PeerState) => void>;
+  readonly bad: Set<(from: PeerId, reason: string) => void>;
   closed: boolean;
   /** Delivered messages that failed to decode (must stay 0 unless a test forges one). */
   refused: number;
@@ -41,9 +42,11 @@ export interface Port extends Transport {
 function makePort(hub: Hub, self: PeerId): Port {
   const messages = new Set<(from: PeerId, msg: WireMsg) => void>();
   const peers = new Set<(peer: PeerId, state: PeerState) => void>();
+  const bad = new Set<(from: PeerId, reason: string) => void>();
   const port: Port = {
     self,
     messages,
+    bad,
     peers,
     closed: false,
     refused: 0,
@@ -59,6 +62,12 @@ function makePort(hub: Hub, self: PeerId): Port {
       messages.add(cb);
       return () => {
         messages.delete(cb);
+      };
+    },
+    onBad: (cb): Unsubscribe => {
+      bad.add(cb);
+      return () => {
+        bad.delete(cb);
       };
     },
     onPeer: (cb): Unsubscribe => {
@@ -133,6 +142,9 @@ export class Hub {
       const decoded = decodeMsg(text);
       if (!decoded.ok) {
         target.refused += 1;
+        for (const cb of [...target.bad]) {
+          cb(from, decoded.reason);
+        }
         return;
       }
       this.delivered.set(decoded.msg.t, (this.delivered.get(decoded.msg.t) ?? 0) + 1);
