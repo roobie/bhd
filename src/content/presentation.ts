@@ -57,7 +57,19 @@ export interface UnitPresentation {
   readonly shape?: 'circle' | 'box' | 'triangle';
 }
 
+export interface BargainPresentation {
+  /** `BargainDef.id`. */
+  readonly id: string;
+  readonly label: string;
+  /** One or two characters for pips. */
+  readonly glyph: string;
+  /** `#rrggbb`. */
+  readonly color: string;
+}
+
 export interface Presentation {
+  /** Bargain names and colours by id; an id without an entry reads as its id spelt out (see `bargainPresentation`). */
+  readonly bargains?: readonly BargainPresentation[];
   readonly abilities: readonly AbilityPresentation[];
   readonly resources: readonly ResourcePresentation[];
   readonly statuses: readonly StatusPresentation[];
@@ -69,6 +81,7 @@ export interface Presentation {
 export const UI_TEXT = {
   fallen: { label: 'Fallen', icon: UI_ICONS.fallen },
   callWave: { label: 'Call next wave', key: 'N', icon: UI_ICONS.callWave },
+  bargain: { label: 'Bargain', decline: 'Decline', team: 'The team' },
 } as const;
 
 /** The respawn countdown line for a fallen hero; `ticksLeft` and `hz` come from perception and the sim clock. */
@@ -78,6 +91,8 @@ export function respawnText(ticksLeft: number, hz: number): string {
 
 export function defaultPresentation(): Presentation {
   return {
+    // Slice B's pool names go here, by id; until then every bargain uses the id-derived fallback.
+    bargains: [],
     abilities: [
       {
         effect: 'brace',
@@ -279,4 +294,26 @@ export function heroPresentation(ui: Presentation, id: string): UnitPresentation
 
 export function enemyPresentation(ui: Presentation, id: string): UnitPresentation {
   return ui.enemies.find((e) => e.id === id) ?? { id, label: id, color: hashedColor(id) };
+}
+
+const CAMEL_BOUNDARY = /(?<a>[a-z0-9])(?<b>[A-Z])/gu;
+const WORD_BREAK = /[\s._-]+/u;
+
+/** `unvented-barrel` or `unventedBarrel` as `Unvented Barrel`. */
+function titleCase(id: string): string {
+  return id
+    .replace(CAMEL_BOUNDARY, '$<a> $<b>')
+    .split(WORD_BREAK)
+    .filter((w) => w !== '')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+export function bargainPresentation(ui: Presentation, id: string): BargainPresentation {
+  const found = ui.bargains?.find((b) => b.id === id);
+  if (found !== undefined) {
+    return found;
+  }
+  const label = titleCase(id);
+  return { id, label: label === '' ? id : label, glyph: label.slice(0, 2), color: hashedColor(id) };
 }

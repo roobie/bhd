@@ -3,15 +3,19 @@
 
 import {
   describeAbility,
+  describeBargain,
+  describeBargainRules,
   describeCallWave,
   describeFallen,
   describeResource,
   describeStatus,
+  effectiveHeroDef,
   TARGETING_TEXT,
 } from '../../content/help.ts';
 import type { Presentation } from '../../content/presentation.ts';
 import {
   abilityPresentation,
+  bargainPresentation,
   enemyPresentation,
   heroPresentation,
   intentKindOf,
@@ -20,14 +24,21 @@ import {
   statusPresentation,
   UI_TEXT,
 } from '../../content/presentation.ts';
-import type { HeroView, IntentView, Perception } from '../../perception/types.ts';
+import type { CardView, HeroView, IntentView, OfferView, Perception, TakenView } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
 import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS, maxOffsetHalfSeconds } from './arming.ts';
+import { BARGAIN_CARD_KEYS, KEY_BARGAIN_DECLINE } from './input.ts';
 import type {
   AbilityBarModel,
   AbilityButtonModel,
   ArmPickerModel,
+  BargainCardModel,
+  BargainHudModel,
+  BargainOfferModel,
+  BargainPipModel,
+  BargainSent,
   ControlState,
+  HelpBargainsModel,
   HelpModel,
   HeroCardModel,
   HudInput,
@@ -154,6 +165,38 @@ function deadCard(input: HudInput, slot: number): HeroCardModel {
   };
 }
 
+/** The hero a card benefits, by entity id: a live or fallen hero's label, else a generic one. */
+function benefitLabel(p: Perception, ui: Presentation, card: CardView): string {
+  if (card.scope === 'team') {
+    return UI_TEXT.bargain.team;
+  }
+  const def = p.heroes.find((h) => h.id === card.hero)?.def ?? p.fallen.find((f) => f.id === card.hero)?.def;
+  return def === undefined ? 'A hero' : heroPresentation(ui, def).label;
+}
+
+function bargainLines(
+  ui: Presentation,
+  card: { readonly scope: 'hero' | 'team'; readonly gains: CardView['gains']; readonly costs: CardView['costs'] },
+): { gains: readonly string[]; costs: readonly string[] } {
+  return describeBargain(card, { scope: card.scope, enemy: (id) => enemyPresentation(ui, id).label });
+}
+
+/** Pips for the accepted bargains that apply to `h`, with a tooltip of their gains and costs. */
+function bargainPips(h: HeroView, p: Perception, ui: Presentation): BargainPipModel[] {
+  return h.bargains.map((id) => {
+    const pres = bargainPresentation(ui, id);
+    const taken = p.bargains.taken.find((t) => t.bargain === id);
+    const lines =
+      taken === undefined ? undefined : bargainLines(ui, { scope: taken.hero === 0 ? 'team' : 'hero', ...taken });
+    const tooltip = [
+      pres.label,
+      ...(lines?.gains.map((g) => `+ ${g}`) ?? []),
+      ...(lines?.costs.map((c) => `- ${c}`) ?? []),
+    ];
+    return { id, label: pres.label, glyph: pres.glyph, color: pres.color, tooltip: tooltip.join('\n') };
+  });
+}
+
 function heroCards(input: HudInput): HeroCardModel[] {
   const { p, ui, controls, driven } = input;
   const longest = longestRemaining(p);
@@ -182,6 +225,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
       respawnSeconds: undefined,
       respawnLabel: undefined,
       fallenLabel: '',
+      bargains: bargainPips(h, p, ui),
     });
   }
   return cards;
@@ -217,6 +261,25 @@ function abilityBar(input: HudInput): AbilityBarModel | undefined {
   return { slot: hero.slot, buttons, hold: hero.hold, armOn: arming.armOn, enabled };
 }
 
+/** The Bargains section of help: the rules from the config, then what was accepted; undefined when the game has no bargains. */
+function helpBargains(input: HudInput): HelpBargainsModel | undefined {
+  const { p, ui, game } = input;
+  if (game?.bargains === undefined) {
+    return undefined;
+  }
+  const taken = p.bargains.taken.map((t: TakenView) => {
+    const lines = bargainLines(ui, { scope: t.hero === 0 ? 'team' : 'hero', ...t });
+    const hero = p.heroes.find((h) => h.id === t.hero) ?? p.fallen.find((f) => f.id === t.hero);
+    return {
+      label: bargainPresentation(ui, t.bargain).label,
+      who: hero === undefined ? UI_TEXT.bargain.team : heroPresentation(ui, hero.def).label,
+      gains: lines.gains,
+      costs: lines.costs,
+    };
+  });
+  return { notes: describeBargainRules(game.bargains), taken };
+}
+
 /** The help overlay for the selected hero; undefined while closed. Numbers come from the game config and perception. */
 function helpModel(input: HudInput): HelpModel | undefined {
   const { p, ui, controls, game } = input;
@@ -224,7 +287,12 @@ function helpModel(input: HudInput): HelpModel | undefined {
     return undefined;
   }
   const hero = p.heroes.find((h) => h.slot === controls.selected);
-  const def = game?.heroes.find((d) => d.id === hero?.def);
+  // The effective def: accepted bargains patched in, so the numbers shown are the ones the sim uses.
+  const def = effectiveHeroDef(
+    game?.heroes.find((d) => d.id === hero?.def),
+    p.bargains.taken,
+    hero,
+  );
   const defs = game?.statuses ?? [];
   const abilities = (hero?.abilities ?? []).map((a) => {
     const pres = abilityPresentation(ui, a.effect, a);
@@ -262,6 +330,7 @@ function helpModel(input: HudInput): HelpModel | undefined {
     const pres = resourcePresentation(ui, r.name);
     return [{ label: pres.label, color: pres.color, text }];
   });
+  const bargains = helpBargains(input);
   const notes: [string, string][] = [[UI_TEXT.callWave.label, describeCallWave()]];
   if (game !== undefined) {
     notes.push([UI_TEXT.fallen.label, describeFallen(game.rules)]);
@@ -272,6 +341,7 @@ function helpModel(input: HudInput): HelpModel | undefined {
     resources,
     notes,
     statuses,
+    ...(bargains === undefined ? {} : { bargains }),
   };
 }
 
@@ -344,6 +414,53 @@ function endResult(reason: NonNullable<HudInput['end']>['reason']): 'win' | 'los
   }
 }
 
+const ANCIENT_LABEL = 'Ancient';
+
+function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[]): BargainOfferModel {
+  const { p, ui, driven, game } = input;
+  const mine = sent.find((x) => x.offer === o.id);
+  const windowTicks = (game?.bargains?.windowSeconds ?? 0) * TICK_HZ;
+  const ticksLeft = Math.max(0, o.expiresAt - p.tick);
+  const heal = game?.bargains?.declineAncientHeal ?? 0;
+  const cards: BargainCardModel[] = o.cards.map((c, i) => {
+    const pres = bargainPresentation(ui, c.bargain);
+    const lines = bargainLines(ui, c);
+    return {
+      id: c.bargain,
+      label: pres.label,
+      glyph: pres.glyph,
+      color: pres.color,
+      who: benefitLabel(p, ui, c),
+      gains: lines.gains,
+      costs: lines.costs,
+      hotkey: BARGAIN_CARD_KEYS[i] ?? '',
+      chosen: mine?.card === c.bargain,
+    };
+  });
+  return {
+    offer: o.id,
+    wave: o.wave,
+    secondsLeft: Math.ceil(ticksLeft / TICK_HZ),
+    frac: windowTicks > 0 ? clamp01(ticksLeft / windowTicks) : 0,
+    cards,
+    declineReward: heal > 0 ? `${ANCIENT_LABEL} +${Math.round(heal * 1000) / 10}%` : '',
+    declineKey: KEY_BARGAIN_DECLINE,
+    inFlight: mine !== undefined,
+    declined: mine !== undefined && mine.card === undefined,
+    enabled: driven.length > 0,
+  };
+}
+
+/** Open offers with their cards, countdowns and in-flight state; undefined when none is open. */
+function bargainModel(input: HudInput): BargainHudModel | undefined {
+  const { open } = input.p.bargains;
+  if (open.length === 0) {
+    return undefined;
+  }
+  const sent = input.controls.bargainSent ?? [];
+  return { offers: open.map((o) => offerModel(input, o, sent)) };
+}
+
 /**
  * The model for one HUD render. Kit-agnostic: ability buttons come from `HeroView.abilities` (one
  * button per entry, so `buttons.length === abilities.length`), resource bars from `resources`
@@ -365,7 +482,7 @@ export function buildHudModel(input: HudInput): HudModel {
     hint,
     help: helpModel(input),
     end: end === undefined ? undefined : { result: endResult(end.reason), wave: end.wave },
-    bargain: undefined,
+    bargain: bargainModel(input),
   };
 }
 

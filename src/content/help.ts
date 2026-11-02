@@ -10,6 +10,8 @@
 // description (the card still shows what perception and presentation know). The text describes what
 // the sim does today (src/sim/heroes/*, combat.ts, statuses.ts); change both together.
 
+import type { EffectView, HeroView, TakenView } from '../perception/types.ts';
+import { applyDefPatches, type BargainsDef, type Effect, type EffectTarget } from './bargains.ts';
 import type { GunnerDef } from './heroes/gunner.ts';
 import type { PenitentDef } from './heroes/penitent.ts';
 import type { PsykerDef } from './heroes/psyker.ts';
@@ -462,4 +464,162 @@ export function statusTemplates(facts: StatusFacts): { id: string; unfilled: str
     const bare = h.appliedBy !== undefined && source === undefined;
     return { id: h.id, unfilled: bare ? [] : unfilled(h.text, h.values(source, facts)) };
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bargains (wave 9). Text is generated from the effect values, never typed per bargain
+// (D-XQMB2FS3UBAE7OZM); nothing here switches on a bargain id.
+// ---------------------------------------------------------------------------------------------
+
+/** What `describeBargain` reads besides the effects. */
+export interface BargainFacts {
+  /** `scope` of the card: a team card's team-wide effects need no qualifier. */
+  readonly scope: 'hero' | 'team';
+  /** The display name of an enemy def id. */
+  readonly enemy: (id: string) => string;
+}
+
+const CAMEL_BOUNDARY = /(?<a>[a-z0-9])(?<b>[A-Z])/gu;
+
+/** `heat.decayPerSecond` as `Heat decay per second`. */
+function pathName(path: string): string {
+  const words = path.split('.').join(' ').replace(CAMEL_BOUNDARY, '$<a> $<b>').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A multiplier as a signed percent change; 0 reads as removed. */
+function multiplier(name: string, ratio: number): string {
+  if (!Number.isFinite(ratio)) {
+    return `${name} ?`;
+  }
+  if (ratio === 0) {
+    return `${name} removed`;
+  }
+  const change = Math.round((ratio - 1) * 1000) / 10;
+  return `${name} ${change >= 0 ? '+' : '-'}${formatNumber(Math.abs(change))}%`;
+}
+
+function signed(name: string, amount: number): string {
+  if (!Number.isFinite(amount)) {
+    return `${name} ?`.trim();
+  }
+  return `${name} ${amount >= 0 ? '+' : '-'}${formatNumber(Math.abs(amount))}`.trim();
+}
+
+const TARGET_SUFFIX: Readonly<Record<EffectTarget, string>> = {
+  self: '',
+  team: ' (whole team)',
+  allies: ' (other heroes)',
+};
+
+const MULTIPLIER_NAMES: Readonly<Record<string, string>> = {
+  dealt: 'Damage dealt',
+  taken: 'Damage taken',
+  healTaken: 'Healing received',
+  respawn: 'Respawn time',
+};
+
+function effectBody(e: EffectView, facts: BargainFacts): string {
+  const known = MULTIPLIER_NAMES[e.kind];
+  if (known !== undefined) {
+    return multiplier(known, e.value);
+  }
+  switch (e.kind) {
+    case 'def': {
+      const name = e.def === '' ? pathName(e.path) : `${facts.enemy(e.def)} ${pathName(e.path).toLowerCase()}`;
+      return e.op === 'add' ? signed(name, e.value) : multiplier(name, e.value);
+    }
+    case 'ancientHeal':
+      return `Heals the Ancient ${Number.isFinite(e.value) ? formatNumber(Math.round(e.value * 1000) / 10) : '?'}% of its max hp, once`;
+    case 'waveExtra':
+      return `${signed('', e.value)} ${facts.enemy(e.def)} in every later wave`;
+    case 'masterBudget':
+      return signed('Wave budget', e.value);
+    default:
+      return `${e.kind} ${formatNumber(e.value)}`;
+  }
+}
+
+/** One line for an effect, with who it applies to when that is not obvious from the card. */
+function effectLine(e: EffectView, facts: BargainFacts): string {
+  const suffix = facts.scope === 'team' && e.target === 'team' ? '' : TARGET_SUFFIX[e.target];
+  return `${effectBody(e, facts)}${suffix}`;
+}
+
+export interface BargainDescription {
+  readonly gains: readonly string[];
+  readonly costs: readonly string[];
+}
+
+/** One gain line and one cost line per effect of a card, from the effect values. */
+export function describeBargain(
+  card: { readonly gains: readonly EffectView[]; readonly costs: readonly EffectView[] },
+  facts: BargainFacts,
+): BargainDescription {
+  return {
+    gains: card.gains.map((e) => effectLine(e, facts)),
+    costs: card.costs.map((e) => effectLine(e, facts)),
+  };
+}
+
+/** The Bargains help section's rules, from the bargains config. */
+export function describeBargainRules(b: BargainsDef): readonly (readonly [string, string])[] {
+  const waves = b.afterWaves.join(', ');
+  const heal = formatNumber(Math.round(b.declineAncientHeal * 1000) / 10);
+  const clock = b.pauseWaves
+    ? 'The wave clock waits while an offer is open.'
+    : 'The wave clock keeps running meanwhile.';
+  return [
+    [
+      'Offers',
+      `After waves ${waves} the team is offered ${formatNumber(b.cards)} bargains. Each trades a gain for a cost on another axis, and the card says who benefits. Every effect is listed on the card, gains first.`,
+    ],
+    [
+      'Window',
+      `An offer stays open for ${formatNumber(b.windowSeconds)}s; the countdown is on the panel. Letting it lapse counts as a decline. ${clock} Commands take a moment to land, so a card greys out once you have chosen.`,
+    ],
+    [
+      'Declining',
+      `Decline is always a fair choice: it heals the Ancient ${heal}% of its max hp. Bargains can heal the Ancient but never hurt it.`,
+    ],
+    [
+      'Permanence',
+      'An accepted bargain lasts the rest of the game, gain and cost together. Its pip sits on the hero card of everyone it touches; hover it for the numbers.',
+    ],
+  ];
+}
+
+/** The hero-def patches of an accepted bargain that apply to `hero` (enemy patches are not the hero's). */
+function heroPatches(taken: TakenView, hero: HeroView): Effect[] {
+  const patches: Effect[] = [];
+  for (const e of [...taken.gains, ...taken.costs]) {
+    if (e.kind !== 'def' || e.def !== '' || (e.op !== 'mul' && e.op !== 'add')) {
+      continue;
+    }
+    // 'self' is the benefiting hero (everyone on a team card), 'allies' everyone else, 'team' everyone.
+    const applies =
+      e.target === 'team' ||
+      (e.target === 'self' && (taken.hero === 0 || taken.hero === hero.id)) ||
+      (e.target === 'allies' && taken.hero !== hero.id);
+    if (applies) {
+      patches.push({ kind: 'def', target: e.target, path: e.path, op: e.op, value: e.value });
+    }
+  }
+  return patches;
+}
+
+/** `def` with the accepted bargains that apply to `hero` patched in, so help numbers reflect them. */
+export function effectiveHeroDef(
+  def: HeroDef | undefined,
+  taken: readonly TakenView[],
+  hero: HeroView | undefined,
+): HeroDef | undefined {
+  if (def === undefined || hero === undefined || hero.bargains.length === 0) {
+    return def;
+  }
+  const mine = taken.filter((t) => hero.bargains.includes(t.bargain));
+  return applyDefPatches(
+    def,
+    mine.flatMap((t) => heroPatches(t, hero)),
+  );
 }

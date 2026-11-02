@@ -6,6 +6,7 @@ import type { TemplateResult } from 'lit-html';
 import { html, render as litRender, nothing } from 'lit-html';
 import { styleMap } from 'lit-html/directives/style-map.js';
 import { UI_TEXT } from '../../content/presentation.ts';
+import { bargainPanelView, bargainPipsView, helpBargainsView } from './bargains.ts';
 import { KEY_CALL_WAVE, KEY_HELP, KEY_HOLD, KEY_STOP } from './input.ts';
 import { armPickerView, intentsListView } from './intentsui.ts';
 import type {
@@ -126,7 +127,7 @@ function cardView(c: HeroCardModel, dispatch: Dispatch): TemplateResult {
     </span>
     ${c.resources.map(resourceView)}
     ${c.respawnSeconds === undefined ? nothing : html`<span class="respawn" role="timer" aria-label=${c.respawnLabel ?? ''} title=${c.respawnLabel ?? ''}><small>${c.fallenLabel}</small> ${c.respawnSeconds}s</span>`}
-    <span class="pips">${c.statuses.map(pipView)}</span>
+    <span class="pips">${c.statuses.map(pipView)}${bargainPipsView(c.bargains ?? [])}</span>
   </button>`;
 }
 
@@ -311,6 +312,7 @@ function helpView(h: HelpModel, dispatch: Dispatch): TemplateResult {
     <dl class="notes">${h.notes.map(([title, text]) => html`<dt>${title}</dt><dd>${text}</dd>`)}</dl>
     <h2>Keys</h2>
     <p class="keys">${KEY_HELP.map((k) => html`<span><kbd>${k.keys}</kbd> ${k.does}</span>`)}</p>
+    ${h.bargains === undefined ? nothing : helpBargainsView(h.bargains)}
     <h2>Statuses</h2>
     <ul class="legend">${h.statuses.map(helpStatusView)}</ul>
   </div>`;
@@ -328,6 +330,11 @@ function endView(model: HudModel, dispatch: Dispatch): TemplateResult | typeof n
   </div>`;
 }
 
+/** Wide screens start the offer panel open; a phone starts it as a one-line strip so the battlefield stays visible. */
+function offersStartOpen(): boolean {
+  return typeof globalThis.matchMedia !== 'function' || globalThis.matchMedia('(min-width: 700px)').matches;
+}
+
 function template(model: HudModel, deps: HudDeps, gestures: Gestures): TemplateResult {
   const { dispatch } = deps;
   return html`
@@ -337,6 +344,7 @@ function template(model: HudModel, deps: HudDeps, gestures: Gestures): TemplateR
     ${model.picker === undefined ? nothing : html`<div class="picker" data-hit>${armPickerView(model.picker, dispatch)}</div>`}
     ${model.bar === undefined ? nothing : barView(model.bar, gestures, dispatch)}
     <div class="cards">${model.heroes.map((c) => cardView(c, dispatch))}</div>
+    ${model.bargain === undefined ? nothing : bargainPanelView(model.bargain, dispatch, offersStartOpen() && model.help === undefined)}
     ${model.help === undefined ? nothing : helpView(model.help, dispatch)}
     ${endView(model, dispatch)}
   `;

@@ -1,42 +1,46 @@
 ---
-phase: initialize
+phase: finalize
 parent: U-IUFI7QQSGH4543TP
 owner:
   - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - An open offer shows as cards (name, who benefits, one gain and one cost line per effect), a countdown and a Decline button with its reward
+  - Keys Z X C V and B, and clicks, emit one valid bargain command per offer; the card greys after sending
+  - Phone (390px) shows a collapsible strip that does not cover the battlefield
+  - Hero cards show pips for accepted bargains with a tooltip; help has a Bargains section and the effective def
+  - npm run ci exits 0
 ---
 
 # slice/w9-hud
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+The HUD side of bargains: offer cards, countdown, Decline, keys, pips and help text, all generated from effect values with no per-bargain switches.
 
 ## Scope
-In: TODO
-Out: TODO
+In: bargains.ts widgets, hudmodel/hud/controls/input/css, content presentation and help, tests.
+Out: sim engine (slice A), bargain content and names, the solo bargainPolicy toggle (needs engine support).
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+Perception views are the contract. No gameplay pinning in tests.
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Finalize: committed on the slice branch.
 
 ## Next
-- TODO
+- Integrator wires GameSpec.bargainPolicy and a runtime setter, fills presentation.bargains labels, reconciles effectiveHeroDef target semantics with slice A.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+- npm run ci exit 0 (log: scratchpad/w9-D-ci.log).
+- Screenshots 390x844 and 1280x720 in scratchpad/w9-D/.
+- Real browser: key X sent a valid accept command and disabled every card.
 
 ## Harvest
-<!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
-     - [ ] decision: …   → record decision
-     - [ ] learning: …   → record learning
-     - [ ] backlog: …    → record backlog
-     - [ ] process: …    → retrospective (change the process, or drop it)
--->
+- [ ] backlog: solo "bots pick bargains" toggle needs GameSpec.bargainPolicy and a Match runtime setter
+- [ ] learning: a new key binding can break the controls "other keys" test; check KEY_HELP clashes
 
 ## Log
 - 2026-11-02 initialized
+- 2026-11-02 execute: built panel, pips, help, keys, reducer, tests; ci green
+- 2026-11-02 phase initialize → execute
+- 2026-11-02 phase execute → finalize

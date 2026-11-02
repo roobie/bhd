@@ -14,6 +14,10 @@ export const KEY_STOP = 'S';
 export const KEY_HOLD = 'F';
 export const KEY_CALL_WAVE = 'N';
 
+/** Bargain keys: Z X C V take the offer's first to fourth card, B declines. None clash with the other bindings. */
+export const BARGAIN_CARD_KEYS: readonly string[] = ['Z', 'X', 'C', 'V'];
+export const KEY_BARGAIN_DECLINE = 'B';
+
 /** Non-ability keys for the help panel's "Keys" row, in the order they read. Keep in step with `keyAction`. */
 export const KEY_HELP: readonly { readonly keys: string; readonly does: string }[] = [
   { keys: '1-4', does: 'select hero' },
@@ -24,6 +28,8 @@ export const KEY_HELP: readonly { readonly keys: string; readonly does: string }
   { keys: 'Ctrl+Q/W/E/R', does: 'autocast' },
   { keys: 'Enter', does: 'confirm arm' },
   { keys: '+ -', does: 'fire time' },
+  { keys: 'Z X C V', does: 'take bargain card' },
+  { keys: KEY_BARGAIN_DECLINE, does: 'decline bargain' },
   { keys: 'P, Space', does: 'pause' },
   { keys: 'H', does: 'help' },
   { keys: 'Esc', does: 'cancel' },
@@ -40,7 +46,7 @@ export interface KeyInput {
 
 /**
  * The keymap, pure: 1-4 select; Q/W/E/R cast slot 0-3 (Ctrl: autocast; Alt: `cast` with `arm: true`); S stop;
- * F hold fire; N call the next wave; H help; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
+ * F hold fire; Z X C V take bargain card 1-4 and B declines (the reducer resolves them against the open offer); N call the next wave; H help; P and Space pause; Escape cancel; Enter armConfirm; '+' / '-' fireTime. Undefined for any
  * other key.
  */
 export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefined {
@@ -58,7 +64,13 @@ export function keyAction(e: KeyInput, _state: ControlState): UiAction | undefin
   if (key >= '1' && key <= '4') {
     return { kind: 'select', slot: Number(key) - 1 };
   }
+  const card = BARGAIN_CARD_KEYS.findIndex((k) => k.toLowerCase() === key);
+  if (card >= 0) {
+    return { kind: 'bargainKey', card };
+  }
   switch (key) {
+    case 'b':
+      return { kind: 'bargainKey' };
     case 's':
       return { kind: 'stop' };
     case 'f':

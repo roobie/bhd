@@ -299,8 +299,10 @@ export type UiAction =
   | { readonly kind: 'help' }
   /** Restart the match (handled by the app, ignored by the reducer). */
   | { readonly kind: 'restart' }
-  /** Resolve a bargain offer: take card `card` (a bargain id), or decline when `card` is absent. STUB: the reducer emits nothing yet (slice D). */
-  | { readonly kind: 'bargain'; readonly offer: number; readonly card?: string };
+  /** Resolve a bargain offer: take card `card` (a bargain id), or decline when `card` is absent. */
+  | { readonly kind: 'bargain'; readonly offer: number; readonly card?: string }
+  /** A bargain key: resolves the oldest open offer; `card` is the 0-based card index, absent = Decline. */
+  | { readonly kind: 'bargainKey'; readonly card?: number };
 
 /** An ability being aimed. */
 interface AimState {
@@ -351,6 +353,14 @@ export interface ControlState {
   /** The help overlay is open. */
   readonly help: boolean;
   readonly hint: Hint | undefined;
+  /** Bargain resolutions already sent (input delay applies, so the offer stays open for a moment); absent = none. */
+  readonly bargainSent?: readonly BargainSent[];
+}
+
+/** A bargain resolution the human has sent: `card` is the bargain id, absent for Decline. */
+export interface BargainSent {
+  readonly offer: number;
+  readonly card?: string;
 }
 
 /** What the reducer reads besides state and action. */
@@ -490,6 +500,18 @@ export interface HeroCardModel {
   readonly respawnLabel: string | undefined;
   /** The fallen-state label (`UI_TEXT.fallen`); empty while it is up. */
   readonly fallenLabel: string;
+  /** Accepted bargains that apply to this hero, in acceptance order; empty when none (or down). */
+  readonly bargains?: readonly BargainPipModel[];
+}
+
+/** A pip on a hero card for one accepted bargain; the tooltip lists its gains and costs. */
+export interface BargainPipModel {
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: string;
+  readonly color: string;
+  /** Name, then each gain and cost line, newline separated. */
+  readonly tooltip: string;
 }
 
 export interface AbilityButtonModel {
@@ -569,6 +591,21 @@ export interface HelpModel {
   /** Call-next-wave and fallen/respawn rules, as `[title, text]`. */
   readonly notes: readonly (readonly [string, string])[];
   readonly statuses: readonly HelpStatusModel[];
+  /** The Bargains section: `[title, text]` rules and the accepted bargains; absent when the game has none. */
+  readonly bargains?: HelpBargainsModel;
+}
+
+/** The help overlay's Bargains section. */
+export interface HelpBargainsModel {
+  readonly notes: readonly (readonly [string, string])[];
+  readonly taken: readonly HelpTakenBargainModel[];
+}
+
+interface HelpTakenBargainModel {
+  readonly label: string;
+  readonly who: string;
+  readonly gains: readonly string[];
+  readonly costs: readonly string[];
 }
 
 export interface IntentRowModel {
@@ -602,12 +639,44 @@ interface EndModel {
   readonly wave: number;
 }
 
-/** One open bargain offer as the HUD shows it. STUB (slice D): grows the cards, effect lines and countdown. */
-export interface BargainOfferModel {
-  readonly offer: number;
+/** One card of an open offer: generated text only (`describeBargain`), no ids to switch on. */
+export interface BargainCardModel {
+  /** `BargainDef.id`; what an accept sends. */
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: string;
+  readonly color: string;
+  /** Who benefits: a hero's label, or the team. */
+  readonly who: string;
+  readonly gains: readonly string[];
+  readonly costs: readonly string[];
+  /** Key that takes this card. */
+  readonly hotkey: string;
+  /** The human's choice for this offer was sent and this is the card chosen. */
+  readonly chosen: boolean;
 }
 
-/** The bargain part of the HUD. STUB (slice D). */
+/** One open bargain offer as the HUD shows it. */
+export interface BargainOfferModel {
+  readonly offer: number;
+  readonly wave: number;
+  /** Whole seconds left until it lapses (a lapse is a decline). */
+  readonly secondsLeft: number;
+  /** Time left over the window, 0..1; 0 when the window is unknown. */
+  readonly frac: number;
+  readonly cards: readonly BargainCardModel[];
+  /** The decline button's reward ("Ancient +4%"); empty when none. */
+  readonly declineReward: string;
+  readonly declineKey: string;
+  /** A resolution was sent and the offer is still open: every button is greyed. */
+  readonly inFlight: boolean;
+  /** The chosen action was Decline. */
+  readonly declined: boolean;
+  /** A human drives a hero, so the buttons do something. */
+  readonly enabled: boolean;
+}
+
+/** The bargain part of the HUD. */
 export interface BargainHudModel {
   readonly offers: readonly BargainOfferModel[];
 }
@@ -625,7 +694,7 @@ export interface HudModel {
   /** Undefined while help is closed. */
   readonly help: HelpModel | undefined;
   readonly end: EndModel | undefined;
-  /** Open bargain offers; undefined when there are none (always, until slice D). */
+  /** Open bargain offers; undefined when there are none . */
   readonly bargain: BargainHudModel | undefined;
 }
 
