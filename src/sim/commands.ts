@@ -11,7 +11,7 @@
 
 import { findById } from '../content/types.ts';
 import { applyIntentCommand } from '../intents/board.ts';
-import { applyBargainCommand } from './bargains.ts';
+import { applyBargainCommand, refreshHeroes } from './bargains.ts';
 import type { TickContext } from './context.ts';
 import { spawnEnemy } from './enemies.ts';
 import { commandHero, spawnHero } from './heroes/index.ts';
@@ -174,10 +174,13 @@ function isIntentShape(cmd: IntentCommand): boolean {
   }
 }
 
+/** Longest accepted bargain id in a command (the logged command stays small). */
+const MAX_CARD_ID = 64;
+
 function isBargainShape(cmd: BargainCommand): boolean {
   switch (cmd.op) {
     case 'accept':
-      return isId(cmd.offer) && typeof cmd.card === 'string' && cmd.card.length > 0;
+      return isId(cmd.offer) && typeof cmd.card === 'string' && cmd.card.length > 0 && cmd.card.length <= MAX_CARD_ID;
     case 'decline':
       return isId(cmd.offer);
     default:
@@ -325,6 +328,8 @@ function applySpawn(ctx: TickContext, cmd: SpawnCommand): void {
   const hero = findById(ctx.game.heroes, cmd.def);
   if (hero !== undefined) {
     spawnHero(ctx, hero, cmd.x, cmd.y);
+    // The new hero starts from its effective def (accepted bargains may patch maxHp, armour, speed).
+    refreshHeroes(ctx);
   }
 }
 

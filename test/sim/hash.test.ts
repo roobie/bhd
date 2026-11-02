@@ -79,7 +79,7 @@ function fixture(game = defaultGame()): Sim {
         { bargain: 'test-tithe', hero: 0 },
       ],
     });
-    sim.bargains.taken.push({ bargain: 'test-horde', offer: 1, hero: 0, tick: 5 });
+    sim.bargains.taken.push({ bargain: 'test-horde', offer: 1, hero: 0, tick: 5, wave: 1 });
   }
   return sim;
 }
