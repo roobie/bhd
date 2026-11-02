@@ -209,13 +209,17 @@ describe('lockstep over the loopback hub', () => {
       s.frame();
     }
     const offer = open();
-    expect(offer, 'the early offer opened').toBeDefined();
+    if (offer === undefined) {
+      throw new Error('the early offer did not open');
+    }
     const { heroes } = s.host.match.perception;
     const card = offer?.cards.find((c) => {
       const slot = heroes.find((h) => h.id === c.hero)?.slot;
       return slot !== undefined && !s.host.match.driven.includes(slot);
     });
-    expect(card, 'the offer holds a card of a bot-driven hero').toBeDefined();
+    if (card === undefined) {
+      throw new Error('the offer holds no card of a bot-driven hero');
+    }
     const botSlot = heroes.find((h) => h.id === card?.hero)?.slot as number;
     const accept: Command = {
       kind: 'bargain',

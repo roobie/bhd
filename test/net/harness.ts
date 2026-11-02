@@ -5,9 +5,9 @@
 // exercised too. Nothing here is gameplay: scripted inputs are arbitrary legal commands.
 
 import { defaultConfig } from '../../src/client/config.ts';
+import { specFromConfig } from '../../src/client/setup.ts';
 import { canStep, DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame, stepBudget } from '../../src/client/shell/frame.ts';
 import type { FrameClock } from '../../src/client/shell/types.ts';
-import { specFromConfig } from '../../src/client/setup.ts';
 import type { ConfigOverrides } from '../../src/content/overrides.ts';
 import type { Match } from '../../src/match/match.ts';
 import type { GameSpec } from '../../src/match/run.ts';

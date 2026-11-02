@@ -11,4 +11,6 @@ tag = "v1"
 new_sqlite_classes = ["Rooms"]
 
 # Secrets (set by the owner with `wrangler secret put`, never committed):
-#   TURN_KEY_ID, TURN_KEY_TOKEN   Cloudflare TURN key; without them /turn returns STUN only.
+#   TURN_KEY_ID, TURN_KEY_TOKEN   Cloudflare TURN key; without them the joined message carries STUN only.
+# Optional var (unset = every origin is allowed):
+#   ALLOWED_ORIGINS = "https://your-game.example,https://other.example"

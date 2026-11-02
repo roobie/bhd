@@ -359,35 +359,41 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
     }
   }
 
+  /** A seated, live peer's pause or resume for one of its own heroes, within the toggle rate. */
+  const mayToggle = (from: PeerId, by: number): boolean =>
+    seats.get(from)?.includes(by) === true && !down.has(from) && toggleAllowed(from);
+
+  /** Only checkpoints the host has itself reached and not yet settled, once per peer (M7). */
+  function onPeerHash(from: PeerId, tick: number, hash: string): void {
+    if (down.has(from) || !seats.has(from) || tick > match.tick || !mine.has(tick)) {
+      return;
+    }
+    const got = theirs.get(tick) ?? new Map<PeerId, string>();
+    if (!got.has(from)) {
+      got.set(from, hash);
+      theirs.set(tick, got);
+      compare(tick);
+    }
+  }
+
   const offMessage = transport.onMessage((from, msg) => {
     switch (msg.t) {
       case 'input':
         accept(from, msg.player, msg.cmd, msg.wantTick);
         break;
       case 'pause':
-        if (seats.get(from)?.includes(msg.by) === true && !down.has(from) && toggleAllowed(from)) {
+        if (mayToggle(from, msg.by)) {
           setPause(msg.by, msg.by);
         }
         break;
       case 'resume':
-        if (seats.get(from)?.includes(msg.by) === true && !down.has(from) && toggleAllowed(from)) {
+        if (mayToggle(from, msg.by)) {
           setPause(undefined, msg.by);
         }
         break;
-      case 'hash': {
-        // Only checkpoints the host has itself reached and not yet settled, once per peer (M7).
-        if (down.has(from) || !seats.has(from) || msg.tick > match.tick || !mine.has(msg.tick)) {
-          break;
-        }
-        const got = theirs.get(msg.tick) ?? new Map<PeerId, string>();
-        if (got.has(from)) {
-          break;
-        }
-        got.set(from, msg.hash);
-        theirs.set(msg.tick, got);
-        compare(msg.tick);
+      case 'hash':
+        onPeerHash(from, msg.tick, msg.hash);
         break;
-      }
       case 'bye':
         dropPeer(from);
         break;

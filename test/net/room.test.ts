@@ -3,13 +3,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   createRoom,
+  deliverAll,
   isRoomCode,
   joinRoom,
   leaveRoom,
   MAX_ROOM_PEERS,
+  originAllowed,
   parseClientMsg,
   relaySignal,
   roomCode,
+  withIceServers,
 } from '../../worker/room.ts';
 import { mintIceServers, STUN_ONLY } from '../../worker/turn.ts';
 
@@ -89,5 +92,44 @@ describe('turn', () => {
     });
     expect(got).toEqual(servers);
     expect(auth).toBe('Bearer t');
+  });
+});
+
+describe('ice delivery, origins and fan-out', () => {
+  it('puts the ICE servers on the joined message only', () => {
+    const room = createRoom();
+    joinRoom(room, 'a');
+    const b = joinRoom(room, 'b');
+    const ice = [{ urls: 'stun:x' }];
+    const out = b.ok ? withIceServers(b.out, ice) : [];
+    expect(out.map((o) => o.msg.t === 'joined' && o.msg.iceServers)).toEqual([ice, false]);
+  });
+
+  it('allows every origin when unset, and only the listed ones otherwise', () => {
+    expect(originAllowed(undefined, 'https://x')).toBe(true);
+    expect(originAllowed('', null)).toBe(true);
+    expect(originAllowed('*', 'https://x')).toBe(true);
+    expect(originAllowed('https://a, https://b', 'https://b')).toBe(true);
+    expect(originAllowed('https://a,https://b', 'https://c')).toBe(false);
+    expect(originAllowed('https://a', null)).toBe(false);
+  });
+
+  it('keeps delivering when one socket throws', () => {
+    const sent: string[] = [];
+    const failed = deliverAll(
+      [
+        { to: 'a', msg: { t: 'error', reason: '1' } },
+        { to: 'bad', msg: { t: 'error', reason: '2' } },
+        { to: 'c', msg: { t: 'error', reason: '3' } },
+      ],
+      (to) => {
+        if (to === 'bad') {
+          throw new Error('closed');
+        }
+        sent.push(to);
+      },
+    );
+    expect(sent).toEqual(['a', 'c']);
+    expect(failed).toEqual(['bad']);
   });
 });

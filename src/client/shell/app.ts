@@ -403,7 +403,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   function canStep(): boolean {
-    return canStepTick(match.tick, driver.steppable());
+    return canStepTick(match.tick, driver.steppable()) && driver.status() === 'running';
   }
 
   /** The networked part of the HUD input; absent in solo. */

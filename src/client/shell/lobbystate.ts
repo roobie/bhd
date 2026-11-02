@@ -54,6 +54,8 @@ export interface LobbyDeps {
   readonly fingerprint: string;
   readonly send: (peer: PeerId, msg: WireMsg) => void;
   readonly broadcast: (msg: WireMsg) => void;
+  /** Host: close the link of a peer that was refused for good (another build, a full room). */
+  readonly kick?: (peer: PeerId) => void;
   readonly mode?: Mode;
   readonly seed?: number;
 }
@@ -109,6 +111,8 @@ export function createLobby(deps: LobbyDeps): Lobby {
   let seed = deps.seed ?? 1;
   let phase: LobbyPhase = 'lobby';
   let error: LobbyError | undefined;
+  /** Set when refused only because a game is running: the host's next `hello` or `lobby` lets us in (L1). */
+  let retryable = false;
 
   const hello = (): WireMsg => ({ t: 'hello', abi: PROTOCOL_VERSION, fingerprint: deps.fingerprint, name: deps.name });
   const lobbyMsg = (): WireMsg => ({
@@ -176,11 +180,15 @@ export function createLobby(deps: LobbyDeps): Lobby {
     if (build !== undefined) {
       rejected.add(from);
       deps.send(from, { t: 'refuse', reason: build });
+      deps.kick?.(from);
       changed();
       return;
     }
     if (!live() || (!accepted.has(from) && accepted.size >= HERO_SLOTS - 1)) {
       deps.send(from, { t: 'refuse', reason: live() ? 'full' : 'started' });
+      if (live()) {
+        deps.kick?.(from); // 'started' keeps the link: the peer retries at the next lobby
+      }
       return;
     }
     accepted.add(from);
@@ -238,7 +246,17 @@ export function createLobby(deps: LobbyDeps): Lobby {
     if (isHost || from !== deps.host) {
       return;
     }
+    retryable = reason === 'started';
     fail('refused', REFUSAL_TEXT[reason]);
+  }
+
+  /** A refused joiner whose host is back in a lobby starts over: it says hello again. */
+  function recover(): void {
+    phase = 'lobby';
+    error = undefined;
+    retryable = false;
+    deps.send(deps.host, hello());
+    changed();
   }
 
   function onStartMsg(from: PeerId, msg: Start): void {
@@ -301,6 +319,9 @@ export function createLobby(deps: LobbyDeps): Lobby {
     }),
     receive(from, msg) {
       if (phase === 'error') {
+        if (retryable && !isHost && from === deps.host && (msg.t === 'hello' || msg.t === 'lobby')) {
+          recover();
+        }
         return;
       }
       if (msg.t === 'hello') {

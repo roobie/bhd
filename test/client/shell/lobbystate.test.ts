@@ -183,6 +183,52 @@ describe('lobby state', () => {
     expect(told).toEqual([{ t: 'refuse', reason: 'started' }]);
   });
 
+  it('a joiner refused because a game runs recovers when the host is back in a lobby (L1)', () => {
+    const sent: [string, WireMsg][] = [];
+    const late = createLobby({
+      self: 'x',
+      host: 'h',
+      name: 'x',
+      fingerprint: 'fp',
+      send: (p, m) => sent.push([p, m]),
+      broadcast: noop,
+    });
+    late.receive('h', { t: 'refuse', reason: 'started' });
+    expect(late.view().phase).toBe('error');
+    late.receive('h', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: 'n-h' });
+    expect(late.view().phase).toBe('lobby');
+    expect(late.view().error).toBeUndefined();
+    expect(sent.at(-1)).toEqual(['h', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: 'x' }]);
+    // A build mismatch stays final.
+    const wrong = createLobby({ self: 'y', host: 'h', name: 'y', fingerprint: 'fp', send: noop, broadcast: noop });
+    wrong.receive('h', { t: 'refuse', reason: 'fingerprint' });
+    wrong.receive('h', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: 'n-h' });
+    expect(wrong.view().phase).toBe('error');
+  });
+
+  it('the host cuts the link of a build mismatch and a full room, but not of a late joiner', () => {
+    const kicked: string[] = [];
+    const host = createLobby({
+      self: 'h',
+      host: 'h',
+      name: 'h',
+      fingerprint: 'fp',
+      send: noop,
+      broadcast: noop,
+      kick: (p) => kicked.push(p),
+    });
+    host.receive('m', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'other', name: 'm' });
+    expect(kicked).toEqual(['m']);
+    for (const p of ['a', 'b', 'c', 'd']) {
+      host.receive(p, { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: p });
+    }
+    expect(kicked).toEqual(['m', 'd']);
+    host.pick(0);
+    host.start();
+    host.receive('z', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: 'z' });
+    expect(kicked).toEqual(['m', 'd']);
+  });
+
   it('hello is sent to the host once a link is up', () => {
     const sent: [string, WireMsg][] = [];
     const l = createLobby({

@@ -28,13 +28,13 @@ Out: deploying the Worker (B), host migration, rejoin, adaptive delay, the wave-
 Plain git in this worktree, never pushed. No gameplay pinning tests.
 
 ## Now
-Done except the Opus review and the lead's merge.
+Opus review fixes (H1, H2, M1 to M7, L1 to L7) done in this branch; waiting for the re-review and the lead's merge.
 
 ## Next
-- Lead: merge, ask B to deploy the Worker and set the TURN secrets.
+- Lead: merge, ask B to deploy the Worker, set the TURN secrets and `ALLOWED_ORIGINS` (unset = every origin).
 
 ## Evidence
-See the wave STATE.md Evidence section.
+See the wave STATE.md Evidence section. Review fixes: `npm run ci` green; test/net halts every peer at the host's pause tick (seeds 21-23); flood, oversized-seal, racing-accept, pause-input tests; rtc fake-timer tests; broadcast lock-election tests; ws events; lobby recovery.
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -46,6 +46,11 @@ See the wave STATE.md Evidence section.
 - [ ] learning: mountShell builds its driver twice (the eager one, then the setup `restart()`); disposing the first sent `bye`, so a networked game ended on every peer at tick 0. The shell now builds an injected driver only in `restart()`. Only a real two-page run showed it: the in-process harness never goes through the shell.
 - [ ] learning: lit keeps its render state on the root element, so a second game needs a fresh HUD root (and canvas) rather than `replaceChildren()`.
 
+- [ ] learning: the harness drove peers with its own target maths, so the pause-boundary bug (host and clients halting at different ticks) passed every test; driving peers through the shell's pure `planFrame` / `stepBudget` / `canStep` is what exposed it.
+- [ ] decision: ICE servers travel in the room's `joined` message and `/turn` is gone; `ALLOWED_ORIGINS` limits `/new` and `/ws` (unset allows every origin).
+- [ ] backlog: a rate-limited `/new` or per-IP join limit in the Worker (origin checks are not authentication).
+
 ## Log
+- 2026-11-02 review fixes: lockstep host hardening, rtc timeouts, lock-based host election, ICE in joined, coop end/kick/bye
 - 2026-11-02 initialized
 - 2026-11-02 execute: wiring, types, wire, fingerprint, determinism, two-tab script

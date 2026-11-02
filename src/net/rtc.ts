@@ -9,16 +9,23 @@
 // link (unknown, or already down) are dropped. `onPeer` reports 'up' when the channel opens and 'down'
 // once, when it closes, the connection fails or closes, or signalling reports the peer left.
 //
+// Bounds (M4): a link that has not opened in 15 s is abandoned ('down' fires, its queue is dropped), a
+// queue past 256 messages abandons the link, and a send that throws on an open link is a drop too.
+// `disconnect(peer)` closes a link a second later, so a final `refuse` still gets out.
+//
 // Importable in Node: nothing touches `RTCPeerConnection` until a transport is created.
 
-import type { PeerId, PeerState, Signalling, SignalPayload, Transport, Unsubscribe, WireMsg } from './types.ts';
+import type {
+  IceServer,
+  PeerId,
+  PeerState,
+  Signalling,
+  SignalPayload,
+  Transport,
+  Unsubscribe,
+  WireMsg,
+} from './types.ts';
 import { decodeMsg, encodeMsg } from './types.ts';
-
-export interface IceServer {
-  readonly urls: string | readonly string[];
-  readonly username?: string;
-  readonly credential?: string;
-}
 
 export interface RtcOptions {
   readonly self: PeerId;
@@ -34,6 +41,13 @@ const DEFAULT_ICE_SERVERS: readonly IceServer[] = [{ urls: 'stun:stun.cloudflare
 
 const CHANNEL_LABEL = 'bhd';
 
+/** A link that has not opened by then is abandoned (M4): 'down' fires and its queue is dropped. */
+const OPEN_TIMEOUT_MS = 15_000;
+/** Most messages buffered for a link that is not open yet; one more and the link is abandoned. */
+const MAX_QUEUE = 256;
+/** How long a refused peer's link stays up after `disconnect`, so the last message (`refuse`) gets out. */
+const DISCONNECT_DELAY_MS = 1000;
+
 interface Link {
   readonly peer: PeerId;
   readonly pc: RTCPeerConnection;
@@ -45,6 +59,8 @@ interface Link {
   remoteSet: boolean;
   up: boolean;
   dead: boolean;
+  /** The open-timeout timer, cleared once the link opens or dies. */
+  timer: ReturnType<typeof setTimeout> | undefined;
 }
 
 /** Runs a promise to completion; every async path here handles its own errors. */
@@ -66,6 +82,7 @@ export function createRtcTransport(options: RtcOptions): Transport {
   const links = new Map<PeerId, Link>();
   const messageCbs = new Set<(from: PeerId, msg: WireMsg) => void>();
   const peerCbs = new Set<(peer: PeerId, state: PeerState) => void>();
+  const badCbs = new Set<(from: PeerId, reason: string) => void>();
   const unsubs: Unsubscribe[] = [];
   let closed = false;
 
@@ -87,6 +104,7 @@ export function createRtcTransport(options: RtcOptions): Transport {
       return;
     }
     link.dead = true;
+    clearTimeout(link.timer);
     const wasUp = link.up;
     link.up = false;
     link.queue = [];
@@ -104,12 +122,23 @@ export function createRtcTransport(options: RtcOptions): Transport {
     }
   }
 
+  /** Abandons a link that never opened (timeout, queue overflow): 'down' fires even though 'up' never did. */
+  function abandon(link: Link, why: string): void {
+    if (link.dead) {
+      return;
+    }
+    log('abandoned', link.peer, why);
+    kill(link);
+    emitPeer(link.peer, 'down');
+  }
+
   function wireChannel(link: Link, channel: RTCDataChannel): void {
     link.channel = channel;
     const onOpen = (): void => {
       if (link.dead || closed) {
         return;
       }
+      clearTimeout(link.timer);
       link.up = true;
       emitPeer(link.peer, 'up');
       const queued = link.queue;
@@ -134,20 +163,31 @@ export function createRtcTransport(options: RtcOptions): Transport {
     const res = typeof data === 'string' ? decodeMsg(data) : ({ ok: false, reason: 'not text' } as const);
     if (!res.ok) {
       log('dropped message from', link.peer, res.reason);
+      fanOut(badCbs, link.peer, res.reason);
       return;
     }
-    for (const cb of [...messageCbs]) {
+    fanOut(messageCbs, link.peer, res.msg);
+  }
+
+  /** Calls every callback in `cbs` (a snapshot, so they may unsubscribe) unless the transport closed meanwhile. */
+  function fanOut<A, B>(cbs: ReadonlySet<(a: A, b: B) => void>, a: A, b: B): void {
+    for (const cb of [...cbs]) {
       if (!closed) {
-        cb(link.peer, res.msg);
+        cb(a, b);
       }
     }
   }
 
   function sendText(link: Link, text: string): void {
+    if (link.dead) {
+      return;
+    }
     try {
       link.channel?.send(text);
     } catch (e) {
+      // A throwing send on an open link means the message is lost: that is a drop, so the link goes down.
       log('send failed', link.peer, e);
+      kill(link);
     }
   }
 
@@ -162,7 +202,9 @@ export function createRtcTransport(options: RtcOptions): Transport {
       remoteSet: false,
       up: false,
       dead: false,
+      timer: undefined,
     };
+    link.timer = setTimeout(() => abandon(link, 'did not open in time'), OPEN_TIMEOUT_MS);
     pc.onicecandidate = (ev) => {
       if (ev.candidate && !link.dead && !closed) {
         signalling.relay(peer, { kind: 'ice', data: JSON.stringify(ev.candidate.toJSON()) });
@@ -290,6 +332,8 @@ export function createRtcTransport(options: RtcOptions): Transport {
     const text = encodeMsg(msg);
     if (link.up) {
       sendText(link, text);
+    } else if (link.queue.length >= MAX_QUEUE) {
+      abandon(link, 'send queue full');
     } else {
       link.queue.push(text);
     }
@@ -311,6 +355,16 @@ export function createRtcTransport(options: RtcOptions): Transport {
       peerCbs.add(cb);
       return () => peerCbs.delete(cb);
     },
+    onBad: (cb) => {
+      badCbs.add(cb);
+      return () => badCbs.delete(cb);
+    },
+    disconnect: (peer) => {
+      const link = links.get(peer);
+      if (link) {
+        setTimeout(() => kill(link), DISCONNECT_DELAY_MS);
+      }
+    },
     close: () => {
       if (closed) {
         return;
@@ -321,6 +375,7 @@ export function createRtcTransport(options: RtcOptions): Transport {
       }
       for (const link of [...links.values()]) {
         link.dead = true;
+        clearTimeout(link.timer);
         try {
           link.channel?.close();
           link.pc.close();
@@ -331,6 +386,7 @@ export function createRtcTransport(options: RtcOptions): Transport {
       links.clear();
       messageCbs.clear();
       peerCbs.clear();
+      badCbs.clear();
     },
   };
 }
