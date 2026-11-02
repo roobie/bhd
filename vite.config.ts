@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { configDefaults, defineConfig } from 'vitest/config';
-import { fingerprint, NET_FINGERPRINT_FILES } from './src/reporter/fingerprint.ts';
+import { fingerprint, NET_FINGERPRINT_FILES } from './tools/fingerprint.ts';
 
 // Tests that run in browsers too: they must not import node:*.
 const BROWSER_TESTS = [

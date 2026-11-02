@@ -165,7 +165,7 @@ describe('lockstep over the loopback hub', () => {
     expect(s.host.driver.log().seals.some((seal) => seal.inputs.some((i) => i.cmd.kind === 'bargain'))).toBe(false);
   });
 
-  it('a human accepts a bot hero\'s bargain card: the host seals it as the slot player and every peer agrees', () => {
+  it("a human accepts a bot hero's bargain card: the host seals it as the slot player and every peer agrees", () => {
     // An offer after wave 1 keeps the run short; slots 2 and 3 stay bots.
     const s = new Session({
       peers: 2,
@@ -181,7 +181,7 @@ describe('lockstep over the loopback hub', () => {
     }
     const offer = open();
     expect(offer, 'the early offer opened').toBeDefined();
-    const heroes = s.host.match.perception.heroes;
+    const { heroes } = s.host.match.perception;
     const card = offer?.cards.find((c) => {
       const slot = heroes.find((h) => h.id === c.hero)?.slot;
       return slot !== undefined && !s.host.match.driven.includes(slot);
@@ -189,7 +189,12 @@ describe('lockstep over the loopback hub', () => {
     expect(card, 'the offer holds a card of a bot-driven hero').toBeDefined();
     const botSlot = heroes.find((h) => h.id === card?.hero)?.slot as number;
     // Peer 1 (a client seated at slot 1) resolves a card that belongs to the bot hero of `botSlot`.
-    s.peers[1]?.driver.submit(botSlot, { kind: 'bargain', op: 'accept', offer: offer?.id as number, card: card?.bargain as string });
+    s.peers[1]?.driver.submit(botSlot, {
+      kind: 'bargain',
+      op: 'accept',
+      offer: offer?.id as number,
+      card: card?.bargain as string,
+    });
     s.runUntil(s.host.match.tick + 120);
     s.drain();
     const sealed = s.host.driver

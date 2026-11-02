@@ -36,11 +36,11 @@ import type {
 import { isPeerCommand } from './types.ts';
 
 /** Ticks between the hash checkpoints peers exchange. */
-export const CHECK_EVERY = 30;
+const CHECK_EVERY = 30;
 /** How far past the sealed tick a peer may ask an input to apply (bounds hostile `wantTick`s). */
 const MAX_AHEAD = 600;
 
-export interface LockstepOptions {
+interface LockstepOptions {
   readonly match: Match;
   readonly transport: Transport;
   /** Input delay in ticks (the `start` message's `delay`). */
@@ -73,7 +73,7 @@ export interface ClientOptions extends LockstepOptions {
 }
 
 /** Why a session ended. */
-export type EndReason = 'game' | 'host-left' | 'closed';
+type EndReason = 'game' | 'host-left' | 'closed';
 
 /** A `TickDriver` plus what the shell needs from a networked game. */
 export interface LockstepDriver extends TickDriver {

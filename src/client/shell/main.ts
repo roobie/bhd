@@ -3,11 +3,14 @@
 // co-op through coop.ts. `#room=new` makes a fresh code first (the signalling worker's `/new`, or a
 // `local-*` code when no signalling server is configured).
 
-import { makeRoomCode } from './lobbystate.ts';
 import { mountShell } from './app.ts';
-import { mountCoop } from './coop.ts';
 import { parseRoomConfig, parseShellHash, parseSignalOrigin, signalOrigin } from './config.ts';
+import { mountCoop } from './coop.ts';
 import { createFeedback } from './feedback.ts';
+import { makeRoomCode } from './lobbystate.ts';
+
+const HASH_PREFIX = /^#/u;
+const WS_PREFIX = /^ws/u;
 
 /** The signalling origin: `#signal=` wins over the build's `VITE_BHD_SIGNAL`; absent by default. */
 function configuredOrigin(): string | undefined {
@@ -20,14 +23,14 @@ function configuredOrigin(): string | undefined {
 
 /** Replaces `room=new` in the URL with a fresh code and returns the new hash. */
 async function resolveNewRoom(origin: string | undefined): Promise<void> {
-  const params = new URLSearchParams(globalThis.location.hash.replace(/^#/u, ''));
+  const params = new URLSearchParams(globalThis.location.hash.replace(HASH_PREFIX, ''));
   if (params.get('room')?.toLowerCase() !== 'new') {
     return;
   }
   let code = `local-${makeRoomCode(Math.random).toLowerCase()}${makeRoomCode(Math.random).toLowerCase()}`;
   if (origin !== undefined) {
     try {
-      const res = await fetch(`${origin.replace(/^ws/u, 'http')}/new`);
+      const res = await fetch(`${origin.replace(WS_PREFIX, 'http')}/new`);
       const body = (await res.json()) as { room?: unknown };
       if (typeof body.room === 'string') {
         code = body.room;
@@ -70,4 +73,4 @@ async function main(): Promise<void> {
   await coop.ready;
 }
 
-void main();
+main().catch(() => undefined);

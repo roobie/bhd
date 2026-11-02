@@ -32,7 +32,7 @@ describe('determinism (node)', () => {
     expect(runSim(SEED, replay, TICKS)).toEqual(events);
   });
 
-  it('replaying the seals of a host-style run reproduces its events, with a bot hero\'s card accepted as the slot', () => {
+  it("replaying the seals of a host-style run reproduces its events, with a bot hero's card accepted as the slot", () => {
     const run = runSealed();
     const replay = replayInputs(run.spec, run.seals);
     expect(replay).toEqual(run.events);

@@ -1,6 +1,7 @@
 // The shared determinism scenario. Runs unchanged in Node and in browsers (no Node imports), and
 // browsers compare their result to the one Node computes in reference.setup.ts: that is how "browser matches Node" is proven.
 
+import { shellSpec } from '../../src/client/shell/config.ts';
 import { defaultBotSetup } from '../../src/content/bots.ts';
 import { defaultDirector, defaultMaster } from '../../src/content/director.ts';
 import type { GameConfig } from '../../src/content/index.ts';
@@ -17,7 +18,6 @@ import {
   PI,
   sin,
 } from '../../src/detmath/index.ts';
-import { shellSpec } from '../../src/client/shell/config.ts';
 import { Match } from '../../src/match/match.ts';
 import type { GameSpec } from '../../src/match/run.ts';
 import { buildMatch } from '../../src/match/run.ts';
@@ -317,7 +317,7 @@ function runControlMatch(): MatchResult {
 const SEALED_TICKS = 1900;
 
 /** A networked-style spec: two humans, an offer after wave 1, so a bot hero's card is up inside the run. */
-export function sealedSpec(): GameSpec {
+function sealedSpec(): GameSpec {
   return {
     ...shellSpec({ seed: SEED, mode: 'schedule', drive: [0, 1] }),
     networked: true,
@@ -346,36 +346,10 @@ export function runSealed(): SealedRun {
   let answered = 0;
   while (match.tick < SEALED_TICKS && !match.ended) {
     const t = match.tick + 1;
-    const inputs: SealedInput[] = [];
-    const hero = (slot: number): number => match.perception.heroes.find((h) => h.slot === slot)?.id ?? 0;
-    if (t % 45 === 0) {
-      inputs.push({ player: 0, cmd: { kind: 'move', hero: hero(0), x: 8 + (t % 90), y: 14 } });
-    }
-    if (t % 70 === 0) {
-      inputs.push({ player: 1, cmd: { kind: 'move', hero: hero(1), x: 30 - (t % 60), y: 18 } });
-    }
-    if (t === 60) {
-      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'bot' } });
-    }
-    if (t === 400) {
-      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'human' } });
-    }
-    if (t === 800) {
-      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'bargainPolicy', policy: 'human' } });
-    }
-    const offer = match.sim.bargains?.offers[0];
-    if (offer !== undefined && answered < 2) {
-      // The bot hero's card first (accepted by a human as the hero's slot), the leftovers declined.
-      const bot = offer.cards.find((c) => {
-        const slot = match.perception.heroes.find((h) => h.id === c.hero)?.slot;
-        return slot !== undefined && !match.driven.includes(slot);
-      });
-      const slot = match.perception.heroes.find((h) => h.id === bot?.hero)?.slot;
-      if (bot !== undefined && slot !== undefined) {
-        inputs.push({ player: slot, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: bot.bargain } });
-      } else {
-        inputs.push({ player: 1, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
-      }
+    const inputs = sealedMoves(match, t);
+    const answer = sealedAnswer(match, answered);
+    if (answer !== undefined) {
+      inputs.push(answer);
       answered += 1;
     }
     inputs.sort((a, b) => a.player - b.player);
@@ -386,6 +360,46 @@ export function runSealed(): SealedRun {
     events.push(...match.step());
   }
   return { spec, seals, events };
+}
+
+/** Tick `t`'s human moves and SYSTEM control handovers (a policy flip too). */
+function sealedMoves(match: Match, t: number): SealedInput[] {
+  const inputs: SealedInput[] = [];
+  const hero = (slot: number): number => match.perception.heroes.find((h) => h.slot === slot)?.id ?? 0;
+  if (t % 45 === 0) {
+    inputs.push({ player: 0, cmd: { kind: 'move', hero: hero(0), x: 8 + (t % 90), y: 14 } });
+  }
+  if (t % 70 === 0) {
+    inputs.push({ player: 1, cmd: { kind: 'move', hero: hero(1), x: 30 - (t % 60), y: 18 } });
+  }
+  if (t === 60) {
+    inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'bot' } });
+  }
+  if (t === 400) {
+    inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'human' } });
+  }
+  if (t === 800) {
+    inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'bargainPolicy', policy: 'human' } });
+  }
+  return inputs;
+}
+
+/** The answer to the open offer: a bot hero's card accepted by a human as that hero's slot, else a decline. Two at most. */
+function sealedAnswer(match: Match, answered: number): SealedInput | undefined {
+  const offer = match.sim.bargains?.offers[0];
+  if (offer === undefined || answered >= 2) {
+    return undefined;
+  }
+  const slotOf = (hero: number): number | undefined => match.perception.heroes.find((h) => h.id === hero)?.slot;
+  const bot = offer.cards.find((c) => {
+    const slot = slotOf(c.hero);
+    return slot !== undefined && !match.driven.includes(slot);
+  });
+  const slot = bot === undefined ? undefined : slotOf(bot.hero);
+  if (bot !== undefined && slot !== undefined) {
+    return { player: slot, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: bot.bargain } };
+  }
+  return { player: 1, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } };
 }
 
 interface MatchResult {
@@ -599,7 +613,8 @@ export function runScenario(): ScenarioResult {
   const run = runSealed();
   return {
     sealed: summarise(replayInputs(run.spec, run.seals)),
-    sealedAccepts: run.seals.flatMap((x) => x.inputs).filter((i) => i.cmd.kind === 'bargain' && i.cmd.op === 'accept').length,
+    sealedAccepts: run.seals.flatMap((x) => x.inputs).filter((i) => i.cmd.kind === 'bargain' && i.cmd.op === 'accept')
+      .length,
     match: runMatch(),
     master: summarise(runMasterSim(SEED, MASTER_TICKS)),
     bargains: summarise(runBargainSim(SEED, TICKS)),

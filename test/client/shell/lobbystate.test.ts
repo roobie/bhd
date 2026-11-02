@@ -3,6 +3,8 @@ import { parseRoomConfig, parseShellHash } from '../../../src/client/shell/confi
 import { createLobby, type Lobby, makeRoomCode, START_DELAY } from '../../../src/client/shell/lobbystate.ts';
 import { type PeerId, PROTOCOL_VERSION, type WireMsg } from '../../../src/net/types.ts';
 
+const FULL = /full/u;
+
 const noop = (): void => undefined;
 const FOUR_LETTERS = /^[A-Z]{4}$/u;
 
@@ -150,6 +152,35 @@ describe('lobby state', () => {
     expect(r.get('h').view().slots).toEqual([null, null, null, null]);
     r.get('a').peerDown('h');
     expect(r.get('a').view().error?.kind).toBe('host-lost');
+  });
+
+  it('slot holders see every name; a joiner refused for a full room or a started game is told why', () => {
+    const r = room(['h', 'a', 'b', 'c', 'd']);
+    r.get('h').pick(0);
+    r.get('a').pick(1);
+    r.get('b').pick(2);
+    // h, a, b, c fill the room; d is the fifth peer.
+    expect(r.get('d').view().error?.message).toMatch(FULL);
+    expect(r.get('d').view().error?.kind).toBe('refused');
+    expect(r.get('b').view().names.get('a')).toBe('n-a');
+    expect(r.get('a').view().names.get('b')).toBe('n-b');
+    expect(r.get('h').start()).toBe(true);
+    const late = createLobby({ self: 'x', host: 'h', name: 'x', fingerprint: 'fp', send: noop, broadcast: noop });
+    late.receive('h', { t: 'refuse', reason: 'started' });
+    expect(late.view().error?.kind).toBe('refused');
+    const told: WireMsg[] = [];
+    const host = createLobby({
+      self: 'h',
+      host: 'h',
+      name: 'h',
+      fingerprint: 'fp',
+      send: (_p, m) => told.push(m),
+      broadcast: noop,
+    });
+    host.pick(0);
+    host.start();
+    host.receive('x', { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'fp', name: 'x' });
+    expect(told).toEqual([{ t: 'refuse', reason: 'started' }]);
   });
 
   it('hello is sent to the host once a link is up', () => {

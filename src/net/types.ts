@@ -7,9 +7,9 @@
 // Pure: no DOM, no clocks, no sockets. Messages are plain JSON.
 
 import type { GameSpec, Mode } from '../match/run.ts';
-import type { SimEvent } from '../sim/events.ts';
 import type { Command } from '../sim/commands.ts';
 import { canonicalCommand, HERO_SLOTS, isValidCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
+import type { SimEvent } from '../sim/events.ts';
 
 /** Wire protocol version; a `hello` with another value is refused. Bump on any change to `WireMsg`. */
 export const PROTOCOL_VERSION = 2;

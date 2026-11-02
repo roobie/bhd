@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PURE_DIRS } from '../match/pureDirs.ts';
+import { PURE_DIRS } from '../src/match/pureDirs.ts';
 
 /**
  * Files outside the pure dirs that the lockstep protocol depends on: peers must run the same

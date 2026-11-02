@@ -6,10 +6,10 @@
 
 import { defaultConfig } from '../../src/client/config.ts';
 import { specFromConfig } from '../../src/client/setup.ts';
+import type { ConfigOverrides } from '../../src/content/overrides.ts';
 import type { Match } from '../../src/match/match.ts';
 import type { GameSpec } from '../../src/match/run.ts';
 import { buildMatch } from '../../src/match/run.ts';
-import type { ConfigOverrides } from '../../src/content/overrides.ts';
 import { netDriver } from '../../src/net/driver.ts';
 import { replayInputs } from '../../src/net/inputlog.ts';
 import type { LockstepDriver } from '../../src/net/lockstep.ts';
@@ -159,7 +159,7 @@ export class Session {
   }
 }
 
-export function hashesOf(p: PeerRig): string[] {
+function hashesOf(p: PeerRig): string[] {
   return p.driver.log().hashes.map((h) => `${h.tick}:${h.hash}`);
 }
 

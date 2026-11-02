@@ -15,10 +15,10 @@ import type { Presentation, Targeting } from '../../content/presentation.ts';
 import type { MapDef } from '../../content/types.ts';
 import type { Match } from '../../match/match.ts';
 import type { GameSpec, Mode } from '../../match/run.ts';
+import type { DriverStatus, TickDriver } from '../../net/types.ts';
 import type { Perception } from '../../perception/types.ts';
 import type { Command } from '../../sim/commands.ts';
 import type { EntityKind, Team } from '../../sim/entities.ts';
-import type { DriverStatus, TickDriver } from '../../net/types.ts';
 import type { FeedbackSink } from './feedbackSink.ts';
 
 // ---------------------------------------------------------------------------------------------

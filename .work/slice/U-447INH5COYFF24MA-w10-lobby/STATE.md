@@ -33,7 +33,7 @@ Done; committed, awaiting merge.
 - npm run ci exit 0 (node 1097 tests, browser 135).
 
 ## Harvest
-- [ ] backlog: a wire field for peer names in `lobby` so joiners see each other's names.
+- [x] backlog: a wire field for peer names in `lobby` so joiners see each other's names. Done in integration: `lobby.names`, PROTOCOL_VERSION 2.
 
 ## Log
 - 2026-11-02 initialized

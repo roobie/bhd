@@ -7,6 +7,8 @@
   "files": { "includes": ["**", "!**/dist", "!**/package-lock.json", "!**/__snapshots__", "!**/*.md", "!.work"] },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": {
+    // Build-time constants vite injects (`define`; declared in src/globals.d.ts).
+    "globals": ["__BHD_FINGERPRINT__"],
     "formatter": { "quoteStyle": "single", "trailingCommas": "all", "arrowParentheses": "always" }
   },
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
@@ -91,7 +93,7 @@
     {
       // Node is allowed only in CLIs, tests and build config; sim and client code stay browser-pure.
       // src/reporter is a headless Node CLI by design (DESIGN.md §6.5).
-      "includes": ["src/reporter/**", "test/**", "vite.config.ts"],
+      "includes": ["src/reporter/**", "test/**", "vite.config.ts", "tools/**"],
       "linter": { "rules": { "correctness": { "noNodejsModules": "off" } } }
     },
     {
@@ -100,9 +102,20 @@
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
     },
     {
-      // Vite requires a default export.
+      // Vite requires a default export, and its `define` keys are the globals' names.
       "includes": ["vite.config.ts"],
-      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+      "linter": { "rules": { "style": { "noDefaultExport": "off", "useNamingConvention": "off" } } }
+    },
+    {
+      // The by-hand two-tab script: a Node CLI that polls and reports to the terminal.
+      "includes": ["test/net/two-tabs.e2e.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConsole": "off" },
+          "style": { "noProcessEnv": "off" },
+          "performance": { "noAwaitInLoops": "off" }
+        }
+      }
     }
   ]
 }

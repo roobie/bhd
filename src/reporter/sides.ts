@@ -3,6 +3,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fingerprint } from '../../tools/fingerprint.ts';
 import type { ConfigOverrides } from '../content/overrides.ts';
 import { ensureSnapshot, git, resolveSha } from './snapshot.ts';
 import type { ResolvedSide, SideSpec } from './types.ts';
@@ -31,8 +32,6 @@ export function parseSide(text: string): SideSpec {
   }
   return text.endsWith('.json') ? { kind: 'overrides', path: text } : { kind: 'ref', ref: text };
 }
-
-import { fingerprint } from './fingerprint.ts';
 
 function readOverrides(path: string, cwd: string): ConfigOverrides {
   const file = resolve(cwd, path);

@@ -158,24 +158,10 @@ export function createLobby(deps: LobbyDeps): Lobby {
   }
 
   function onHello(from: PeerId, msg: Extract<WireMsg, { t: 'hello' }>): void {
-    const bad = mismatch(msg);
     if (isHost) {
-      const build = refusal(msg);
-      if (build !== undefined) {
-        rejected.add(from);
-        deps.send(from, { t: 'refuse', reason: build });
-        changed();
-        return;
-      }
-      if (!live() || (!accepted.has(from) && accepted.size >= HERO_SLOTS - 1)) {
-        deps.send(from, { t: 'refuse', reason: live() ? 'full' : 'started' });
-        return;
-      }
-      accepted.add(from);
-      names.set(from, msg.name);
-      deps.send(from, lobbyMsg());
-      changed();
+      hostOnHello(from, msg);
     } else if (from === deps.host) {
+      const bad = mismatch(msg);
       if (bad !== undefined) {
         fail('mismatch', bad);
         return;
@@ -183,6 +169,24 @@ export function createLobby(deps: LobbyDeps): Lobby {
       names.set(from, msg.name);
       changed();
     }
+  }
+
+  function hostOnHello(from: PeerId, msg: Extract<WireMsg, { t: 'hello' }>): void {
+    const build = refusal(msg);
+    if (build !== undefined) {
+      rejected.add(from);
+      deps.send(from, { t: 'refuse', reason: build });
+      changed();
+      return;
+    }
+    if (!live() || (!accepted.has(from) && accepted.size >= HERO_SLOTS - 1)) {
+      deps.send(from, { t: 'refuse', reason: live() ? 'full' : 'started' });
+      return;
+    }
+    accepted.add(from);
+    names.set(from, msg.name);
+    deps.send(from, lobbyMsg());
+    changed();
   }
 
   /** Host: a joiner's request. Only its own entries count. */

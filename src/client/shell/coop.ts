@@ -9,11 +9,11 @@
 // While a game runs the host answers a late `hello` with `refuse {started}`; the transport, the
 // signalling and the room stay up across games.
 
+import { netDriver } from '../../net/driver.ts';
 import { createRtcTransport, type IceServer } from '../../net/rtc.ts';
 import { createBroadcastSignalling, isLocalRoom } from '../../net/signal/broadcast.ts';
 import { createWsSignalling } from '../../net/signal/ws.ts';
 import type { PeerId, Signalling, Transport, WireMsg } from '../../net/types.ts';
-import { netDriver } from '../../net/driver.ts';
 import { mountShell } from './app.ts';
 import type { FeedbackSink } from './feedbackSink.ts';
 import { type LobbyHandle, mountLobby } from './lobby.ts';
@@ -37,9 +37,17 @@ export interface CoopDeps {
   /** Milliseconds clock; default `performance.now`. */
   readonly now?: () => number;
   /** Test and automation hook: called with the live shell and driver of each game. */
-  readonly onGame?: (game: { readonly shell: ShellHandle; readonly driver: ReturnType<ReturnType<typeof netDriver>> }) => void;
+  readonly onGame?: (game: {
+    readonly shell: ShellHandle;
+    readonly driver: ReturnType<ReturnType<typeof netDriver>>;
+  }) => void;
   /** Test hook: replaces the transport factory. */
-  readonly createTransport?: (self: PeerId, host: PeerId, signalling: Signalling, ice: readonly IceServer[]) => Transport;
+  readonly createTransport?: (
+    self: PeerId,
+    host: PeerId,
+    signalling: Signalling,
+    ice: readonly IceServer[],
+  ) => Transport;
 }
 
 export interface CoopHandle {
@@ -63,6 +71,17 @@ async function fetchIce(origin: string): Promise<readonly IceServer[] | undefine
   } catch {
     return undefined;
   }
+}
+
+/** Broadcast signalling for local rooms; otherwise the ws server (and its TURN credentials) at `origin`. */
+async function openSignalling(
+  room: string,
+  origin: string | undefined,
+): Promise<{ readonly signalling: Signalling; readonly ice: readonly IceServer[] }> {
+  if (isLocalRoom(room) || origin === undefined) {
+    return { signalling: createBroadcastSignalling(), ice: [] };
+  }
+  return { signalling: createWsSignalling(origin), ice: (await fetchIce(origin)) ?? [] };
 }
 
 function showError(root: HTMLElement, title: string, message: string): void {
@@ -95,7 +114,7 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
   let lobby: LobbyHandle | undefined;
   let shell: ShellHandle | undefined;
   let feedback: FeedbackSink | undefined;
-  let canvas = deps.els.canvas;
+  let { canvas, hud } = deps.els;
   let games = 0;
 
   function enterLobby(): void {
@@ -120,16 +139,21 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
     }
   }
 
-  /** A fresh canvas for every game after the first: a WebGL context is not reused across shells. */
-  function freshCanvas(): HTMLCanvasElement {
+  /**
+   * Fresh canvas and HUD root for every game after the first: a WebGL context is not reused across
+   * shells, and lit keeps its render state on the root element it was given.
+   */
+  function freshElements(): ShellElements {
     if (games > 0) {
-      const next = canvas.cloneNode(false) as HTMLCanvasElement;
-      canvas.replaceWith(next);
-      canvas = next;
+      const nextCanvas = canvas.cloneNode(false) as HTMLCanvasElement;
+      canvas.replaceWith(nextCanvas);
+      canvas = nextCanvas;
+      const nextHud = hud.cloneNode(false) as HTMLElement;
+      hud.replaceWith(nextHud);
+      hud = nextHud;
     }
     games += 1;
-    deps.els.hud.replaceChildren();
-    return canvas;
+    return { canvas, hud };
   }
 
   function startGame(start: Start): void {
@@ -155,7 +179,7 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
     const make = netDriver({ transport: t, start: { ...start, spec }, host, now });
     let driver: ReturnType<typeof make> | undefined;
     const opened = mountShell(
-      { canvas: freshCanvas(), hud: deps.els.hud },
+      freshElements(),
       { seed: spec.seed, mode: spec.mode, drive: humans },
       {
         spec,
@@ -250,12 +274,10 @@ export function mountCoop(deps: CoopDeps): CoopHandle {
       return;
     }
     try {
-      const origin = deps.signalOrigin;
-      signalling = local || origin === undefined ? createBroadcastSignalling() : createWsSignalling(origin);
-      const ice = !local && origin !== undefined ? ((await fetchIce(origin)) ?? []) : [];
+      const { signalling: sig, ice } = await openSignalling(deps.room, deps.signalOrigin);
+      signalling = sig;
       const info = await signalling.join(deps.room);
-      self = info.self;
-      host = info.host;
+      ({ self, host } = info);
       const options = ice.length > 0 ? { iceServers: ice } : {};
       transport =
         deps.createTransport?.(self, host, signalling, ice) ??

@@ -25,5 +25,5 @@
     "allowUnusedLabels": false,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "test", "worker", "vite.config.ts"]
+  "include": ["src", "test", "worker", "tools", "vite.config.ts"]
 }

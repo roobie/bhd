@@ -92,18 +92,21 @@ export function parseRoomConfig(hash: string, search = ''): RoomConfig {
  * ws(s) URL without path, query or credentials, else undefined. The build default is the caller's.
  */
 export function parseSignalOrigin(hash: string, search = ''): string | undefined {
-  const text = new URLSearchParams(hash.replace(HASH_PREFIX, '')).get('signal') ?? new URLSearchParams(search).get('signal');
+  const text =
+    new URLSearchParams(hash.replace(HASH_PREFIX, '')).get('signal') ?? new URLSearchParams(search).get('signal');
   if (text === null) {
     return undefined;
   }
   return signalOrigin(text);
 }
 
+const ORIGIN_SCHEME = /^(?:https?|wss?):$/u;
+
 /** `text` as a signalling origin (scheme://host[:port]) when it is a valid http(s)/ws(s) URL, else undefined. */
 export function signalOrigin(text: string): string | undefined {
   try {
     const url = new URL(text.trim());
-    return /^(?:https?|wss?):$/u.test(url.protocol) && url.username === '' && url.host !== '' ? url.origin : undefined;
+    return ORIGIN_SCHEME.test(url.protocol) && url.username === '' && url.host !== '' ? url.origin : undefined;
   } catch {
     return undefined;
   }

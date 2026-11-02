@@ -142,8 +142,24 @@ describe('wire protocol', () => {
       { t: 'start', spec: { ...SPEC, humans: [0, 0] }, seats: SEATS, delay: 3 },
       { t: 'start', spec: { ...SPEC, humans: [0, 5] }, seats: SEATS, delay: 3 },
       { t: 'start', spec: SPEC, seats: [{ peer: 'p1', players: [0] }], delay: 3 },
-      { t: 'start', spec: SPEC, seats: [{ peer: 'p1', players: [0, 2] }, { peer: 'p1', players: [] }], delay: 3 },
-      { t: 'start', spec: SPEC, seats: [{ peer: 'p1', players: [0] }, { peer: 'p2', players: [0, 2] }], delay: 3 },
+      {
+        t: 'start',
+        spec: SPEC,
+        seats: [
+          { peer: 'p1', players: [0, 2] },
+          { peer: 'p1', players: [] },
+        ],
+        delay: 3,
+      },
+      {
+        t: 'start',
+        spec: SPEC,
+        seats: [
+          { peer: 'p1', players: [0] },
+          { peer: 'p2', players: [0, 2] },
+        ],
+        delay: 3,
+      },
       { t: 'start', spec: SPEC, seats: SEATS, delay: 61 },
       { t: 'start', spec: { ...SPEC, mode: 'x' }, seats: [], delay: 3 },
       { t: 'start', spec: SPEC, seats: [], delay: 0 },

@@ -458,7 +458,10 @@ function isTheirs(input: HudInput, c: CardView): boolean {
 }
 
 const NET_TEXT = {
-  stalled: ['Waiting for the other players', 'The next tick has not arrived yet. The game resumes by itself. If the host\'s tab is in the background, ask them to bring it to the front.'],
+  stalled: [
+    'Waiting for the other players',
+    "The next tick has not arrived yet. The game resumes by itself. If the host's tab is in the background, ask them to bring it to the front.",
+  ],
   desynced: [
     'Out of sync',
     'The players disagree about the game state, so it is halted. Download the dump for the bug report.',

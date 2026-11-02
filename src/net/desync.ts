@@ -8,7 +8,7 @@ import type { InputLog, LoggedCmd } from './inputlog.ts';
 import { replayInputs } from './inputlog.ts';
 
 /** What one dump says about itself, against the replay of its own seals. */
-export interface LogCheck {
+interface LogCheck {
   readonly peer: string;
   readonly seals: number;
   /** Last recorded checkpoint tick that matched the replay (0 when none did). */
