@@ -8,6 +8,7 @@ describe('determinism scenario', () => {
     expect(reference.hashes.length).toBeGreaterThan(10);
     expect(reference.match.hashes.length).toBeGreaterThan(10);
     expect(reference.master.hashes.length).toBeGreaterThan(10);
+    expect(reference.control.hashes.length).toBeGreaterThan(10);
     expect(reference.detmath.length).toBeGreaterThan(0);
     expect(reference.detmathSweep.length).toBeGreaterThan(0);
   });

@@ -11,7 +11,7 @@ import { createIntentBoard, intentSystem } from '../intents/board.ts';
 import type { BargainState } from './bargains.ts';
 import { bargainSystem, createBargainState, createMods } from './bargains.ts';
 import type { Command } from './commands.ts';
-import { applyCommand, canonicalCommand, isValidCommand } from './commands.ts';
+import { applyCommand, canonicalCommand, isValidCommand, SYSTEM_PLAYER } from './commands.ts';
 import type { TickContext } from './context.ts';
 import { deathSystem } from './deaths.ts';
 import { enemySystem } from './enemies.ts';
@@ -161,7 +161,7 @@ export class Sim implements SimView {
     };
     const cmd: Command =
       at === undefined ? { kind: 'ability', hero, slot } : { kind: 'ability', hero, slot, x: at.x, y: at.y };
-    applyCommand(ctx, cmd);
+    applyCommand(ctx, cmd, SYSTEM_PLAYER);
     return cast;
   }
 
@@ -187,6 +187,11 @@ export class Sim implements SimView {
    * the delayed tick. Commands for a tick already run are rejected and never logged. Within a tick,
    * commands apply in (player, seq) order, where seq counts that player's accepted submissions; so
    * only each player's own submission order matters, not how players interleave.
+   *
+   * Rule R1 (D-JE6GN42N3RGVK62M; networked play): nobody calls this for a human or system player except the tick
+   * driver's `beforeStep(T)`, which submits tick T's sealed inputs in seal order (player, then send
+   * order). Match's own submissions for T happen during earlier steps, so every peer assigns the
+   * same seqs. Any other call desyncs peers silently until the next hash checkpoint.
    */
   command(player: number, cmd: Command, tick: number = this.#tick + 1): CommandResult {
     if (!(Number.isSafeInteger(player) && player >= 0 && Number.isSafeInteger(tick) && isValidCommand(cmd))) {
@@ -242,7 +247,7 @@ export class Sim implements SimView {
       due.sort(byPlayerThenSeq);
       for (const p of due) {
         ctx.emit({ tick: this.#tick, kind: 'cmd', player: p.player, cmd: p.cmd });
-        applyCommand(ctx, p.cmd);
+        applyCommand(ctx, p.cmd, p.player);
       }
     }
     intentSystem(ctx);

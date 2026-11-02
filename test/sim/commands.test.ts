@@ -17,6 +17,11 @@ const VALID: readonly Command[] = [
   { kind: 'intent', op: 'cancel', hero: 3, intent: 1 },
   { kind: 'summon', def: 'grunt', count: 3 },
   { kind: 'send' },
+  { kind: 'control', op: 'drive', slot: 2, by: 'human' },
+  { kind: 'control', op: 'drive', slot: 0, by: 'bot' },
+  { kind: 'control', op: 'bargainPolicy', policy: 'bots' },
+  { kind: 'control', op: 'bargainPolicy', policy: 'human' },
+  { kind: 'control', op: 'bargainPolicy', policy: 'off' },
 ];
 
 function bad(cmd: Record<string, unknown>): Command {
@@ -33,6 +38,7 @@ const NEGATIVE_ZERO: readonly Command[] = [
   { kind: 'intent', op: 'post', hero: -0, slot: -0, intentKind: 'pull', x: -0, y: -0, fireIn: 5 },
   { kind: 'intent', op: 'reserve', hero: -0, intent: -0, slot: -0, offset: -0 },
   { kind: 'intent', op: 'cancel', hero: -0, intent: -0 },
+  { kind: 'control', op: 'drive', slot: -0, by: 'bot' },
 ];
 
 const INVALID: readonly (readonly [string, Command])[] = [
@@ -73,6 +79,11 @@ const INVALID: readonly (readonly [string, Command])[] = [
   ['reserve with negative offset', { kind: 'intent', op: 'reserve', hero: 3, intent: 1, slot: 0, offset: -1 }],
   ['reserve with fractional offset', { kind: 'intent', op: 'reserve', hero: 3, intent: 1, slot: 0, offset: 0.5 }],
   ['cancel without an intent id', bad({ kind: 'intent', op: 'cancel', hero: 3 })],
+  ['control drive of slot 4', bad({ kind: 'control', op: 'drive', slot: 4, by: 'human' })],
+  ['control drive by nobody', bad({ kind: 'control', op: 'drive', slot: 0, by: 'nobody' })],
+  ['control drive without a driver', bad({ kind: 'control', op: 'drive', slot: 0 })],
+  ['control with unknown policy', bad({ kind: 'control', op: 'bargainPolicy', policy: 'anyone' })],
+  ['control with unknown op', bad({ kind: 'control', op: 'reboot' })],
   ['summon with empty def', { kind: 'summon', def: '', count: 1 }],
   ['summon of zero', { kind: 'summon', def: 'grunt', count: 0 }],
   ['summon of a fraction', { kind: 'summon', def: 'grunt', count: 1.5 }],

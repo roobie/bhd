@@ -73,7 +73,7 @@ it('follows its container: the canvas backing store tracks a resize', async () =
   remove();
 });
 
-it('asks the sink factory for a sink per match, so a restart rebinds it', () => {
+it('asks the driver factory for a driver per match, so a restart rebinds it', () => {
   if (!hasGl2) {
     return;
   }
@@ -82,9 +82,15 @@ it('asks the sink factory for a sink per match, so a restart rebinds it', () => 
   const shell = mountShell({ canvas, hud }, defaultShellConfig(), {
     now: () => 0,
     schedule: () => () => undefined,
-    sink: (match) => {
+    driver: (match) => {
       seen.push(match);
-      return { submit: () => undefined };
+      return {
+        submit: () => undefined,
+        steppable: () => Number.POSITIVE_INFINITY,
+        beforeStep: () => undefined,
+        afterStep: () => undefined,
+        status: () => 'running',
+      };
     },
   });
   const first = seen.at(-1);

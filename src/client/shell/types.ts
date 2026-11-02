@@ -4,7 +4,7 @@
 //
 //   Match --step--> takeSnapshot --> interpolate --> buildScene --> InstanceBuffer --> Renderer.draw
 //   Match.perception + Presentation + ControlState --> buildHudModel --> Hud.render
-//   DOM events --> UiAction --> reduce --> {ControlState, Command[]} --> CommandSink.submit
+//   DOM events --> UiAction --> reduce --> {ControlState, Command[]} --> TickDriver.submit
 //
 // Units: world coordinates are sim units (the map is `MapDef.width` x `MapDef.height`, x east, y
 // down in the debug viewer's convention); screen coordinates are CSS pixels with the origin at the
@@ -18,6 +18,7 @@ import type { Mode } from '../../match/run.ts';
 import type { Perception } from '../../perception/types.ts';
 import type { Command } from '../../sim/commands.ts';
 import type { EntityKind, Team } from '../../sim/entities.ts';
+import type { SimEvent } from '../../sim/events.ts';
 import type { FeedbackSink } from './feedbackSink.ts';
 
 // ---------------------------------------------------------------------------------------------
@@ -229,15 +230,41 @@ export interface FramePlan {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Commands out: the sink and its delay
+// Commands out: the tick driver and its delay
 // ---------------------------------------------------------------------------------------------
 
+/** Where a driver stands: it decides whether the step loop may advance. */
+export type DriverStatus =
+  /** Stepping is allowed up to `steppable()`. */
+  | 'running'
+  /** Waiting for a peer's inputs (the next tick is not sealed yet). */
+  | 'stalled'
+  /** Everyone is paused; `steppable()` does not advance. */
+  | 'paused'
+  /** Hash checkpoints disagreed; the match is halted. */
+  | 'desynced'
+  /** The session is over (host left, or the game ended). */
+  | 'ended';
+
 /**
- * Where a human's commands go. `player` is the hero slot (D-ZWZVLE5U4MRETLI7). Wave 10 replaces the
- * local sink with the lockstep transport; nothing upstream changes.
+ * How the shell feeds a match and decides when it may advance (D-ZWZVLE5U4MRETLI7: `player` is the
+ * hero slot). `localDriver` is solo play; wave 10's lockstep driver (src/net) replaces it and nothing
+ * upstream changes. Rule R1 (see `Sim.command`): in networked play only `beforeStep` calls
+ * `sim.command` for human and system players, in seal order.
+ *
+ * Step loop contract, once per tick: `if (match.tick < driver.steppable())`, then
+ * `driver.beforeStep(match.tick + 1)`, `match.step()`, `driver.afterStep(events)`.
  */
-export interface CommandSink {
+export interface TickDriver {
+  /** A human (or system) input from the local shell; the driver decides when it applies. */
   submit: (player: number, cmd: Command) => void;
+  /** The highest tick that is safe to step to (the loop steps while `match.tick < steppable()`). */
+  steppable: () => number;
+  /** Called right before tick `tick` runs; submits that tick's inputs to the sim (R1). */
+  beforeStep: (tick: number) => void;
+  /** Called with the events the step produced (hash checkpoints, control commands, the end). */
+  afterStep: (events: readonly SimEvent[]) => void;
+  status: () => DriverStatus;
 }
 
 /** Ticks a local command waits before it applies (100 ms at 30 Hz), the delay lockstep will add. */
@@ -757,8 +784,8 @@ export interface ShellElements {
 
 /** Injection points so tests control time, the sink and the frame loop. All optional. */
 export interface ShellOptions {
-  /** Replaces `localSink(match, INPUT_DELAY_TICKS)`; called with the new match on start and on every restart. */
-  readonly sink?: (match: Match) => CommandSink;
+  /** Replaces `localDriver(match, INPUT_DELAY_TICKS)`; called with the new match on start and on every restart. */
+  readonly driver?: (match: Match) => TickDriver;
   /** Milliseconds clock; default `performance.now`. The only wall-clock read of the shell. */
   readonly now?: () => number;
   /** Frame scheduler; default `requestAnimationFrame`. Returns a cancel function. */

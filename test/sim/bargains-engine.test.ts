@@ -42,6 +42,14 @@ const acceptFirst: Policy = (o) => {
 };
 const ignoreAll: Policy = () => undefined;
 
+/** The player to submit `cmd` as: the card's hero slot for a hero-bound accept (the ownership rule), else any. */
+function playerFor(sim: Sim, offer: ReturnType<typeof perceiveBargains>['open'][number], cmd: Command): number {
+  const hero =
+    cmd.kind === 'bargain' && cmd.op === 'accept' ? offer.cards.find((c) => c.bargain === cmd.card)?.hero : 0;
+  const entity = hero === undefined || hero === 0 ? undefined : sim.entities.get(hero);
+  return entity === undefined ? offer.id % 3 : sim.game.heroes.findIndex((h) => h.id === entity.def);
+}
+
 /** Steps `n` ticks; before each tick `policy` answers every open offer it has not answered yet. */
 function run(sim: Sim, n: number, policy: Policy, onTick?: (events: SimEvent[]) => void): SimEvent[] {
   const all: SimEvent[] = [];
@@ -51,7 +59,7 @@ function run(sim: Sim, n: number, policy: Policy, onTick?: (events: SimEvent[]) 
       const cmd = answered.has(offer.id) ? undefined : policy(offer, index);
       if (cmd !== undefined) {
         answered.add(offer.id);
-        sim.command(offer.id % 3, cmd);
+        sim.command(playerFor(sim, offer, cmd), cmd);
       }
     }
     const events = sim.step();
@@ -137,6 +145,26 @@ describe('offers', () => {
 });
 
 describe('commands', () => {
+  it("a hero-bound card is accepted only by its hero's slot; team cards and Decline are open to any player", () => {
+    const sim = new Sim({ seed: 1, game: quickGame() });
+    const offer = giveOffer(sim, ['test-hair-shirt']); // the Penitent's card (slot 1)
+    for (const player of [0, 2, 3, 4, 5]) {
+      sim.command(player, { kind: 'bargain', op: 'accept', offer, card: 'test-hair-shirt' });
+    }
+    expect(bargainEvents(sim.step())).toEqual([]);
+    expect(sim.bargains?.offers.map((o) => o.id)).toContain(offer);
+    sim.command(1, { kind: 'bargain', op: 'accept', offer, card: 'test-hair-shirt' });
+    expect(bargainEvents(sim.step()).map((e) => e.op)).toEqual(['accept', 'end']);
+
+    const team = giveOffer(sim, ['test-tithe']);
+    sim.command(3, { kind: 'bargain', op: 'accept', offer: team, card: 'test-tithe' });
+    expect(bargainEvents(sim.step()).map((e) => e.op)).toEqual(['accept', 'end']);
+
+    const declined = giveOffer(sim, ['test-hair-shirt', 'test-horde']);
+    sim.command(2, { kind: 'bargain', op: 'decline', offer: declined });
+    expect(bargainEvents(sim.step()).map((e) => e.op)).toEqual(['decline', 'end']);
+  });
+
   it('the first valid resolution wins; later ones and wrong cards are no-ops', () => {
     const sim = new Sim({ seed: 1, game: quickGame() });
     const offer = giveOffer(sim, ['test-tithe', 'test-horde']);
@@ -234,7 +262,7 @@ describe('effects', () => {
       throw new Error('no heroes');
     }
     const base = heroDef(sim, penitent);
-    sim.command(0, { kind: 'bargain', op: 'accept', offer, card: 'test-hair-shirt' });
+    sim.command(1, { kind: 'bargain', op: 'accept', offer, card: 'test-hair-shirt' }); // the Penitent's own card: player = slot
     sim.step();
     const patched = heroDef(sim, penitent);
     if (base?.kit !== 'penitent' || patched?.kit !== 'penitent') {
