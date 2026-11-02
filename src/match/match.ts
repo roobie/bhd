@@ -42,8 +42,8 @@ import type { PerceptionMemory } from '../perception/memory.ts';
 import { createMemory, foldEvents } from '../perception/memory.ts';
 import { perceive, perceiveMaster } from '../perception/perceive.ts';
 import type { MasterView, Perception } from '../perception/types.ts';
-import type { Command } from '../sim/commands.ts';
-import { canonicalCommand } from '../sim/commands.ts';
+import type { BargainPolicyName, Command, ControlCommand } from '../sim/commands.ts';
+import { canonicalCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { Sim } from '../sim/sim.ts';
 import { ticks } from '../sim/time.ts';
@@ -74,7 +74,7 @@ export interface MatchOptions {
 }
 
 /** Who resolves bargain offers; see `MatchOptions.bargainPolicy` and `Match.setBargainPolicy`. */
-export type BargainPolicy = 'bots' | 'human' | 'off';
+export type BargainPolicy = BargainPolicyName;
 
 /** What the viewer shows for one decision of a seat. */
 export interface DecisionView {
@@ -175,6 +175,8 @@ function channelOf(cmd: Command): string | undefined {
       return `${cmd.kind}:${cmd.hero}`;
     case 'bargain':
       return `bargain:${cmd.offer}`;
+    case 'control':
+      return cmd.op === 'drive' ? `control:drive:${cmd.slot}` : 'control:bargainPolicy';
     case 'send':
     case 'spawn':
       return cmd.kind;
@@ -358,6 +360,20 @@ export class Match {
     }
   }
 
+  #control(cmd: ControlCommand): void {
+    if (cmd.op === 'bargainPolicy') {
+      this.setBargainPolicy(cmd.policy);
+      return;
+    }
+    const driven = new Set(this.driven);
+    if (cmd.by === 'human') {
+      driven.add(cmd.slot);
+    } else {
+      driven.delete(cmd.slot);
+    }
+    this.setDriven([...driven].sort((a, b) => a - b));
+  }
+
   /** Seats a human plays from the start go quiet; every seat gets its hero put in its driver's state. */
   #startDriven(slots: readonly number[]): void {
     for (const seat of this.#seats) {
@@ -421,6 +437,13 @@ export class Match {
     const events = this.sim.step();
     const { tick } = this.sim;
     foldEvents(this.#memory, events, tick);
+    // Control commands (SYSTEM_PLAYER only) take effect right after the tick they applied in, so
+    // every peer and every replay of the log changes driver or policy at the same tick.
+    for (const e of events) {
+      if (e.kind === 'cmd' && e.cmd.kind === 'control' && e.player === SYSTEM_PLAYER) {
+        this.#control(e.cmd);
+      }
+    }
     if (this.sim.ended) {
       return events;
     }
@@ -537,6 +560,22 @@ export class Match {
     this.#submit(dir, cmds, tick);
   }
 
+  /**
+   * The player a command is submitted as: the seat's own, except that accepting a hero-bound card
+   * goes in as that hero's slot (the sim's bargain ownership rule; player = slot).
+   */
+  #playerOf(who: Pacing, cmd: Command): number {
+    if (cmd.kind !== 'bargain' || cmd.op !== 'accept') {
+      return who.player;
+    }
+    const hero = this.perception.bargains.open
+      .find((o) => o.id === cmd.offer)
+      ?.cards.find((c) => c.bargain === cmd.card)?.hero;
+    const entity = hero === undefined || hero === 0 ? undefined : this.sim.entities.get(hero);
+    const slot = entity === undefined ? -1 : this.sim.game.heroes.findIndex((h) => h.id === entity.def);
+    return slot < 0 ? who.player : slot;
+  }
+
   #submit(who: Pacing, cmds: readonly Command[], tick: number): void {
     who.pending = who.pending.filter((e) => e.at > tick);
     for (const cmd of cmds) {
@@ -548,7 +587,7 @@ export class Match {
         continue;
       }
       const at = tick + who.delay;
-      if (this.sim.command(who.player, canon, at).ok) {
+      if (this.sim.command(this.#playerOf(who, canon), canon, at).ok) {
         who.pending.push({ cmd: canon, at, channel, key });
       }
     }

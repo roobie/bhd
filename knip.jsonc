@@ -1,9 +1,21 @@
 {
   "$schema": "./node_modules/knip/schema.json",
-  "entry": ["index.html!", "play.html!", "src/reporter/worker.ts!"],
+  "entry": [
+    "index.html!",
+    "play.html!",
+    "src/reporter/worker.ts!",
+    // Wave 10 stubs until their slices land and something imports them.
+    "src/net/{rtc,lockstep,inputlog}.ts!",
+    "src/net/signal/memory.ts!"
+  ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
     "src/reporter/types.ts": ["exports", "types"],
-    "src/reporter/store.ts": ["exports"]
+    "src/reporter/store.ts": ["exports"],
+    "src/net/types.ts": ["exports", "types"],
+    "src/net/rtc.ts": ["exports", "types"],
+    "src/net/lockstep.ts": ["exports", "types"],
+    "src/net/inputlog.ts": ["exports", "types"],
+    "src/net/signal/memory.ts": ["exports", "types"]
   }
 }

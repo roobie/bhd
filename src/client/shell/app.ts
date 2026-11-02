@@ -1,11 +1,11 @@
 // The shell: wires the match, the frame loop, renderer, input and HUD. Owner: w7-shell.
 //
 // Contract: builds the match through `buildMatch` (match/run.ts) with `humans: config.drive`;
-// creates `localSink(match, INPUT_DELAY_TICKS)` unless `options.sink` is given; each animation frame
+// creates `localDriver(match, INPUT_DELAY_TICKS)` unless `options.driver` is given; each animation frame
 // runs `planFrame`, steps the match `steps` times (snapshot after each, effects advanced from the
 // events), draws `interpolate(prev, curr, alpha)` through `buildScene` and the renderer, and
 // re-renders the HUD when the sim tick or the controls changed. Actions go through `reduce`; its
-// commands are submitted as player = the driven slot (the selected hero's slot) through the sink.
+// commands are submitted as player = the driven slot (the selected hero's slot) through the driver.
 // `performance.now` is read here and nowhere else; real time never reaches the sim. Without WebGL2
 // (`createRenderer` returns undefined, or any part of the setup throws) it shows a message with a
 // link to index.html and runs no loop (`rendering` false). `restart` rebuilds the match.
@@ -13,11 +13,13 @@
 import { defaultPresentation } from '../../content/presentation.ts';
 import type { Match } from '../../match/match.ts';
 import { buildMatch } from '../../match/run.ts';
+import type { Command } from '../../sim/commands.ts';
 import { createInstanceBuffer } from '../gl/instances.ts';
 import { createRenderer } from '../gl/renderer.ts';
 import { fitCamera } from './camera.ts';
 import { shellSpec } from './config.ts';
 import { initialControls, reduce } from './controls.ts';
+import { localDriver } from './driver.ts';
 import { DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame } from './frame.ts';
 import { createHud } from './hud.ts';
 import { buildHudModel, hudInsets } from './hudmodel.ts';
@@ -25,11 +27,9 @@ import { attachInput } from './input.ts';
 import { interpolate } from './interp.ts';
 import { PALETTE } from './palette.ts';
 import { buildScene } from './scene.ts';
-import { localSink } from './sink.ts';
 import { advanceEffects, takeSnapshot } from './snapshot.ts';
 import type {
   Camera,
-  CommandSink,
   ControlState,
   Effect,
   EntitySnap,
@@ -41,6 +41,7 @@ import type {
   ShellHandle,
   ShellOptions,
   Snapshot,
+  TickDriver,
   UiAction,
 } from './types.ts';
 import { INPUT_DELAY_TICKS } from './types.ts';
@@ -103,8 +104,8 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   let botsPick = false;
 
   let match: Match = buildMatch(spec);
-  const makeSink = (m: Match): CommandSink => options?.sink?.(m) ?? localSink(m, INPUT_DELAY_TICKS);
-  let sink: CommandSink = makeSink(match);
+  const makeDriver = (m: Match): TickDriver => options?.driver?.(m) ?? localDriver(m, INPUT_DELAY_TICKS);
+  let driver: TickDriver = makeDriver(match);
   let controls: ControlState | undefined;
   let clock: FrameClock = newFrameClock();
   let prev: Snapshot | undefined;
@@ -142,7 +143,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     match = buildMatch(spec);
     driven = config.drive;
     match.setBargainPolicy(botsPick ? 'bots' : 'human');
-    sink = makeSink(match);
+    driver = makeDriver(match);
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
     prev = takeSnapshot(match.sim, undefined);
@@ -200,14 +201,30 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     const player = controls.selected;
     controls = result.state;
     for (const cmd of result.commands) {
-      sink.submit(player, cmd);
+      driver.submit(cardOwner(cmd) ?? player, cmd);
     }
     hudDirty = true;
   }
 
+  /** Accepting a hero-bound card is submitted as that hero's slot (the sim's bargain ownership rule). */
+  function cardOwner(cmd: Command): number | undefined {
+    if (cmd.kind !== 'bargain' || cmd.op !== 'accept') {
+      return undefined;
+    }
+    const hero = match.perception.bargains.open
+      .find((o) => o.id === cmd.offer)
+      ?.cards.find((c) => c.bargain === cmd.card)?.hero;
+    const p = match.perception;
+    return hero === undefined || hero === 0
+      ? undefined
+      : (p.heroes.find((h) => h.id === hero) ?? p.fallen.find((h) => h.id === hero))?.slot;
+  }
+
   /** `nowMs` is the real clock, `visualMs` the (possibly hitstop-dilated) effect clock. */
   function stepOnce(nowMs: number, visualMs: number): void {
+    driver.beforeStep(match.tick + 1);
     const events = match.step();
+    driver.afterStep(events);
     prev = curr;
     curr = takeSnapshot(match.sim, prev);
     // Dead entities are gone from `curr`; the predecessor still has them.
@@ -322,7 +339,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       const nowMs = feedback?.visualTime(realMs) ?? realMs;
       const plan = planFrame(clock, realMs, { ...DEFAULT_FRAME_OPTIONS, paused: controls.paused });
       ({ clock } = plan);
-      for (let i = 0; i < plan.steps && !match.ended && end === undefined; i++) {
+      for (let i = 0; i < plan.steps && !match.ended && end === undefined && match.tick < driver.steppable(); i++) {
         stepOnce(realMs, nowMs);
       }
       const p = match.perception;

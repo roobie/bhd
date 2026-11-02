@@ -546,12 +546,20 @@ function accept(ctx: TickContext, state: BargainState, offer: Offer, card: Offer
   ctx.emit({ tick: ctx.tick, kind: 'bargain', op: 'end', offer: offer.id });
 }
 
+/** Lineup slot of hero entity `id` (its def's index in `game.heroes`), -1 if it is no hero. */
+function slotOfHero(ctx: TickContext, id: number): number {
+  const e = ctx.entities.get(id);
+  return e?.kind === 'hero' ? ctx.game.heroes.findIndex((h) => h.id === e.def) : -1;
+}
+
 /**
  * The `bargain` command. The first valid resolution of an offer wins; an unknown offer, an unknown
  * card, a second resolution or a command at or after the offer's `expiresAt` is a silent no-op (the
- * `cmd` event is still logged). Any player may resolve any offer (who may is a Match or shell policy).
+ * `cmd` event is still logged). Ownership: accepting a hero-bound card needs `player` to be that
+ * hero's lineup slot (player = slot); team cards and Decline are open to any player. Whoever
+ * resolves a bot hero's card therefore submits as that slot's player (the host or the shell does).
  */
-export function applyBargainCommand(ctx: TickContext, cmd: BargainCommand): void {
+export function applyBargainCommand(ctx: TickContext, cmd: BargainCommand, player: number): void {
   const state = ctx.bargains;
   const rules = ctx.game.bargains;
   const offer = state?.offers.find((o) => o.id === cmd.offer);
@@ -560,7 +568,7 @@ export function applyBargainCommand(ctx: TickContext, cmd: BargainCommand): void
   }
   if (cmd.op === 'accept') {
     const card = offer.cards.find((c) => c.bargain === cmd.card);
-    if (card !== undefined) {
+    if (card !== undefined && (card.hero === 0 || player === slotOfHero(ctx, card.hero))) {
       accept(ctx, state, offer, card);
     }
     return;

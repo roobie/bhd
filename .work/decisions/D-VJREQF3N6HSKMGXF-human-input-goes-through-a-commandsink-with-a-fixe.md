@@ -5,7 +5,7 @@ read_if:
   - adding networking or lockstep transport
   - changing how a human seat issues commands
 refs:
-  - src/client/shell/sink.ts
+  - src/client/shell/driver.ts
   - src/client/shell/config.ts
 ---
 

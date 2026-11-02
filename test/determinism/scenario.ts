@@ -19,6 +19,7 @@ import {
 } from '../../src/detmath/index.ts';
 import { Match } from '../../src/match/match.ts';
 import type { Command } from '../../src/sim/commands.ts';
+import { SYSTEM_PLAYER } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { StateHasher } from '../../src/sim/hash.ts';
 import { Sim } from '../../src/sim/sim.ts';
@@ -237,7 +238,10 @@ function answerOffers(sim: Sim, tick: number): void {
     }
     const card = offer.cards.find((c) => c.bargain === 'test-fleeting') ?? offer.cards[0];
     if (offer.id === 1 && card !== undefined) {
-      submit(sim, { tick, player: 2, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: card.bargain } });
+      // A hero-bound card is accepted as its hero's slot (the sim's bargain ownership rule).
+      const owner = sim.entities.get(card.hero);
+      const player = owner === undefined ? 2 : sim.game.heroes.findIndex((h) => h.id === owner.def);
+      submit(sim, { tick, player, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: card.bargain } });
       submit(sim, { tick, player: 3, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
     } else if (offer.id === 2) {
       submit(sim, { tick, player: 4, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
@@ -254,6 +258,56 @@ export function runBargainSim(seed: number, ticks: number): SimEvent[] {
   return drive({ seed, game: bargainsScenarioGame() }, ticks, () => undefined, answerOffers);
 }
 
+/** Ticks of the control-command run. */
+const CONTROL_TICKS = 1800;
+
+/**
+ * Control commands through a full Match (bots, bargains), submitted the way a networked driver does
+ * (just before the tick, SYSTEM_PLAYER for control, the human's own commands as player = slot): drive
+ * handovers both ways, bargain policy changes, a control command from a non-system player (ignored),
+ * and a human playing slot 1 while it is driven. Cross-checks that every runtime applies them alike.
+ */
+function runControlMatch(): MatchResult {
+  const match = new Match({
+    seed: SEED,
+    game: bargainsScenarioGame(),
+    bots: defaultBotSetup(),
+    hashEvery: HASH_EVERY,
+    bargainPolicy: 'human',
+  });
+  const hero = (slot: number): number => match.perception.heroes.find((h) => h.slot === slot)?.id ?? 0;
+  const control: Readonly<Record<number, readonly (readonly [number, Command])[]>> = {
+    40: [[SYSTEM_PLAYER, { kind: 'control', op: 'drive', slot: 1, by: 'human' }]],
+    90: [[0, { kind: 'control', op: 'drive', slot: 3, by: 'human' }]],
+    200: [[SYSTEM_PLAYER, { kind: 'control', op: 'bargainPolicy', policy: 'bots' }]],
+    500: [
+      [SYSTEM_PLAYER, { kind: 'control', op: 'drive', slot: 2, by: 'human' }],
+      [SYSTEM_PLAYER, { kind: 'control', op: 'drive', slot: 1, by: 'bot' }],
+    ],
+    900: [[SYSTEM_PLAYER, { kind: 'control', op: 'bargainPolicy', policy: 'off' }]],
+    1100: [[SYSTEM_PLAYER, { kind: 'control', op: 'bargainPolicy', policy: 'human' }]],
+    1300: [[SYSTEM_PLAYER, { kind: 'control', op: 'drive', slot: 2, by: 'bot' }]],
+  };
+  const events: SimEvent[] = [];
+  while (match.tick < CONTROL_TICKS && !match.ended) {
+    const t = match.tick + 1;
+    for (const [player, cmd] of control[t] ?? []) {
+      match.sim.command(player, cmd);
+    }
+    if (t >= 60 && t < 500 && t % 40 === 0) {
+      match.sim.command(1, { kind: 'move', hero: hero(1), x: 10 + (t % 120), y: 20 });
+    }
+    if (t >= 520 && t < 1300 && t % 50 === 0) {
+      match.sim.command(2, { kind: 'move', hero: hero(2), x: 20 + (t % 100), y: 25 });
+    }
+    events.push(...match.step());
+  }
+  if (events.at(-1)?.kind !== 'hash') {
+    events.push({ tick: match.tick, kind: 'hash', stateHash: match.sim.hash() });
+  }
+  return summarise(events);
+}
+
 interface MatchResult {
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];
@@ -266,6 +320,8 @@ export interface ScenarioResult {
   readonly master: MatchResult;
   /** Bargains configured with a test-only pool, bargain commands scripted: cross-checks the bargain state hash and command path. */
   readonly bargains: MatchResult;
+  /** A Match with control commands (drive handovers, bargain policy) and a human's commands submitted per tick. */
+  readonly control: MatchResult;
   /** An all-bot Match with the default bots and Director: any bot or Director change moves it. */
   readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
@@ -460,6 +516,7 @@ export function runScenario(): ScenarioResult {
     match: runMatch(),
     master: summarise(runMasterSim(SEED, MASTER_TICKS)),
     bargains: summarise(runBargainSim(SEED, TICKS)),
+    control: runControlMatch(),
     hashes: hashesOf(events),
     eventDigest: digestOf(events),
     detmath: detmathValues(),

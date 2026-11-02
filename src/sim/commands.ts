@@ -1,7 +1,8 @@
 // Commands: the only input that changes sim state (project DESIGN.md §3). Lockstep sends exactly
 // these. Plain JSON data so they serialize unchanged into the event log and over the wire.
 // Validation is shape only; commands naming missing entities or bad targets are semantic no-ops
-// (still logged). No ownership checks until wave 10.
+// (still logged). The sim checks one kind of ownership: who may accept a hero-bound bargain card
+// (sim/bargains.ts). Who may submit as which player is the host's job (D-VXJDVX4RFRWSLUQB).
 //
 // Wave-master, intents and bargain commands are routed to sim/master.ts, intents/board.ts and sim/bargains.ts.
 //
@@ -111,6 +112,23 @@ interface SendCommand {
   readonly kind: 'send';
 }
 
+/** The player number that issues control commands (the lockstep host, in networked play). */
+export const SYSTEM_PLAYER = 5;
+
+/** Who resolves bargain offers (Match state, see `Match.setBargainPolicy`). */
+export type BargainPolicyName = 'bots' | 'human' | 'off';
+
+const BARGAIN_POLICIES: readonly string[] = ['bots', 'human', 'off'];
+
+/**
+ * Match-level state that must change at the same tick on every peer: who drives a hero slot, and
+ * who resolves bargains. The sim validates and logs it and does nothing else; `Match.step` applies
+ * it from the step's `cmd` events, and only when the player is `SYSTEM_PLAYER`.
+ */
+export type ControlCommand =
+  | { readonly kind: 'control'; readonly op: 'drive'; readonly slot: number; readonly by: 'human' | 'bot' }
+  | { readonly kind: 'control'; readonly op: 'bargainPolicy'; readonly policy: BargainPolicyName };
+
 /**
  * Resolves a bargain offer (src/sim/bargains.ts): `accept` takes card `card` (a `BargainDef.id` on
  * the offer), `decline` refuses them all. The first valid resolution of an offer wins; an unknown
@@ -130,6 +148,7 @@ export type Command =
   | SummonCommand
   | SendCommand
   | CallWaveCommand
+  | ControlCommand
   | SpawnCommand;
 
 function isId(n: unknown): boolean {
@@ -188,6 +207,17 @@ function isBargainShape(cmd: BargainCommand): boolean {
   }
 }
 
+function isControlShape(cmd: ControlCommand): boolean {
+  switch (cmd.op) {
+    case 'drive':
+      return isSlot(cmd.slot) && (cmd.by === 'human' || cmd.by === 'bot');
+    case 'bargainPolicy':
+      return BARGAIN_POLICIES.includes(cmd.policy);
+    default:
+      return false;
+  }
+}
+
 function isAbilityShape(cmd: AbilityCommand): boolean {
   const hasX = cmd.x !== undefined;
   const hasY = cmd.y !== undefined;
@@ -225,6 +255,8 @@ export function isValidCommand(cmd: Command): boolean {
         cmd.count >= 1 &&
         cmd.count <= MAX_SUMMON
       );
+    case 'control':
+      return isControlShape(cmd);
     case 'send':
     case 'callWave':
       return true;
@@ -306,6 +338,10 @@ export function canonicalCommand(cmd: Command): Command {
         : { kind: 'bargain', op: 'decline', offer: cmd.offer + 0 };
     case 'summon':
       return { kind: 'summon', def: cmd.def, count: cmd.count + 0 };
+    case 'control':
+      return cmd.op === 'drive'
+        ? { kind: 'control', op: 'drive', slot: cmd.slot + 0, by: cmd.by }
+        : { kind: 'control', op: 'bargainPolicy', policy: cmd.policy };
     case 'send':
       return { kind: 'send' };
     case 'callWave':
@@ -333,8 +369,14 @@ function applySpawn(ctx: TickContext, cmd: SpawnCommand): void {
   }
 }
 
-/** Applies one command. Commands that target missing entities are no-ops (still logged as `cmd`). */
-export function applyCommand(ctx: TickContext, cmd: Command): void {
+/**
+ * Applies one command from `player`. Commands that target missing entities are no-ops (still logged
+ * as `cmd`). `player` matters only for bargain ownership; control commands do nothing here.
+ */
+export function applyCommand(ctx: TickContext, cmd: Command, player: number): void {
+  if (cmd.kind === 'control') {
+    return;
+  }
   if (cmd.kind === 'spawn') {
     applySpawn(ctx, cmd);
     return;
@@ -344,7 +386,7 @@ export function applyCommand(ctx: TickContext, cmd: Command): void {
     return;
   }
   if (cmd.kind === 'bargain') {
-    applyBargainCommand(ctx, cmd);
+    applyBargainCommand(ctx, cmd, player);
     return;
   }
   if (cmd.kind === 'summon') {

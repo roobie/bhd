@@ -1,11 +1,11 @@
-// Sink and determinism invariants (D-4E4QRJ7N6LIGZDSD: no gameplay numbers). A driven game's human
-// commands, recorded through the sink, replay into a fresh match from the same spec with identical
+// Driver and determinism invariants (D-4E4QRJ7N6LIGZDSD: no gameplay numbers). A driven game's human
+// commands, recorded through the driver, replay into a fresh match from the same spec with identical
 // state hashes. Headless: no renderer.
 
 import { describe, expect, it } from 'vitest';
 import { shellSpec } from '../../../src/client/shell/config.ts';
-import { localSink } from '../../../src/client/shell/sink.ts';
-import type { CommandSink } from '../../../src/client/shell/types.ts';
+import { localDriver } from '../../../src/client/shell/driver.ts';
+import type { TickDriver } from '../../../src/client/shell/types.ts';
 import { INPUT_DELAY_TICKS } from '../../../src/client/shell/types.ts';
 import type { Match } from '../../../src/match/match.ts';
 import { buildMatch } from '../../../src/match/run.ts';
@@ -53,7 +53,7 @@ function hashes(match: Match, before: (tick: number) => void): string[] {
   return out;
 }
 
-describe('localSink', () => {
+describe('localDriver', () => {
   it('applies a command INPUT_DELAY_TICKS after the current tick', () => {
     const match = buildMatch(shellSpec({ seed: 1, mode: 'director', drive: [0] }));
     const hero = match.perception.heroes[0]?.id ?? -1;
@@ -64,8 +64,22 @@ describe('localSink', () => {
       return real(player, cmd, tick);
     };
     match.step();
-    localSink(match, INPUT_DELAY_TICKS).submit(0, { kind: 'stop', hero });
+    localDriver(match, INPUT_DELAY_TICKS).submit(0, { kind: 'stop', hero });
     expect(applied).toContain(match.tick + INPUT_DELAY_TICKS);
+  });
+});
+
+describe('localDriver as a TickDriver', () => {
+  it('never gates stepping, has no step hooks to run, and reports running until the game ends', () => {
+    const match = buildMatch(shellSpec({ seed: 1, mode: 'director', drive: [0] }));
+    const driver = localDriver(match, INPUT_DELAY_TICKS);
+    expect(driver.steppable()).toBe(Number.POSITIVE_INFINITY);
+    expect(driver.status()).toBe('running');
+    const before = match.sim.hash();
+    driver.beforeStep(match.tick + 1);
+    driver.afterStep([]);
+    expect(match.sim.hash()).toBe(before);
+    expect(match.tick).toBe(0);
   });
 });
 
@@ -77,8 +91,9 @@ describe('driven game determinism', () => {
     const hero = live.perception.heroes[0]?.id ?? -1;
     expect(hero).toBeGreaterThanOrEqual(0);
     const recorded: Recorded[] = [];
-    const inner = localSink(live, INPUT_DELAY_TICKS);
-    const sink: CommandSink = {
+    const inner = localDriver(live, INPUT_DELAY_TICKS);
+    const sink: TickDriver = {
+      ...inner,
       submit(player, cmd) {
         recorded.push({ player, cmd, at: live.tick + INPUT_DELAY_TICKS });
         inner.submit(player, cmd);
