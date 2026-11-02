@@ -6,7 +6,9 @@
     "src/reporter/worker.ts!",
     // Wave 10 stubs until their slices land and something imports them.
     "src/net/{rtc,lockstep,inputlog}.ts!",
-    "src/net/signal/memory.ts!"
+    "src/net/signal/memory.ts!",
+    // Wave 10 E1 until step-3 integration imports the lobby.
+    "src/client/shell/lobby.ts!"
   ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
