@@ -45,8 +45,8 @@
 // only way a bargain touches it. A field added to `BargainState` MUST be added to `hashBargains`
 // (L-53OTZPIIVO2XYNNL).
 
-import type { BargainDef, BargainsDef, Effect, EffectTarget } from '../content/bargains.ts';
-import { applyDefPatches } from '../content/bargains.ts';
+import type { BargainDef, BargainsDef, Effect } from '../content/bargains.ts';
+import { effectiveDef, effectReaches } from '../content/bargains.ts';
 import type { GameConfig, HeroDef } from '../content/index.ts';
 import { findById } from '../content/types.ts';
 import type { Rng } from '../detmath/index.ts';
@@ -129,14 +129,6 @@ export function hashBargains(h: StateHasher, b: BargainState): void {
 }
 
 // ---------------------------------------------------------------- Derived layer
-
-/** Does an effect with `target` reach hero `hero`, for a card benefiting `benefit` (0 = the whole team)? */
-function affects(target: EffectTarget, benefit: number, hero: number): boolean {
-  if (target === 'team' || benefit === 0) {
-    return true;
-  }
-  return target === 'self' ? hero === benefit : hero !== benefit;
-}
 
 interface Item {
   readonly taken: TakenBargain;
@@ -230,7 +222,7 @@ function heroModsOf(d: Derived, hero: number): HeroMods {
   const m: HeroMods = { dealt: 1, taken: 1, heal: 1, respawn: 1 };
   for (const item of d.items) {
     for (const e of item.effects) {
-      if (!affects(e.target, item.taken.hero, hero)) {
+      if (!effectReaches(e.target, item.taken.hero, hero)) {
         continue;
       }
       switch (e.kind) {
@@ -295,15 +287,11 @@ export function heroDef(s: DefSource, hero: Readonly<Entity>): HeroDef | undefin
   if (d.heroDefs.has(hero.id)) {
     return d.heroDefs.get(hero.id);
   }
-  const patches: Effect[] = [];
-  for (const item of d.items) {
-    for (const e of item.effects) {
-      if (e.kind === 'def' && affects(e.target, item.taken.hero, hero.id)) {
-        patches.push(e);
-      }
-    }
-  }
-  const out = patches.length === 0 ? base : applyDefPatches(base, patches);
+  const out = effectiveDef(
+    base,
+    d.items.map((item) => ({ hero: item.taken.hero, effects: item.effects })),
+    hero.id,
+  );
   d.heroDefs.set(hero.id, out);
   return out;
 }
@@ -330,7 +318,7 @@ export function bargainsReaching(s: DefSource, hero: number): string[] {
     return [];
   }
   return derivedOf(s.game, state)
-    .items.filter((item) => item.effects.some((e) => heroFacing(e) && affects(e.target, item.taken.hero, hero)))
+    .items.filter((item) => item.effects.some((e) => heroFacing(e) && effectReaches(e.target, item.taken.hero, hero)))
     .map((item) => item.taken.bargain);
 }
 
@@ -380,7 +368,10 @@ export function refreshHeroes(ctx: TickContext): void {
       }
       e.maxHp = maxHp;
     }
-    e.armour = def.armour;
+    // A Spent Penitent keeps his armour penalty (penitent.ts sets it on Martyrdom's end and clears it with Spent).
+    const spent = def.kit === 'penitent' && e.kit?.kind === 'penitent' && e.kit.spentTicks > 0;
+    e.armour =
+      def.kit === 'penitent' && spent ? Math.max(0, def.armour - def.martyrdom.spentArmourPenalty) : def.armour;
     e.speed = perTick(Math.max(0, def.speed));
   }
 }

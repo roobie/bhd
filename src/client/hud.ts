@@ -1,6 +1,7 @@
 // HUD fragments for the debug viewer. Read-only over the sim.
 
 import { html } from 'lit-html';
+import { heroDef } from '../sim/bargains.ts';
 import { STANCE } from '../sim/heroes/gunner.ts';
 import type { Sim } from '../sim/sim.ts';
 
@@ -36,7 +37,7 @@ export function gunnerHud(sim: Sim) {
       continue;
     }
     const pct = Math.round(kit.heat / 100); // heat is basis points (0..10000)
-    const def = sim.game.heroes.find((h) => h.kit === 'gunner');
+    const def = heroDef(sim, e); // effective: accepted bargains patched in
     const pierce = Math.round((def?.kit === 'gunner' ? def.heat.pierceAbove : 0.6) * 100);
     const flags = [kit.lockTicks > 0 ? 'overheated' : '', kit.furnaceTicks > 0 ? 'furnace' : ''].filter(Boolean);
     return html`<div class="gunner">

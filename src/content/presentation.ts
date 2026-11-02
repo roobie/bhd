@@ -81,7 +81,7 @@ export interface Presentation {
 export const UI_TEXT = {
   fallen: { label: 'Fallen', icon: UI_ICONS.fallen },
   callWave: { label: 'Call next wave', key: 'N', icon: UI_ICONS.callWave },
-  bargain: { label: 'Bargain', decline: 'Decline', team: 'The team' },
+  bargain: { label: 'Bargain', decline: 'Decline', team: 'The team', botsPick: 'Bots pick bargains' },
 } as const;
 
 /** The respawn countdown line for a fallen hero; `ticksLeft` and `hz` come from perception and the sim clock. */
@@ -91,8 +91,14 @@ export function respawnText(ticksLeft: number, hz: number): string {
 
 export function defaultPresentation(): Presentation {
   return {
-    // Slice B's pool names go here, by id; until then every bargain uses the id-derived fallback.
-    bargains: [],
+    bargains: [
+      { id: 'unvented-barrel', label: 'Unvented Barrel', glyph: 'Ub', color: '#e8832a' },
+      { id: 'iron-discipline', label: 'Iron Discipline', glyph: 'Id', color: '#9aa7b8' },
+      { id: 'hair-shirt', label: 'Hair Shirt', glyph: 'Hs', color: '#c0172f' },
+      { id: 'open-the-eye', label: 'Open the Eye', glyph: 'Oe', color: '#8f5fd6' },
+      { id: 'blood-tithe', label: 'Blood Tithe', glyph: 'Bt', color: '#b8324a' },
+      { id: 'call-the-horde', label: 'Call the Horde', glyph: 'Ch', color: '#d8a030' },
+    ],
     abilities: [
       {
         effect: 'brace',

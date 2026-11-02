@@ -82,6 +82,8 @@ export interface GunnerView {
   readonly pierceAbove: number;
   /** Above this heat, rounds overpenetrate into allies (0..1). */
   readonly overpenAbove: number;
+  /** 0 when the overpenetration line spares allies (Iron Discipline), else it hits them. */
+  readonly overpenAllies: number;
 }
 
 type HeroRole = 'gunner' | 'penitent' | 'psyker' | 'tank' | 'ranged' | 'support';
@@ -250,6 +252,8 @@ export interface EffectView {
   readonly op: 'mul' | 'add' | '';
   /** The enemy def a `def` effect patches, or the enemy a `waveExtra` adds; else ''. */
   readonly def: string;
+  /** A `self` hero-def effect: the unpatched number at `path` for the benefiting hero; undefined when unknown or not applicable. */
+  readonly base: number | undefined;
 }
 
 /** A card on an open offer. */
@@ -301,7 +305,12 @@ export interface Perception {
   readonly intents: readonly IntentView[];
   readonly team: TeamView;
   /** Bargains; both lists are empty when the game has none. */
-  readonly bargains: { readonly open: readonly OfferView[]; readonly taken: readonly TakenView[] };
+  readonly bargains: {
+    readonly open: readonly OfferView[];
+    readonly taken: readonly TakenView[];
+    /** Fraction of the Ancient's max hp a decline (or lapse) restores. */
+    readonly declineAncientHeal: number;
+  };
 }
 
 /** What only the Director sees (wave master mode). */

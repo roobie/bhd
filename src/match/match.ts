@@ -70,8 +70,11 @@ export interface MatchOptions {
    * Who resolves bargain offers: `bots` (default) the bot seats, per `bots.bargain.policy`; `human`
    * nobody here (the shell sends the commands); `off` nobody, offers just lapse.
    */
-  readonly bargainPolicy?: 'bots' | 'human' | 'off';
+  readonly bargainPolicy?: BargainPolicy;
 }
+
+/** Who resolves bargain offers; see `MatchOptions.bargainPolicy` and `Match.setBargainPolicy`. */
+export type BargainPolicy = 'bots' | 'human' | 'off';
 
 /** What the viewer shows for one decision of a seat. */
 export interface DecisionView {
@@ -236,18 +239,14 @@ function heroIds(sim: Sim): number[] {
   return out;
 }
 
-/** The bots' bargain policy, undefined when a human or nobody resolves offers. */
-function bargainPolicyOf(options: MatchOptions): BargainBotPolicy | undefined {
-  return (options.bargainPolicy ?? 'bots') === 'bots' ? (options.bots.bargain?.policy ?? 'evaluate') : undefined;
-}
-
 export class Match {
   readonly sim: Sim;
   readonly seed: number;
   readonly #memory: PerceptionMemory;
   readonly #seats: Seat[] = [];
   readonly #director: DirectorSeat | undefined;
-  readonly #bargainPolicy: BargainBotPolicy | undefined;
+  readonly #botPolicy: BargainBotPolicy;
+  #bargainPolicy: BargainPolicy;
   #cached: Perception | undefined;
   #masterCached: { readonly tick: number; readonly view: MasterView | undefined } | undefined;
 
@@ -290,11 +289,27 @@ export class Match {
     this.#seats.sort((a, b) => a.slot - b.slot);
     this.#startDriven(drivenAtStart);
     this.#director = directorSeat(options.director, seed, game);
-    this.#bargainPolicy = bargainPolicyOf(options);
+    this.#botPolicy = bots.bargain?.policy ?? 'evaluate';
+    this.#bargainPolicy = options.bargainPolicy ?? 'bots';
   }
 
   get tick(): number {
     return this.sim.tick;
+  }
+
+  /** Who resolves bargain offers now. */
+  get bargainPolicy(): BargainPolicy {
+    return this.#bargainPolicy;
+  }
+
+  /**
+   * Hands bargain offers to the bots (`bots`, scored per `bots.bargain.policy`) or to a human (`human`,
+   * the shell sends the commands; `off`: nobody, offers lapse). It only changes which commands the bot
+   * seats issue from the next think on, never the sim: commands already queued still land, and the
+   * game stays a pure function of seed, config and the commands issued.
+   */
+  setBargainPolicy(policy: BargainPolicy): void {
+    this.#bargainPolicy = policy;
   }
 
   get ended(): boolean {
@@ -442,7 +457,7 @@ export class Match {
     };
     const decisions = [
       ...seat.bot.think(ctx),
-      ...(this.#bargainPolicy === undefined ? [] : bargainDecisions(ctx, this.#bargainPolicy)),
+      ...(this.#decidesBargains(seat, p) ? bargainDecisions(ctx, this.#botPolicy) : []),
     ];
     const views: DecisionView[] = [];
     const seen = new Map<string, string>();
@@ -459,6 +474,19 @@ export class Match {
       seat.prev.set(k, v);
     }
     seat.decisions = views;
+  }
+
+  /**
+   * Whether `seat` decides the team's offers: policy `bots`, an offer open, and `seat` is the
+   * lowest-slot seat that a bot plays (not driven) with its hero up. A downed or human-driven seat
+   * never decides; the deciding seat may take any card whichever hero it benefits.
+   */
+  #decidesBargains(seat: Seat, p: Perception): boolean {
+    if (this.#bargainPolicy !== 'bots' || p.bargains.open.length === 0) {
+      return false;
+    }
+    const first = this.#seats.find((s) => !s.driven && p.heroes.some((h) => h.id === s.hero));
+    return first === seat;
   }
 
   #resolve(seat: Seat, d: Decision, run: Round): DecisionView {

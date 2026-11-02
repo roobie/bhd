@@ -22,7 +22,7 @@ const ctx = (driven: readonly number[] = [0]): ControlContext => ({
 
 describe('bargain model', () => {
   it('is absent without an open offer', () => {
-    const none = { ...p, bargains: { open: [], taken: p.bargains.taken } };
+    const none = { ...p, bargains: { ...p.bargains, open: [] } };
     expect(buildHudModel(hudInput(none)).bargain).toBeUndefined();
   });
 
@@ -51,6 +51,15 @@ describe('bargain model', () => {
       expect(offer?.frac).toBeGreaterThanOrEqual(0);
       expect(offer?.frac).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('disables the cards when a command could no longer land, while bots pick, and hides the panel after the end', () => {
+    const enabled = (s: number, over: Partial<Parameters<typeof hudInput>[1]> = {}): boolean | undefined =>
+      buildHudModel(hudInput(withOffer(s), over)).bargain?.offers[0]?.enabled;
+    expect(enabled(WINDOW_SECONDS)).toBe(true);
+    expect(enabled(0)).toBe(false);
+    expect(enabled(WINDOW_SECONDS, { botsPick: true })).toBe(false);
+    expect(buildHudModel(hudInput(p, { end: { reason: 'victory', wave: 3 } })).bargain).toBeUndefined();
   });
 
   it('marks the chosen card and greys the offer once a resolution was sent', () => {

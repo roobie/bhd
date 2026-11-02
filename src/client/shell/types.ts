@@ -302,7 +302,9 @@ export type UiAction =
   /** Resolve a bargain offer: take card `card` (a bargain id), or decline when `card` is absent. */
   | { readonly kind: 'bargain'; readonly offer: number; readonly card?: string }
   /** A bargain key: resolves the oldest open offer; `card` is the 0-based card index, absent = Decline. */
-  | { readonly kind: 'bargainKey'; readonly card?: number };
+  | { readonly kind: 'bargainKey'; readonly card?: number }
+  /** The "Bots pick bargains" toggle (handled by the app, ignored by the reducer): on = the bot seats resolve offers. */
+  | { readonly kind: 'bargainBots'; readonly on: boolean };
 
 /** An ability being aimed. */
 interface AimState {
@@ -679,6 +681,10 @@ export interface BargainOfferModel {
 /** The bargain part of the HUD. */
 export interface BargainHudModel {
   readonly offers: readonly BargainOfferModel[];
+  /** The "Bots pick bargains" toggle is on. */
+  readonly botsPick: boolean;
+  /** Label of the toggle. */
+  readonly botsPickLabel: string;
 }
 
 export interface HudModel {
@@ -708,6 +714,8 @@ export interface HudInput {
   readonly maxOffsetSeconds: number;
   /** The game config, the source of help numbers (hero and status defs); without it help shows `?` for them. */
   readonly game?: GameConfig;
+  /** The shell's "Bots pick bargains" toggle (default off). */
+  readonly botsPick?: boolean;
   /** Set once the match has ended. */
   readonly end:
     | { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks' | 'team-wiped'; readonly wave: number }

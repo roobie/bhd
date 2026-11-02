@@ -174,20 +174,33 @@ function benefitLabel(p: Perception, ui: Presentation, card: CardView): string {
   return def === undefined ? 'A hero' : heroPresentation(ui, def).label;
 }
 
+/** What card text reads besides the card: perception (who the heroes are), presentation and the game's hero defs. */
+type TextWorld = Pick<HudInput, 'p' | 'ui' | 'game'>;
+
 function bargainLines(
-  ui: Presentation,
-  card: { readonly scope: 'hero' | 'team'; readonly gains: CardView['gains']; readonly costs: CardView['costs'] },
+  world: TextWorld,
+  card: {
+    readonly scope: 'hero' | 'team';
+    readonly hero: number;
+    readonly gains: CardView['gains'];
+    readonly costs: CardView['costs'];
+  },
 ): { gains: readonly string[]; costs: readonly string[] } {
-  return describeBargain(card, { scope: card.scope, enemy: (id) => enemyPresentation(ui, id).label });
+  return describeBargain(card, {
+    scope: card.scope,
+    enemy: (id) => enemyPresentation(world.ui, id).label,
+    base: (e) => e.base,
+  });
 }
 
 /** Pips for the accepted bargains that apply to `h`, with a tooltip of their gains and costs. */
-function bargainPips(h: HeroView, p: Perception, ui: Presentation): BargainPipModel[] {
+function bargainPips(h: HeroView, world: TextWorld): BargainPipModel[] {
+  const { p, ui } = world;
   return h.bargains.map((id) => {
     const pres = bargainPresentation(ui, id);
     const taken = p.bargains.taken.find((t) => t.bargain === id);
     const lines =
-      taken === undefined ? undefined : bargainLines(ui, { scope: taken.hero === 0 ? 'team' : 'hero', ...taken });
+      taken === undefined ? undefined : bargainLines(world, { scope: taken.hero === 0 ? 'team' : 'hero', ...taken });
     const tooltip = [
       pres.label,
       ...(lines?.gains.map((g) => `+ ${g}`) ?? []),
@@ -225,7 +238,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
       respawnSeconds: undefined,
       respawnLabel: undefined,
       fallenLabel: '',
-      bargains: bargainPips(h, p, ui),
+      bargains: bargainPips(h, input),
     });
   }
   return cards;
@@ -268,7 +281,7 @@ function helpBargains(input: HudInput): HelpBargainsModel | undefined {
     return undefined;
   }
   const taken = p.bargains.taken.map((t: TakenView) => {
-    const lines = bargainLines(ui, { scope: t.hero === 0 ? 'team' : 'hero', ...t });
+    const lines = bargainLines(input, { scope: t.hero === 0 ? 'team' : 'hero', ...t });
     const hero = p.heroes.find((h) => h.id === t.hero) ?? p.fallen.find((f) => f.id === t.hero);
     return {
       label: bargainPresentation(ui, t.bargain).label,
@@ -424,7 +437,7 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
   const heal = game?.bargains?.declineAncientHeal ?? 0;
   const cards: BargainCardModel[] = o.cards.map((c, i) => {
     const pres = bargainPresentation(ui, c.bargain);
-    const lines = bargainLines(ui, c);
+    const lines = bargainLines(input, c);
     return {
       id: c.bargain,
       label: pres.label,
@@ -447,18 +460,24 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
     declineKey: KEY_BARGAIN_DECLINE,
     inFlight: mine !== undefined,
     declined: mine !== undefined && mine.card === undefined,
-    enabled: driven.length > 0,
+    // Greyed out while bots pick, and once a command could no longer land before the offer lapses.
+    enabled: driven.length > 0 && input.botsPick !== true && ticksLeft > INPUT_DELAY_TICKS,
   };
 }
 
 /** Open offers with their cards, countdowns and in-flight state; undefined when none is open. */
 function bargainModel(input: HudInput): BargainHudModel | undefined {
   const { open } = input.p.bargains;
-  if (open.length === 0) {
+  // The offers die with the game.
+  if (open.length === 0 || input.end !== undefined) {
     return undefined;
   }
   const sent = input.controls.bargainSent ?? [];
-  return { offers: open.map((o) => offerModel(input, o, sent)) };
+  return {
+    offers: open.map((o) => offerModel(input, o, sent)),
+    botsPick: input.botsPick === true,
+    botsPickLabel: UI_TEXT.bargain.botsPick,
+  };
 }
 
 /**

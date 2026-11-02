@@ -86,5 +86,16 @@ export function defaultBotSetup(): BotSetup {
       ...psykerWeights(),
       ...standinWeights(),
     },
+    bargain: { policy: 'evaluate' },
   };
+}
+
+const BARGAIN_POLICIES: readonly string[] = ['evaluate', 'declineAll', 'acceptAll'];
+
+/** Throws on a bargain policy that is not one of `evaluate`, `declineAll`, `acceptAll`. */
+export function validateBots(bots: BotSetup): void {
+  const policy: unknown = bots.bargain?.policy;
+  if (policy !== undefined && !(typeof policy === 'string' && BARGAIN_POLICIES.includes(policy))) {
+    throw new RangeError(`bots config: unknown bargain policy '${String(policy)}'`);
+  }
 }

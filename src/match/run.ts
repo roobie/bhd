@@ -12,6 +12,7 @@ import { defaultGame, defaultMasterGame } from '../content/index.ts';
 import type { ConfigOverrides, RunConfig } from '../content/overrides.ts';
 import { applyOverrides } from '../content/overrides.ts';
 import type { EndReason, SimEvent } from '../sim/events.ts';
+import type { BargainPolicy } from './match.ts';
 import { Match } from './match.ts';
 
 export const RUN_ABI = 1;
@@ -45,6 +46,11 @@ export interface GameSpec {
    * `Match.setDriven` hands them back). Absent or empty means an all-bot game. The reporter never sets it.
    */
   readonly humans?: readonly number[];
+  /**
+   * Who resolves bargain offers. Default `human` when `humans` is non-empty (a solo human decides every
+   * offer) and `bots` otherwise; `bots` with a human lets the bot seats pick (the shell's opt-in toggle).
+   */
+  readonly bargainPolicy?: BargainPolicy;
   /** A patch on the shipped config; see content/overrides.ts. */
   readonly overrides?: ConfigOverrides;
 }
@@ -121,6 +127,7 @@ function matchOf(spec: GameSpec, resolved: RunConfig): Match {
     bots: resolved.bots,
     hashEvery: spec.hashEvery,
     ...(spec.humans === undefined ? {} : { driven: spec.humans }),
+    bargainPolicy: spec.bargainPolicy ?? ((spec.humans?.length ?? 0) > 0 ? 'human' : 'bots'),
     ...(resolved.director === undefined ? {} : { director: resolved.director }),
   });
 }

@@ -6,6 +6,7 @@
 
 import type { SimEvent } from '../../sim/events.ts';
 import type { GameLog } from '../types.ts';
+import { heroDefAt } from './effective.ts';
 
 interface EntityInfo {
   readonly id: number;
@@ -52,12 +53,14 @@ export interface GameIndex {
 
 const cache = new WeakMap<GameLog, GameIndex>();
 
-function maxHpOf(log: GameLog, def: string): number {
+/** Max hp of entity `id` of content def `def` at `tick`; a hero's is its effective def's (accepted bargains patched in). */
+function maxHpOf(log: GameLog, spawned: { readonly id: number; readonly def: string; readonly tick: number }): number {
   const { game } = log.header.resolved;
+  const { def } = spawned;
   if (def === 'ancient') {
     return game.map.ancient.maxHp;
   }
-  const hero = game.heroes.find((h) => h.id === def);
+  const hero = heroDefAt(log, spawned.id, def, spawned.tick);
   if (hero !== undefined) {
     return hero.maxHp;
   }
@@ -84,7 +87,7 @@ class Tracker {
 
   spawn(e: { readonly id: number; readonly def: string; readonly team: 0 | 1; readonly tick: number }): void {
     const isHero = e.team === 0 && this.#heroIds.has(e.def);
-    const maxHp = maxHpOf(this.#log, e.def);
+    const maxHp = maxHpOf(this.#log, e);
     this.entities.set(e.id, {
       id: e.id,
       def: e.def,

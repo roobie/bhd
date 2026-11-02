@@ -17,7 +17,7 @@ import { testBargains } from '../bargains-fixture.ts';
 const SEED = 0x91_b4_c0_de;
 
 function eff(over: Partial<EffectView> & Pick<EffectView, 'kind'>): EffectView {
-  return { target: 'self', value: 1, path: '', op: '', def: '', ...over };
+  return { target: 'self', value: 1, path: '', op: '', def: '', base: undefined, ...over };
 }
 
 function card(bargain: string, hero: number, gains: EffectView[], costs: EffectView[]): CardView {
@@ -61,7 +61,7 @@ function offerOf(id: number, cs: CardView[]): OfferView {
 }
 
 function withOffers(p: Perception, offers: OfferView[]): Perception {
-  return { ...p, bargains: { open: offers, taken: [] } };
+  return { ...p, bargains: { open: offers, taken: [], declineAncientHeal: 0.04 } };
 }
 
 function ctxOf(p: Perception, meIndex = 0, over: Partial<BotCtx> = {}): BotCtx {
@@ -117,11 +117,11 @@ function offerFor(p: Perception): OfferView {
 }
 
 describe('bargainDecisions: shape', () => {
-  it('is empty without an open offer and for seats other than the first living hero', () => {
+  it('is empty without an open offer, one decision with one (the Match picks which seat asks)', () => {
     const p = base();
     expect(bargainDecisions(ctxOf(p), 'evaluate')).toEqual([]);
     const open = withOffers(p, [offerFor(p)]);
-    expect(bargainDecisions(ctxOf(open, 1), 'evaluate')).toEqual([]);
+    expect(bargainDecisions(ctxOf(open, 1), 'evaluate')).toHaveLength(1);
     expect(bargainDecisions(ctxOf(open, 0), 'evaluate')).toHaveLength(1);
   });
 
@@ -192,15 +192,28 @@ describe('bargainDecisions: evaluate', () => {
     expect(JSON.stringify(p)).toBe(before);
   });
 
-  it('sometimes declines and sometimes accepts over a range of situations', () => {
-    const picks = new Set<string>();
+  it('accepts a clearly positive card and declines a clearly negative one, in every situation', () => {
+    const good = card('good', 0, [eff({ kind: 'dealt', target: 'team', value: 3 })], []);
+    const bad = card('bad', 0, [], [eff({ kind: 'respawn', target: 'team', value: 3 })]);
     for (const p of situations()) {
-      for (const c of offerFor(p).cards) {
-        const solo = withOffers(p, [offerOf(1, [c])]);
-        picks.add(picked(only(bargainDecisions(ctxOf(solo), 'evaluate'))) === 'decline' ? 'decline' : 'accept');
-      }
+      const pick = (c: CardView): string =>
+        picked(only(bargainDecisions(ctxOf(withOffers(p, [offerOf(1, [c])])), 'evaluate')));
+      expect(pick(good)).toBe('accept:good');
+      expect(pick(bad)).toBe('decline');
     }
-    expect([...picks].sort()).toEqual(['accept', 'decline']);
+  });
+
+  it('counts an additive patch against the number it patches', () => {
+    const p = withOffers(base(), [offerOf(1, [])]);
+    const costOf = (e: Partial<EffectView>): number => {
+      const c = card('x', 0, [], [eff({ kind: 'def', path: 'attack.damage', op: 'add', value: -2, ...e })]);
+      const open = withOffers(p, [offerOf(1, [c])]);
+      return only(bargainDecisions(ctxOf(open), 'evaluate')).options[1]?.cost ?? Number.NaN;
+    };
+    // The same -2 hurts more on a small base than on a large one; an unknown base still counts something.
+    expect(costOf({ base: 4 })).toBeGreaterThan(costOf({ base: 40 }));
+    expect(costOf({ base: undefined })).toBeGreaterThan(0);
+    expect(costOf({ base: 0 })).toBe(costOf({ base: undefined }));
   });
 
   it('values what is missing: a hurt Ancient never makes a heal card worse, a full one gains nothing from it', () => {
@@ -288,6 +301,54 @@ describe('Match bargain round', () => {
     }
     return { events, decisionIds };
   }
+
+  function resolvers(m: Match, until: number): Set<number> {
+    const players = new Set<number>();
+    while (!m.ended && m.tick < until) {
+      for (const e of m.step()) {
+        if (e.kind === 'cmd' && e.cmd.kind === 'bargain') {
+          players.add(e.player);
+        }
+      }
+    }
+    return players;
+  }
+
+  function solo(over: Partial<MatchOptions>): Match {
+    return new Match({
+      seed: SEED,
+      game: { ...defaultGame(), bargains: testBargains() },
+      bots: defaultBotSetup(),
+      ...over,
+    });
+  }
+
+  it('a driven seat never decides: the lowest bot seat does', () => {
+    const players = resolvers(solo({ driven: [0], bargainPolicy: 'bots' }), 1800);
+    expect(players.size).toBeGreaterThan(0);
+    expect([...players]).toEqual([1]);
+  });
+
+  it('setBargainPolicy hands offers to the bots only from then on, and is deterministic', () => {
+    const play = (): string => {
+      const m = solo({ driven: [0], bargainPolicy: 'human' });
+      const log: unknown[] = [];
+      while (!m.ended && m.tick < 1800) {
+        if (m.tick === 300) {
+          m.setBargainPolicy('bots');
+        }
+        for (const e of m.step()) {
+          log.push(e);
+        }
+      }
+      return JSON.stringify(log);
+    };
+    expect(play()).toBe(play());
+    const m = solo({ driven: [0], bargainPolicy: 'human' });
+    expect(resolvers(m, 400)).toEqual(new Set());
+    m.setBargainPolicy('bots');
+    expect(m.bargainPolicy).toBe('bots');
+  });
 
   it('human and off never put bargain decisions or commands through the bots', () => {
     for (const policy of ['human', 'off'] as const) {

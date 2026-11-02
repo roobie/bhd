@@ -1,9 +1,10 @@
 // Bot side of bargains (wave 9). Bots see offers only through Perception (`ctx.p.bargains.open`,
-// D-ABIU2YALDBBGMWAR). One seat per game, the one holding the first living hero (slot 0 when up),
-// decides the team's offers: one `bargain.offer` decision for the lowest open offer id, options
+// D-ABIU2YALDBBGMWAR). One seat per game decides the team's offers: `Match` hands this the think of
+// the lowest-slot bot seat (not human-driven) whose hero is up, so a downed or human-driven seat never
+// decides and a card whose benefiting hero is down can still be taken. One `bargain.offer` decision for the lowest open offer id, options
 // `decline` and `accept:<card>` (label: the bargain id, so choice spread shows accept rates per
-// bargain). `Match` calls this on every think of a bot seat when `MatchOptions.bargainPolicy` is
-// `bots`, and dedupes the commands on the channel `bargain:<offer>`.
+// bargain). `Match` calls this for that seat when its bargain policy is `bots`, and dedupes the
+// commands on the channel `bargain:<offer>`.
 //
 // The scorer is generic over `EffectView`s: gains minus costs, each effect worth its magnitude times
 // a per-kind unit, costs scaled by the situation (weak heroes, armoured preview, leaks, friendly-fire
@@ -65,7 +66,13 @@ function magnitude(ctx: BotCtx, e: EffectView): number {
     case 'ancientHeal':
       return Math.abs(e.value);
     case 'def':
-      return e.op === 'add' ? Math.abs(e.value) * w(ctx, 'bargain.addScale') : Math.abs(e.value - 1);
+      if (e.op !== 'add') {
+        return Math.abs(e.value - 1);
+      }
+      // An additive patch counts as a relative change of the number it patches; `addScale` stands in when the base is unknown or 0.
+      return e.base !== undefined && e.base !== 0
+        ? Math.abs(e.value) / Math.abs(e.base)
+        : Math.abs(e.value) * w(ctx, 'bargain.addScale');
     default:
       return Math.abs(e.value - 1);
   }
@@ -176,7 +183,7 @@ function optionsFor(ctx: BotCtx, offer: OfferView, policy: BargainBotPolicy): Op
       ];
     default: {
       const s = situation(ctx.p);
-      const heal = Math.min(w(ctx, 'bargain.decline.heal'), s.missing) * w(ctx, 'bargain.unit.ancientHeal');
+      const heal = Math.min(ctx.p.bargains.declineAncientHeal, s.missing) * w(ctx, 'bargain.unit.ancientHeal');
       return [
         declineOption(offer, w(ctx, 'bargain.decline.base') + heal),
         ...offer.cards.map((c) => acceptOption(offer, c, scoreCard(ctx, s, c))),
@@ -185,17 +192,12 @@ function optionsFor(ctx: BotCtx, offer: OfferView, policy: BargainBotPolicy): Op
   }
 }
 
-/** The seat's bargain decisions under `policy` (`evaluate` scores cards, `declineAll`, `acceptAll`). */
+/** The deciding seat's bargain decisions under `policy` (`evaluate` scores cards, `declineAll`, `acceptAll`). */
 export function bargainDecisions(ctx: BotCtx, policy: BargainBotPolicy): Decision[] {
-  // Only the seat of the first living hero resolves the team's offers; the others stay silent.
-  const [owner] = ctx.p.heroes;
-  if (owner === undefined || owner.id !== ctx.me.id) {
-    return [];
-  }
   const offer = firstOffer(ctx.p);
   if (offer === undefined) {
     return [];
   }
   const options = optionsFor(ctx, offer, policy);
-  return [{ id: 'bargain.offer', hero: benefiting(offer, options, owner.id), options }];
+  return [{ id: 'bargain.offer', hero: benefiting(offer, options, ctx.me.id), options }];
 }

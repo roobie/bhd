@@ -2,6 +2,14 @@
 // default roster, so `validateGame` accepts it; engine specs and the determinism scenario share it.
 
 import type { BargainsDef } from '../src/content/bargains.ts';
+import type { GameConfig } from '../src/content/index.ts';
+import { defaultGame } from '../src/content/index.ts';
+
+/** The shipped game with bargains switched off (the default game has them on). */
+export function noBargains(): GameConfig {
+  const { bargains: _on, ...off } = defaultGame();
+  return off;
+}
 
 export function testBargains(): BargainsDef {
   return {

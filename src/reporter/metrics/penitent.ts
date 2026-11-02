@@ -4,6 +4,7 @@
 
 import { ticks } from '../../sim/time.ts';
 import type { GameLog, MetricDef } from '../types.ts';
+import { heroDefAt } from './effective.ts';
 import { buildIndex, type GameIndex } from './gameindex.ts';
 
 /** Martyrdom's ability slot (the ultimate; see hero.ts). */
@@ -16,9 +17,10 @@ interface Knobs {
   readonly novaMult: number;
 }
 
-/** The resolved penitent def's numbers, neutral ones for a game that has no penitent. */
-function penitentKnobs(log: GameLog): Knobs {
-  const def = log.header.resolved.game.heroes.find((h) => h.kit === 'penitent');
+/** The penitent's effective def numbers at `tick` (accepted bargains patched in), neutral ones for a game that has no penitent. */
+function penitentKnobs(log: GameLog, ix: GameIndex, tick: number): Knobs {
+  const id = [...ix.entities.values()].find((e) => e.def === 'penitent')?.id;
+  const def = id === undefined ? undefined : heroDefAt(log, id, 'penitent', tick);
   if (def?.kit !== 'penitent') {
     return { ffMult: 1, hpLossMult: 1, seconds: 0, novaMult: 1 };
   }
@@ -59,8 +61,7 @@ export const penitentPain: MetricDef = {
   missing: 'zero',
   compute: (log) => {
     const ix = buildIndex(log);
-    const k = penitentKnobs(log);
-    const windowTicks = ticks(k.seconds);
+    const windowAt = (tick: number): number => ticks(penitentKnobs(log, ix, tick).seconds);
     // Martyrdom casts: Pain banks the raw damage, and hp loss is only hpLossMult of it inside the window.
     const casts = log.events.flatMap((e) =>
       e.kind === 'ability' && e.slot === MARTYRDOM_SLOT && isPenitent(ix, e.hero) ? [e] : [],
@@ -70,7 +71,8 @@ export const penitentPain: MetricDef = {
       if (e.kind !== 'dmg' || !isPenitent(ix, e.dst)) {
         return;
       }
-      const inside = casts.some((c) => e.tick >= c.tick && e.tick < c.tick + windowTicks);
+      const k = penitentKnobs(log, ix, e.tick);
+      const inside = casts.some((c) => e.tick >= c.tick && e.tick < c.tick + windowAt(c.tick));
       const raw = (ix.effDamage[i] ?? 0) / (inside && k.hpLossMult > 0 ? k.hpLossMult : 1);
       banked += e.tags.includes('ff') ? raw * k.ffMult : raw;
     });
@@ -78,10 +80,11 @@ export const penitentPain: MetricDef = {
     let spent = 0;
     const hits = novaHits(log, ix);
     for (const c of casts) {
+      const k = penitentKnobs(log, ix, c.tick);
       if (c.value > 0) {
         spent += c.value;
       } else if (k.novaMult > 0) {
-        const end = c.tick + windowTicks;
+        const end = c.tick + windowAt(c.tick);
         const burst = hits.filter((h) => h.tick >= end - 1 && h.tick <= end + 1);
         spent += Math.max(0, ...burst.map((h) => h.amount)) / k.novaMult;
       }

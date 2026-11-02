@@ -118,7 +118,7 @@ function patchAt(node: unknown, keys: readonly string[], i: number, e: Extract<E
  * or not a finite number. Validation already forbids a patch that misses a hero its target reaches, so
  * skipping is only a defensive fallback. Enemy patches (`enemy`) are rejected by validation; the field is ignored here.
  */
-export function applyDefPatches<T extends object>(def: T, effects: readonly Effect[]): T {
+function applyDefPatches<T extends object>(def: T, effects: readonly Effect[]): T {
   let out: unknown = def;
   for (const e of effects) {
     if (e.kind === 'def') {
@@ -128,8 +128,44 @@ export function applyDefPatches<T extends object>(def: T, effects: readonly Effe
   return out as T;
 }
 
+/**
+ * Does an effect with `target` reach hero entity `hero`, for a card benefiting `benefit` (0 = a team
+ * card, the whole team)? The one source of truth for who an effect applies to: the sim, the HUD, help
+ * and the reporter all ask this. On a team card `self` and `allies` both mean every hero; on a hero
+ * card `team` is every hero, `self` the benefiting hero and `allies` the others.
+ */
+export function effectReaches(target: EffectTarget, benefit: number, hero: number): boolean {
+  if (target === 'team' || benefit === 0) {
+    return true;
+  }
+  return target === 'self' ? hero === benefit : hero !== benefit;
+}
+
+/** An accepted bargain as the def layer reads it: who it benefits (entity id, 0 = team) and its effects. */
+export interface AppliedEffects {
+  readonly hero: number;
+  readonly effects: readonly Effect[];
+}
+
+/**
+ * `def` of hero entity `hero` with every `def` patch of `taken` (in order) that reaches it applied.
+ * Pure; the same object when nothing applies. The sim (`heroDef`), perception-fed HUD and help, and
+ * the reporter derive effective defs through this and nothing else.
+ */
+export function effectiveDef<T extends object>(def: T, taken: readonly AppliedEffects[], hero: number): T {
+  const patches: Effect[] = [];
+  for (const t of taken) {
+    for (const e of t.effects) {
+      if (e.kind === 'def' && e.enemy === undefined && effectReaches(e.target, t.hero, hero)) {
+        patches.push(e);
+      }
+    }
+  }
+  return patches.length === 0 ? def : applyDefPatches(def, patches);
+}
+
 /** The numeric leaf at dotted `path` of `node`, undefined if the path does not end at a finite number. */
-function numberAt(node: unknown, path: string): number | undefined {
+export function defNumberAt(node: unknown, path: string): number | undefined {
   let cur = node;
   for (const key of path.split('.')) {
     if (!hasKey(cur, key)) {
@@ -175,7 +211,7 @@ function checkDefEffect(world: BargainWorld, b: BargainDef, e: Extract<Effect, {
     fail(b.id, 'enemy def patches are not supported yet');
   }
   // Every hero the target reaches must have the path (a card whose kit is not in the roster is never offered).
-  if (!reachedHeroes(world, b, e.target).every((h) => numberAt(h, e.path) !== undefined)) {
+  if (!reachedHeroes(world, b, e.target).every((h) => defNumberAt(h, e.path) !== undefined)) {
     fail(b.id, `unknown hero def path '${e.path}' for target '${e.target}'`);
   }
 }
