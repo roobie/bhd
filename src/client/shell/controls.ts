@@ -1,10 +1,10 @@
 // The control reducer: (ControlState, UiAction, ctx) -> {state, commands}. Owner: w7-input.
 
 import { abilityPresentation } from '../../content/presentation.ts';
-import type { HeroView } from '../../perception/types.ts';
+import type { HeroView, Perception } from '../../perception/types.ts';
 import type { Command } from '../../sim/commands.ts';
 import { initialArming, reduceArming } from './arming.ts';
-import type { ControlContext, ControlState, ReduceResult, UiAction } from './types.ts';
+import type { BargainSent, ControlContext, ControlState, ReduceResult, UiAction } from './types.ts';
 
 /** Ticks a hint stays up (2 s at 30 Hz). */
 const HINT_TICKS = 60;
@@ -30,6 +30,7 @@ export function initialControls(selected: number): ControlState {
     paused: false,
     help: false,
     hint: undefined,
+    bargainSent: [],
   };
 }
 
@@ -177,6 +178,60 @@ export function reduce(state: ControlState, action: UiAction, ctx: ControlContex
   return reduceOpen(state.help && CLOSES_HELP.has(action.kind) ? { ...state, help: false } : state, action, ctx);
 }
 
+/** The offer and card (undefined card = Decline) an action names; a key names the oldest unsent open offer. */
+function bargainTarget(
+  action: UiAction,
+  open: Perception['bargains']['open'],
+  sent: readonly BargainSent[],
+): { readonly offerId: number; readonly card: string | undefined } | undefined {
+  if (action.kind === 'bargain') {
+    return { offerId: action.offer, card: action.card };
+  }
+  if (action.kind !== 'bargainKey') {
+    return undefined;
+  }
+  const oldest = open.find((o) => !sent.some((x) => x.offer === o.id)) ?? open[0];
+  if (oldest === undefined) {
+    return undefined;
+  }
+  if (action.card === undefined) {
+    return { offerId: oldest.id, card: undefined };
+  }
+  const picked = oldest.cards[action.card];
+  return picked === undefined ? undefined : { offerId: oldest.id, card: picked.bargain };
+}
+
+/**
+ * Resolves a bargain offer: one command per offer, from a human-driven seat, for an open offer and
+ * (when accepting) one of its cards. The offer is recorded as sent, so the HUD greys it while the
+ * input delay runs and a second click or key does nothing. Entries of offers no longer open are dropped.
+ */
+function reduceBargain(state: ControlState, action: UiAction, ctx: ControlContext): ReduceResult {
+  const { open } = ctx.p.bargains;
+  const sent = (state.bargainSent ?? []).filter((x) => open.some((o) => o.id === x.offer));
+  const next: ControlState = { ...state, bargainSent: sent };
+  const target = bargainTarget(action, open, sent);
+  if (target === undefined) {
+    return { state: next, commands: [] };
+  }
+  const { offerId, card } = target;
+  const offer = open.find((o) => o.id === offerId);
+  if (
+    offer === undefined ||
+    ctx.driven.length === 0 ||
+    sent.some((x) => x.offer === offer.id) ||
+    (card !== undefined && !offer.cards.some((c) => c.bargain === card))
+  ) {
+    return { state: next, commands: [] };
+  }
+  const command: Command =
+    card === undefined
+      ? { kind: 'bargain', op: 'decline', offer: offer.id }
+      : { kind: 'bargain', op: 'accept', offer: offer.id, card };
+  const entry = card === undefined ? { offer: offer.id } : { offer: offer.id, card };
+  return { state: { ...next, bargainSent: [...sent, entry] }, commands: [command] };
+}
+
 function reduceOpen(state: ControlState, action: UiAction, ctx: ControlContext): ReduceResult {
   if (action.kind === 'help') {
     return { state: { ...state, help: !state.help }, commands: [] };
@@ -197,6 +252,9 @@ function reduceOpen(state: ControlState, action: UiAction, ctx: ControlContext):
     return { state: next, commands: step.commands };
   }
   switch (action.kind) {
+    case 'bargain':
+    case 'bargainKey':
+      return reduceBargain(next, action, ctx);
     case 'callWave':
       return { state: next, commands: [{ kind: 'callWave' }] };
     case 'select':

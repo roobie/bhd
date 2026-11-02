@@ -707,3 +707,220 @@
   font-weight: 400;
   opacity: 0.8;
 }
+
+/* Bargain offers (wave 9): a strip under the top bar; the cards open below it. On a phone the strip
+   is one line and starts collapsed (hud.ts), so the battlefield stays visible; wide screens start
+   open with the cards in a column at the right edge. */
+.hud-root .bargains {
+  position: absolute;
+  top: calc(var(--safe-top) + var(--top-h) + 4px);
+  left: calc(var(--safe-left) + 6px);
+  right: calc(var(--safe-right) + 6px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.hud-root .bargain-offer {
+  pointer-events: auto;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgb(14 14 18);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.hud-root .bsummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hud-root .bsummary::-webkit-details-marker {
+  display: none;
+}
+
+.hud-root .bsummary::after {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.hud-root .bargain-offer[open] .bsummary::after {
+  content: "hide";
+}
+
+.hud-root .bargain-offer:not([open]) .bsummary::after {
+  content: "show";
+}
+
+.hud-root .btitle {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.hud-root .btime {
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-root .bbar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #00000080;
+  overflow: hidden;
+}
+
+.hud-root .bbar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.hud-root .bcards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 6px 6px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.hud-root .bcard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--hit);
+  padding: 5px 8px;
+  box-sizing: border-box;
+  text-align: left;
+  border: 1px solid var(--c, var(--border));
+  border-radius: 8px;
+  background: #ffffff0d;
+  cursor: pointer;
+}
+
+.hud-root .bcard:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hud-root .bcard.chosen:disabled {
+  opacity: 0.9;
+  border-width: 2px;
+}
+
+.hud-root .bhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.hud-root .bname {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.hud-root .bhead .key {
+  position: static;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.hud-root .bwho,
+.hud-root .reward {
+  opacity: 0.75;
+}
+
+.hud-root .reward {
+  color: var(--good);
+}
+
+.hud-root .bline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-root .bline.gain b {
+  color: var(--good);
+}
+
+.hud-root .bline.cost b {
+  color: var(--bad);
+}
+
+.hud-root .bcard.decline {
+  border-color: var(--border);
+}
+
+.hud-root .bpips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.hud-root .bpip {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: var(--c, #888);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.hud-root .helptaken {
+  list-style: none;
+}
+
+/* Landscape: a row of cards in the free band under the map, between the hero column and the ability cluster */
+@media (min-width: 700px) {
+  .hud-root .bargains {
+    top: auto;
+    bottom: calc(var(--safe-bottom) + 6px);
+    left: calc(var(--safe-left) + var(--col-w) + 8px);
+    right: calc(var(--safe-right) + 470px);
+  }
+
+  .hud-root .bcards {
+    flex-direction: row;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .hud-root .bcard {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  .hud-root .bcard.decline {
+    flex: 0 0 92px;
+  }
+}
+
+/* Phone: the open panel scrolls and stays clear of the bottom bands */
+@media (max-width: 699px) {
+  .hud-root .bcards {
+    max-height: calc(100vh - var(--top-h) - var(--bar-h) - var(--cards-h) - 90px);
+  }
+
+  .hud-root .bsummary {
+    min-height: 32px;
+  }
+
+  .hud-root .card .bpip {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+  }
+}

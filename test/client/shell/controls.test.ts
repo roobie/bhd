@@ -272,7 +272,7 @@ describe('keyAction', () => {
   });
 
   it('leaves other keys and browser shortcuts alone', () => {
-    expect(k('z')).toBeUndefined();
+    expect(k('j')).toBeUndefined();
     expect(k('5')).toBeUndefined();
     expect(k('F5')).toBeUndefined();
     expect(k('s', { ctrl: true })).toBeUndefined();
