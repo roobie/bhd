@@ -14,13 +14,14 @@ import { defaultPresentation } from '../../content/presentation.ts';
 import type { Match } from '../../match/match.ts';
 import { buildMatch } from '../../match/run.ts';
 import type { Command } from '../../sim/commands.ts';
+import { SYSTEM_PLAYER } from '../../sim/commands.ts';
 import { createInstanceBuffer } from '../gl/instances.ts';
 import { createRenderer } from '../gl/renderer.ts';
 import { fitCamera } from './camera.ts';
 import { shellSpec } from './config.ts';
 import { initialControls, reduce } from './controls.ts';
 import { localDriver } from './driver.ts';
-import { DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame } from './frame.ts';
+import { DEFAULT_FRAME_OPTIONS, newFrameClock, planFrame, stepBudget } from './frame.ts';
 import { createHud } from './hud.ts';
 import { buildHudModel, hudInsets } from './hudmodel.ts';
 import { attachInput } from './input.ts';
@@ -31,11 +32,15 @@ import { advanceEffects, takeSnapshot } from './snapshot.ts';
 import type {
   Camera,
   ControlState,
+  DriverInfo,
+  DriverNotice,
   Effect,
   EntitySnap,
   FrameClock,
   HudInput,
+  HudNetInput,
   Insets,
+  NetNotice,
   ShellConfig,
   ShellElements,
   ShellHandle,
@@ -47,6 +52,9 @@ import type {
 import { INPUT_DELAY_TICKS } from './types.ts';
 
 type EndInfo = NonNullable<HudInput['end']>;
+
+/** How long a callout about another player's action stays up. */
+const NOTICE_MS = 5000;
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -86,6 +94,15 @@ function fallback(root: HTMLElement, detail: string): void {
   root.replaceChildren(box);
 }
 
+function defaultDownload(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/x-ndjson' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function defaultSchedule(frame: (nowMs: number) => void): () => void {
   const id = globalThis.requestAnimationFrame(frame);
   return () => globalThis.cancelAnimationFrame(id);
@@ -95,17 +112,30 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const now = options?.now ?? (() => performance.now());
   const schedule = options?.schedule ?? defaultSchedule;
   const ui = defaultPresentation();
-  const spec = shellSpec(config);
   const feedback = options?.feedback;
   // One configured hero is a solo game: selecting another hero takes it over (the others become bots).
-  const solo = config.drive.length === 1;
-  let driven: readonly number[] = config.drive;
+  // Co-op (several humans): ownership is fixed, nobody takes over, and the bots-pick toggle is gone.
+  const localPlayers = options?.localPlayers;
+  const humanSlots = options?.humanSlots;
+  const coop = localPlayers !== undefined && humanSlots !== undefined;
+  const spec = coop ? { ...shellSpec(config), networked: true } : shellSpec(config);
+  const solo = !coop && config.drive.length === 1;
+  const startDriven = (): readonly number[] => localPlayers ?? config.drive;
+  let driven: readonly number[] = startDriven();
+  /** Slots whose human dropped (a bot has the hero), as far as the driver has said. */
+  let dropped: readonly number[] = [];
+  let notices: (NetNotice & { readonly untilMs: number })[] = [];
+  let pausedBy: number | undefined;
+  let endedBy: DriverInfo['endedBy'];
+  let unsubscribe: () => void = () => undefined;
+  let lastStatus: string | undefined;
+  let frameAlpha = 0;
   // The "Bots pick bargains" toggle: off = a human decides every offer. It survives a restart.
   let botsPick = false;
 
   let match: Match = buildMatch(spec);
   const makeDriver = (m: Match): TickDriver => options?.driver?.(m) ?? localDriver(m, INPUT_DELAY_TICKS);
-  let driver: TickDriver = makeDriver(match);
+  let driver: TickDriver = bindDriver(makeDriver(match));
   let controls: ControlState | undefined;
   let clock: FrameClock = newFrameClock();
   let prev: Snapshot | undefined;
@@ -133,17 +163,65 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     dispose: () => {
       if (!disposed) {
         disposed = true;
+        unsubscribe();
+        driver.dispose();
         cancelFrame();
         teardown();
       }
     },
   });
 
+  /** Listens to the driver's notices for the panels and callouts. */
+  function bindDriver(d: TickDriver): TickDriver {
+    unsubscribe = d.onNotice((n) => onNotice(n));
+    return d;
+  }
+
+  function onNotice(n: DriverNotice): void {
+    switch (n.kind) {
+      case 'paused':
+        pausedBy = n.by;
+        notify('pause', n.by);
+        break;
+      case 'resumed':
+        pausedBy = undefined;
+        notify('resume', n.by);
+        break;
+      case 'dropped':
+        for (const slot of n.slots) {
+          if (!dropped.includes(slot)) {
+            dropped = [...dropped, slot];
+            notify('drop', slot);
+          }
+        }
+        break;
+      case 'hostLeft':
+        endedBy = 'host-left';
+        break;
+      case 'calledWave':
+        notify('call', n.by);
+        break;
+      default:
+        break;
+    }
+    hudDirty = true;
+  }
+
   function restart(): void {
     match = buildMatch(spec);
-    driven = config.drive;
-    match.setBargainPolicy(botsPick ? 'bots' : 'human');
-    driver = makeDriver(match);
+    driven = startDriven();
+    dropped = [];
+    notices = [];
+    pausedBy = undefined;
+    endedBy = undefined;
+    // A fresh solo match at tick 0: this is its initial configuration, not a mid-game change. In
+    // networked play the spec carries the policy and the shell does not override it.
+    if (!coop) {
+      match.setBargainPolicy(botsPick ? 'bots' : 'human');
+    }
+    unsubscribe();
+    driver.dispose();
+    driver = bindDriver(makeDriver(match));
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
     prev = takeSnapshot(match.sim, undefined);
@@ -165,6 +243,22 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     return undefined;
   }
 
+  /** Slots another human drives and who has not dropped (co-op); empty in solo. */
+  function others(): readonly number[] {
+    return (humanSlots ?? []).filter((s) => !(driven.includes(s) || dropped.includes(s)));
+  }
+
+  /** Hero entity ids another human drives. */
+  function lockedHeroes(): readonly number[] {
+    const taken = others();
+    const p = match.perception;
+    return [...p.heroes, ...p.fallen].filter((h) => taken.includes(h.slot)).map((h) => h.id);
+  }
+
+  function control(cmd: Command): void {
+    driver.submit(SYSTEM_PLAYER, cmd);
+  }
+
   /** Solo: choosing a hero makes it the human's and hands the previous one back to its bot. */
   function takeOver(action: UiAction): void {
     if (!solo || controls === undefined) {
@@ -172,23 +266,63 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     }
     const slot = selectedSlot(action, controls);
     if (slot !== undefined && Number.isInteger(slot) && slot >= 0 && slot <= 3 && driven[0] !== slot) {
+      const [old] = driven;
       driven = [slot];
-      match.setDriven(driven);
+      // Through the driver, so the handover lands at the same tick everywhere. `driven` flips now so
+      // the player's next orders already go to the new hero.
+      if (old !== undefined) {
+        control({ kind: 'control', op: 'drive', slot: old, by: 'bot' });
+      }
+      control({ kind: 'control', op: 'drive', slot, by: 'human' });
+    }
+  }
+
+  function togglePause(): boolean {
+    driver.setPaused(driver.status() !== 'paused', driven[0] ?? 0);
+    hudDirty = true;
+    return true;
+  }
+
+  function setBotsPick(on: boolean): void {
+    if (!coop) {
+      botsPick = on;
+      control({ kind: 'control', op: 'bargainPolicy', policy: on ? 'bots' : 'human' });
+      hudDirty = true;
+    }
+  }
+
+  function downloadDump(): void {
+    const text = driver.dump();
+    if (text !== undefined) {
+      (options?.download ?? defaultDownload)('bhd-desync.ndjson', text);
+    }
+  }
+
+  /** Actions the app handles itself (restart, toggles, pause, dump); true = consumed. */
+  function intercept(action: UiAction): boolean {
+    switch (action.kind) {
+      case 'restart':
+        if (options?.onRestart?.() !== true) {
+          restart();
+        }
+        return true;
+      case 'bargainBots':
+        setBotsPick(action.on);
+        return true;
+      case 'dumpDesync':
+        downloadDump();
+        return true;
+      case 'pause':
+        return togglePause();
+      case 'select':
+        return others().includes(action.slot);
+      default:
+        return false;
     }
   }
 
   function dispatch(action: UiAction): void {
-    if (disposed || controls === undefined) {
-      return;
-    }
-    if (action.kind === 'restart') {
-      restart();
-      return;
-    }
-    if (action.kind === 'bargainBots') {
-      botsPick = action.on;
-      match.setBargainPolicy(botsPick ? 'bots' : 'human');
-      hudDirty = true;
+    if (disposed || controls === undefined || intercept(action)) {
       return;
     }
     takeOver(action);
@@ -197,6 +331,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       driven,
       ui,
       maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds,
+      lockedHeroes: lockedHeroes(),
     });
     const player = controls.selected;
     controls = result.state;
@@ -218,6 +353,63 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     return hero === undefined || hero === 0
       ? undefined
       : (p.heroes.find((h) => h.id === hero) ?? p.fallen.find((h) => h.id === hero))?.slot;
+  }
+
+  /** Callouts are for co-op; solo has nobody else to name. */
+  function notify(kind: NetNotice['kind'], slot: number): void {
+    if (coop) {
+      notices = [...notices, { kind, slot, untilMs: now() + NOTICE_MS }].slice(-3);
+    }
+  }
+
+  /** Tracks the driver's status and expires old callouts. */
+  function watchDriver(realMs: number): void {
+    const status = driver.status();
+    if (status !== lastStatus) {
+      lastStatus = status;
+      hudDirty = true;
+    }
+    if (notices.some((n) => n.untilMs <= realMs)) {
+      notices = notices.filter((n) => n.untilMs > realMs);
+      hudDirty = true;
+    }
+  }
+
+  /** Runs this frame's steps: the wall clock's, plus catch-up, and never past what the driver has sealed. */
+  function stepFrame(realMs: number, nowMs: number): void {
+    watchDriver(realMs);
+    const plan = planFrame(clock, realMs, {
+      ...DEFAULT_FRAME_OPTIONS,
+      paused: driver.status() === 'paused',
+    });
+    ({ clock } = plan);
+    frameAlpha = plan.alpha;
+    // A stall or a pause just stops stepping; the frame still draws and the HUD still answers.
+    const budget = stepBudget(plan.steps, match.tick, driver.steppable());
+    for (let i = 0; i < budget && !match.ended && end === undefined && canStep(); i++) {
+      stepOnce(realMs, nowMs);
+    }
+  }
+
+  function canStep(): boolean {
+    return match.tick < driver.steppable() && driver.status() === 'running';
+  }
+
+  /** The networked part of the HUD input; absent in solo. */
+  function netInput(): Pick<HudInput, 'coop' | 'others' | 'names' | 'net' | 'paused'> {
+    const status = driver.status();
+    const net: HudNetInput = {
+      status,
+      info: { ...(pausedBy === undefined ? {} : { pausedBy }), ...(endedBy === undefined ? {} : { endedBy }) },
+      canDump: driver.dump() !== undefined,
+      notices,
+    };
+    return {
+      paused: status === 'paused',
+      ...(coop ? { coop, others: others() } : {}),
+      ...(options?.names === undefined ? {} : { names: options.names }),
+      net,
+    };
   }
 
   /** `nowMs` is the real clock, `visualMs` the (possibly hitstop-dilated) effect clock. */
@@ -337,13 +529,10 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       }
       const realMs = now();
       const nowMs = feedback?.visualTime(realMs) ?? realMs;
-      const plan = planFrame(clock, realMs, { ...DEFAULT_FRAME_OPTIONS, paused: controls.paused });
-      ({ clock } = plan);
-      for (let i = 0; i < plan.steps && !match.ended && end === undefined && match.tick < driver.steppable(); i++) {
-        stepOnce(realMs, nowMs);
-      }
+      watchDriver(realMs);
+      stepFrame(realMs, nowMs);
       const p = match.perception;
-      drawn = interpolate(prev, curr, plan.alpha);
+      drawn = interpolate(prev, curr, frameAlpha);
       buffer.clear();
       buildScene(
         {
@@ -356,7 +545,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
           driven,
           effects,
           nowMs,
-          tickF: p.tick + plan.alpha,
+          tickF: p.tick + frameAlpha,
         },
         buffer,
       );
@@ -372,6 +561,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
             driven,
             end,
             botsPick,
+            ...netInput(),
             maxOffsetSeconds: match.sim.game.intents.maxOffsetSeconds,
             game: match.sim.game,
           }),

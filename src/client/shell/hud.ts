@@ -116,12 +116,13 @@ function cardView(c: HeroCardModel, dispatch: Dispatch): TemplateResult {
   return html`<button
     class=${cls}
     type="button"
+    ?disabled=${c.badge === 'other'}
     aria-label="Select ${c.label}"
     aria-pressed=${c.selected ? 'true' : 'false'}
     style=${styleMap({ '--c': c.color })}
     @click=${() => dispatch({ kind: 'select', slot: c.slot })}
   >
-    <span class="name"><i class="swatch"></i><span class="label">${c.label}</span><small class="badge ${c.badge}">${c.badge}</small></span>
+    <span class="name"><i class="swatch"></i><span class="label">${c.label}</span><small class="badge ${c.badge}">${c.badgeLabel ?? c.badge}</small></span>
     <span class="hp" role="progressbar" aria-label="${c.label} hp" aria-valuenow=${Math.round(c.hpFrac * 100)}>
       <i style=${styleMap({ width: pct(c.hpFrac) })}></i>
     </span>
@@ -330,6 +331,29 @@ function endView(model: HudModel, dispatch: Dispatch): TemplateResult | typeof n
   </div>`;
 }
 
+function netView(model: HudModel, dispatch: Dispatch): TemplateResult | typeof nothing {
+  const { net } = model;
+  if (net === undefined) {
+    return nothing;
+  }
+  return html`<div class="net" data-hit>
+    ${net.notes.length === 0 ? nothing : html`<ul class="netnotes" role="status">${net.notes.map((n) => html`<li>${n}</li>`)}</ul>`}
+    ${
+      net.kind === undefined
+        ? nothing
+        : html`<div class="netpanel ${net.kind}" role="alertdialog" aria-label=${net.title}>
+            <h2>${net.title}</h2>
+            ${net.detail === '' ? nothing : html`<p>${net.detail}</p>`}
+            ${
+              net.dump
+                ? html`<button class="btn primary dump" type="button" @click=${() => dispatch({ kind: 'dumpDesync' })}>Download dump</button>`
+                : nothing
+            }
+          </div>`
+    }
+  </div>`;
+}
+
 /** Wide screens start the offer panel open; a phone starts it as a one-line strip so the battlefield stays visible. */
 function offersStartOpen(): boolean {
   return typeof globalThis.matchMedia !== 'function' || globalThis.matchMedia('(min-width: 700px)').matches;
@@ -347,6 +371,7 @@ function template(model: HudModel, deps: HudDeps, gestures: Gestures): TemplateR
     ${model.bargain === undefined ? nothing : bargainPanelView(model.bargain, dispatch, offersStartOpen() && model.help === undefined)}
     ${model.help === undefined ? nothing : helpView(model.help, dispatch)}
     ${endView(model, dispatch)}
+    ${netView(model, dispatch)}
   `;
 }
 

@@ -43,8 +43,10 @@ import type {
   HeroCardModel,
   HudInput,
   HudModel,
+  HudNetInput,
   Insets,
   IntentRowModel,
+  NetPanelModel,
   PreviewChip,
   ResourceBarModel,
   Size,
@@ -88,7 +90,7 @@ function topBar(input: HudInput): TopBarModel {
     preview,
     previewHidden: preview.length === 0 && pending,
     ancientFrac: clamp01(p.ancient.hpFrac),
-    paused: controls.paused,
+    paused: controls.paused || input.paused === true || input.net?.status === 'paused',
     help: controls.help,
   };
 }
@@ -141,9 +143,21 @@ function respawnSecondsOf(ticks: number): number {
   return Math.max(1, Math.ceil(ticks / TICK_HZ));
 }
 
+/** The badge of a slot: the local human ('you'), another human ('other', with their name), or a bot. */
+function badgeOf(input: HudInput, slot: number): Pick<HeroCardModel, 'badge' | 'badgeLabel'> {
+  if (input.driven.includes(slot)) {
+    return { badge: 'you' };
+  }
+  if (input.others?.includes(slot) === true) {
+    const name = input.names?.[slot];
+    return name === undefined || name === '' ? { badge: 'other' } : { badge: 'other', badgeLabel: name };
+  }
+  return { badge: 'bot' };
+}
+
 /** A downed hero keeps its name and colour (from `p.fallen`) and counts down; a slot with no hero at all is blank. */
 function deadCard(input: HudInput, slot: number): HeroCardModel {
-  const { p, ui, controls, driven } = input;
+  const { p, ui, controls } = input;
   const fallen = p.fallen.find((f) => f.slot === slot);
   const pres = fallen === undefined ? undefined : heroPresentation(ui, fallen.def);
   return {
@@ -156,7 +170,7 @@ function deadCard(input: HudInput, slot: number): HeroCardModel {
     maxHp: 0,
     resources: [],
     statuses: [],
-    badge: driven.includes(slot) ? 'you' : 'bot',
+    ...badgeOf(input, slot),
     selected: controls.selected === slot,
     dead: true,
     respawnSeconds: fallen === undefined ? undefined : respawnSecondsOf(fallen.respawnTicks),
@@ -211,7 +225,7 @@ function bargainPips(h: HeroView, world: TextWorld): BargainPipModel[] {
 }
 
 function heroCards(input: HudInput): HeroCardModel[] {
-  const { p, ui, controls, driven } = input;
+  const { p, ui, controls } = input;
   const longest = longestRemaining(p);
   const cards: HeroCardModel[] = [];
   for (let slot = 0; slot < HERO_SLOTS; slot++) {
@@ -232,7 +246,7 @@ function heroCards(input: HudInput): HeroCardModel[] {
       maxHp: h.maxHp,
       resources: resourceBars(h, ui),
       statuses: statusPips(h, p, ui, longest),
-      badge: driven.includes(slot) ? 'you' : 'bot',
+      ...badgeOf(input, slot),
       selected,
       dead: false,
       respawnSeconds: undefined,
@@ -429,6 +443,101 @@ function endResult(reason: NonNullable<HudInput['end']>['reason']): 'win' | 'los
 
 const ANCIENT_LABEL = 'Ancient';
 
+/** The slot of a hero entity, up or downed. */
+function slotOfHero(p: Perception, id: number): number | undefined {
+  return (p.heroes.find((h) => h.id === id) ?? p.fallen.find((h) => h.id === id))?.slot;
+}
+
+/** A hero-bound card whose hero another human drives. */
+function isTheirs(input: HudInput, c: CardView): boolean {
+  if (c.scope !== 'hero' || input.others === undefined) {
+    return false;
+  }
+  const slot = slotOfHero(input.p, c.hero);
+  return slot !== undefined && input.others.includes(slot);
+}
+
+const NET_TEXT = {
+  stalled: ['Waiting for the other players', 'The next tick has not arrived yet. The game resumes by itself.'],
+  desynced: [
+    'Out of sync',
+    'The players disagree about the game state, so it is halted. Download the dump for the bug report.',
+  ],
+  hostLeft: ['The host left', 'The session is over.'],
+  closed: ['Session ended', 'The session is over.'],
+} as const;
+
+/** "Ana (Gunner)": a slot's player name and hero, whichever are known. */
+function slotLabel(input: HudInput, slot: number): string {
+  const name = input.names?.[slot];
+  const hero = input.p.heroes.find((h) => h.slot === slot) ?? input.p.fallen.find((h) => h.slot === slot);
+  const heroLabel = hero === undefined ? undefined : heroPresentation(input.ui, hero.def).label;
+  const who = name === undefined || name === '' ? undefined : name;
+  if (who !== undefined && heroLabel !== undefined) {
+    return `${who} (${heroLabel})`;
+  }
+  return who ?? heroLabel ?? `Player ${slot + 1}`;
+}
+
+function noticeText(input: HudInput, kind: 'pause' | 'resume' | 'call' | 'drop', slot: number): string {
+  const who = slotLabel(input, slot);
+  switch (kind) {
+    case 'pause':
+      return `${who} paused`;
+    case 'call':
+      return `${who} called the next wave`;
+    case 'resume':
+      return `${who} resumed`;
+    default:
+      return `${who} dropped; a bot has the hero`;
+  }
+}
+
+type Blocking = Pick<NetPanelModel, 'kind' | 'title' | 'detail'>;
+
+/** The state that stops the game, if any (the end overlay owns a match that ended on its own). */
+function blocking(input: HudInput, net: HudNetInput): Blocking | undefined {
+  if (input.end !== undefined) {
+    return undefined;
+  }
+  switch (net.status) {
+    case 'stalled':
+      return { kind: 'stalled', title: NET_TEXT.stalled[0], detail: NET_TEXT.stalled[1] };
+    case 'desynced':
+      return { kind: 'desynced', title: NET_TEXT.desynced[0], detail: NET_TEXT.desynced[1] };
+    case 'paused': {
+      const by = net.info.pausedBy;
+      return input.coop === true
+        ? { kind: 'paused', title: by === undefined ? 'Paused' : `Paused by ${slotLabel(input, by)}`, detail: '' }
+        : undefined;
+    }
+    case 'ended': {
+      const [title, detail] = net.info.endedBy === 'host-left' ? NET_TEXT.hostLeft : NET_TEXT.closed;
+      return { kind: 'ended', title, detail };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** The networked-play panel; undefined when there is nothing to say. */
+function netModel(input: HudInput): NetPanelModel | undefined {
+  const { net } = input;
+  if (net === undefined) {
+    return undefined;
+  }
+  const notes = net.notices.map((n) => noticeText(input, n.kind, n.slot));
+  const stop = blocking(input, net);
+  if (stop === undefined && notes.length === 0) {
+    return undefined;
+  }
+  return {
+    ...(stop === undefined ? { title: '', detail: '' } : stop),
+    dump: stop?.kind === 'desynced' && net.canDump,
+    notes,
+  };
+}
+
 function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[]): BargainOfferModel {
   const { p, ui, driven, game } = input;
   const mine = sent.find((x) => x.offer === o.id);
@@ -448,6 +557,7 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
       costs: lines.costs,
       hotkey: BARGAIN_CARD_KEYS[i] ?? '',
       chosen: mine?.card === c.bargain,
+      ...(isTheirs(input, c) ? { theirs: true } : {}),
     };
   });
   return {
@@ -461,7 +571,7 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
     inFlight: mine !== undefined,
     declined: mine !== undefined && mine.card === undefined,
     // Greyed out while bots pick, and once a command could no longer land before the offer lapses.
-    enabled: driven.length > 0 && input.botsPick !== true && ticksLeft > INPUT_DELAY_TICKS,
+    enabled: driven.length > 0 && (input.coop === true || input.botsPick !== true) && ticksLeft > INPUT_DELAY_TICKS,
   };
 }
 
@@ -477,7 +587,13 @@ function bargainModel(input: HudInput): BargainHudModel | undefined {
     offers: open.map((o) => offerModel(input, o, sent)),
     botsPick: input.botsPick === true,
     botsPickLabel: UI_TEXT.bargain.botsPick,
+    ...(input.coop === true ? { botsPickHidden: true } : {}),
   };
+}
+
+function netPart(input: HudInput): { net: NetPanelModel } | Record<string, never> {
+  const net = netModel(input);
+  return net === undefined ? {} : { net };
 }
 
 /**
@@ -502,6 +618,7 @@ export function buildHudModel(input: HudInput): HudModel {
     help: helpModel(input),
     end: end === undefined ? undefined : { result: endResult(end.reason), wave: end.wave },
     bargain: bargainModel(input),
+    ...netPart(input),
   };
 }
 
