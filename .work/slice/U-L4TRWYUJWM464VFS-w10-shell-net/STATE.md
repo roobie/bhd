@@ -1,33 +1,36 @@
 ---
-phase: initialize
+phase: execute
 parent: U-GLFZ7OIE2B53ZZCA
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - 'Shell steps only to driver.steppable() while running, with bounded catch-up; stall keeps rendering'
+  - 'Pause, takeover and the bargain toggle go through the driver (setPaused, control commands from SYSTEM_PLAYER)'
+  - 'Stalled, paused, desynced (dump button), ended and drop/pause/call callouts show; co-op ownership gating works'
+  - 'Solo behaviour unchanged; npm run ci exits 0'
 ---
 
 # slice/w10-shell-net
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Integrate the TickDriver into the shell so a lockstep driver can be dropped in at step 3.
 
 ## Scope
-In: TODO
-Out: TODO
+In: shell app, frame, controls, hud, hudmodel, bargains, localDriver, tests; Match `networked` guard.
+Out: net driver, lobby, restart-to-lobby wiring (hook `ShellOptions.onRestart`).
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
-
+Works fully against localDriver. types.ts changes are additive except TickDriver gained required members.
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; committed on branch, awaiting integration.
 
 ## Next
-- TODO
+- Integration wires netDriver, localPlayers/humanSlots/names, onRestart.
 
 ## Evidence
+- npm run ci exit 0 (log in scratchpad w10-E2-ci.log)
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
 
 ## Harvest

@@ -265,29 +265,35 @@ export interface TickDriver {
   /** Called with the events the step produced (hash checkpoints, control commands, the end). */
   afterStep: (events: readonly SimEvent[]) => void;
   status: () => DriverStatus;
-  /** Networked: ask everyone to pause; `by` is the asking player. Absent (solo): the shell pauses locally. */
-  pause?: (by: number) => void;
-  /** Networked: ask everyone to resume. */
-  resume?: (by: number) => void;
-  /** The desync dump (NDJSON text) for the "download dump" button; absent = no button. */
-  dump?: () => string;
-  /** What the panels name: who paused, which peers dropped, why the session ended. Absent = nothing to say. */
-  info?: () => DriverInfo;
+  /** Pause or resume for everyone (`by` is the asking player); while paused `steppable()` stays at the current tick. */
+  setPaused: (on: boolean, by: number) => void;
+  /** Releases timers and listeners; called when the match is replaced (restart) and on shell dispose. */
+  dispose: () => void;
+  /** The desync dump (NDJSON text) for the "download dump" button; undefined when there is none. */
+  dump: () => string | undefined;
+  /** Subscribes to callouts (who paused, who dropped, ...); returns the unsubscribe. */
+  onNotice: (cb: (n: DriverNotice) => void) => () => void;
 }
 
-/** Facts a networked driver tells the shell for its panels. Slots are hero slots (= players 0-3). */
+/** Something the driver tells the shell to call out. Slots are hero slots (= players 0-3). */
+export type DriverNotice =
+  | { readonly kind: 'paused' | 'resumed'; readonly by: number }
+  | { readonly kind: 'dropped'; readonly slots: number[] }
+  | { readonly kind: 'hostLeft' }
+  | { readonly kind: 'desync'; readonly tick: number }
+  | { readonly kind: 'calledWave'; readonly by: number };
+
+/** What the shell derives from notices for the panels. */
 export interface DriverInfo {
   /** The player that paused, while `status()` is 'paused'. */
   readonly pausedBy?: number;
-  /** Slots whose human dropped; a bot has their hero. Only grows. */
-  readonly dropped?: readonly number[];
   /** Why the session ended, when `status()` is 'ended' without the match ending. */
   readonly endedBy?: 'host-left' | 'closed';
 }
 
 /** A short-lived callout about something another human did. */
 export interface NetNotice {
-  readonly kind: 'pause' | 'call' | 'drop';
+  readonly kind: 'pause' | 'resume' | 'call' | 'drop';
   /** The slot that did it (or dropped). */
   readonly slot: number;
 }
@@ -800,6 +806,8 @@ export interface HudInput {
   readonly game?: GameConfig;
   /** The shell's "Bots pick bargains" toggle (default off). */
   readonly botsPick?: boolean;
+  /** The driver is paused (solo included). */
+  readonly paused?: boolean;
   /** Co-op: hides the bots-pick toggle. */
   readonly coop?: boolean;
   /** Co-op: slots another human drives (badged, not selectable; their bargain cards are not clickable). */

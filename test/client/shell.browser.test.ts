@@ -6,7 +6,13 @@ import { acquireContext } from '../../src/client/gl/context.ts';
 import { mountShell } from '../../src/client/shell/app.ts';
 import { defaultShellConfig } from '../../src/client/shell/config.ts';
 import { localDriver } from '../../src/client/shell/driver.ts';
-import type { DriverInfo, DriverStatus, ShellHandle, ShellOptions, TickDriver } from '../../src/client/shell/types.ts';
+import type {
+  DriverNotice,
+  DriverStatus,
+  ShellHandle,
+  ShellOptions,
+  TickDriver,
+} from '../../src/client/shell/types.ts';
 import { INPUT_DELAY_TICKS } from '../../src/client/shell/types.ts';
 import type { Match } from '../../src/match/match.ts';
 import type { Command } from '../../src/sim/commands.ts';
@@ -90,13 +96,7 @@ it('asks the driver factory for a driver per match, so a restart rebinds it', ()
     schedule: () => () => undefined,
     driver: (match) => {
       seen.push(match);
-      return {
-        submit: () => undefined,
-        steppable: () => Number.POSITIVE_INFINITY,
-        beforeStep: () => undefined,
-        afterStep: () => undefined,
-        status: () => 'running',
-      };
+      return { ...localDriver(match, INPUT_DELAY_TICKS), status: () => 'running' };
     },
   });
   const first = seen.at(-1);
@@ -201,7 +201,7 @@ it('the bargain toggle goes through the driver as a control command', () => {
 interface Gated extends TickDriver {
   limit: number;
   state: DriverStatus;
-  facts: DriverInfo;
+  emit: (n: DriverNotice) => void;
   calls: string[];
 }
 
@@ -212,14 +212,19 @@ function gated(m: Match): Gated {
     ...inner,
     limit: 0,
     state: 'running',
-    facts: {},
+    emit: () => undefined,
     calls: [],
     steppable: () => d.limit,
     status: () => d.state,
-    pause: (by) => d.calls.push(`pause:${by}`),
-    resume: (by) => d.calls.push(`resume:${by}`),
+    setPaused: (on, by) => {
+      d.calls.push(`${on ? 'pause' : 'resume'}:${by}`);
+      d.state = on ? 'paused' : 'running';
+    },
     dump: () => 'DUMP',
-    info: () => d.facts,
+    onNotice: (cb) => {
+      d.emit = cb;
+      return () => undefined;
+    },
   };
   return d;
 }
@@ -276,7 +281,9 @@ it('pause goes through the driver when it has one, and the stall and desync pane
   run(2);
   shell.dispatch({ kind: 'pause' });
   expect(driver?.calls).toEqual(['pause:0']);
-  expect(shell.controls().paused).toBe(false);
+  expect(driver?.state).toBe('paused');
+  shell.dispatch({ kind: 'pause' });
+  expect(driver?.calls).toEqual(['pause:0', 'resume:0']);
   if (driver !== undefined) {
     driver.state = 'stalled';
   }
@@ -289,6 +296,37 @@ it('pause goes through the driver when it has one, and the stall and desync pane
   await vi.waitFor(() => expect(hud.querySelector('button.dump')).not.toBeNull());
   hud.querySelector<HTMLButtonElement>('button.dump')?.click();
   expect(downloads).toEqual(['DUMP']);
+  shell.dispose();
+  remove();
+});
+
+it('co-op: callouts name who paused, who called a wave and who dropped', async () => {
+  if (!hasGl2) {
+    return;
+  }
+  let driver: Gated | undefined;
+  const { shell, run, hud, remove } = manual({
+    localPlayers: [1],
+    humanSlots: [0, 1],
+    names: ['Ann', 'Bo'],
+    driver: (m) => {
+      driver = gated(m);
+      return driver;
+    },
+  });
+  run(2);
+  driver?.emit({ kind: 'paused', by: 0 });
+  driver?.emit({ kind: 'calledWave', by: 0 });
+  driver?.emit({ kind: 'dropped', slots: [0] });
+  run(2);
+  await vi.waitFor(() => {
+    const text = hud.querySelector('.netnotes')?.textContent ?? '';
+    expect(text).toContain('Ann');
+    expect(text).toContain('called');
+    expect(text).toContain('dropped');
+  });
+  // A dropped human's hero is a bot's: its card is selectable again.
+  expect(hud.querySelectorAll('button.card:disabled').length).toBe(0);
   shell.dispose();
   remove();
 });

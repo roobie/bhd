@@ -32,6 +32,8 @@ import { advanceEffects, takeSnapshot } from './snapshot.ts';
 import type {
   Camera,
   ControlState,
+  DriverInfo,
+  DriverNotice,
   Effect,
   EntitySnap,
   FrameClock,
@@ -53,8 +55,6 @@ type EndInfo = NonNullable<HudInput['end']>;
 
 /** How long a callout about another player's action stays up. */
 const NOTICE_MS = 5000;
-
-const HERO_SLOTS = 4;
 
 const NO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -112,20 +112,22 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const now = options?.now ?? (() => performance.now());
   const schedule = options?.schedule ?? defaultSchedule;
   const ui = defaultPresentation();
-  const spec = shellSpec(config);
   const feedback = options?.feedback;
   // One configured hero is a solo game: selecting another hero takes it over (the others become bots).
   // Co-op (several humans): ownership is fixed, nobody takes over, and the bots-pick toggle is gone.
   const localPlayers = options?.localPlayers;
   const humanSlots = options?.humanSlots;
   const coop = localPlayers !== undefined && humanSlots !== undefined;
+  const spec = coop ? { ...shellSpec(config), networked: true } : shellSpec(config);
   const solo = !coop && config.drive.length === 1;
   const startDriven = (): readonly number[] => localPlayers ?? config.drive;
   let driven: readonly number[] = startDriven();
   /** Slots whose human dropped (a bot has the hero), as far as the driver has said. */
   let dropped: readonly number[] = [];
   let notices: (NetNotice & { readonly untilMs: number })[] = [];
-  let lastPausedBy: number | undefined;
+  let pausedBy: number | undefined;
+  let endedBy: DriverInfo['endedBy'];
+  let unsubscribe: () => void = () => undefined;
   let lastStatus: string | undefined;
   let frameAlpha = 0;
   // The "Bots pick bargains" toggle: off = a human decides every offer. It survives a restart.
@@ -133,7 +135,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
 
   let match: Match = buildMatch(spec);
   const makeDriver = (m: Match): TickDriver => options?.driver?.(m) ?? localDriver(m, INPUT_DELAY_TICKS);
-  let driver: TickDriver = makeDriver(match);
+  let driver: TickDriver = bindDriver(makeDriver(match));
   let controls: ControlState | undefined;
   let clock: FrameClock = newFrameClock();
   let prev: Snapshot | undefined;
@@ -161,21 +163,65 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     dispose: () => {
       if (!disposed) {
         disposed = true;
+        unsubscribe();
+        driver.dispose();
         cancelFrame();
         teardown();
       }
     },
   });
 
+  /** Listens to the driver's notices for the panels and callouts. */
+  function bindDriver(d: TickDriver): TickDriver {
+    unsubscribe = d.onNotice((n) => onNotice(n));
+    return d;
+  }
+
+  function onNotice(n: DriverNotice): void {
+    switch (n.kind) {
+      case 'paused':
+        pausedBy = n.by;
+        notify('pause', n.by);
+        break;
+      case 'resumed':
+        pausedBy = undefined;
+        notify('resume', n.by);
+        break;
+      case 'dropped':
+        for (const slot of n.slots) {
+          if (!dropped.includes(slot)) {
+            dropped = [...dropped, slot];
+            notify('drop', slot);
+          }
+        }
+        break;
+      case 'hostLeft':
+        endedBy = 'host-left';
+        break;
+      case 'calledWave':
+        notify('call', n.by);
+        break;
+      default:
+        break;
+    }
+    hudDirty = true;
+  }
+
   function restart(): void {
     match = buildMatch(spec);
     driven = startDriven();
     dropped = [];
     notices = [];
-    lastPausedBy = undefined;
-    // A fresh match at tick 0: this is its initial configuration, not a mid-game change.
-    match.setBargainPolicy(botsPick ? 'bots' : 'human');
-    driver = makeDriver(match);
+    pausedBy = undefined;
+    endedBy = undefined;
+    // A fresh solo match at tick 0: this is its initial configuration, not a mid-game change. In
+    // networked play the spec carries the policy and the shell does not override it.
+    if (!coop) {
+      match.setBargainPolicy(botsPick ? 'bots' : 'human');
+    }
+    unsubscribe();
+    driver.dispose();
+    driver = bindDriver(makeDriver(match));
     controls = initialControls(driven[0] ?? 0);
     clock = newFrameClock();
     prev = takeSnapshot(match.sim, undefined);
@@ -232,11 +278,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   function togglePause(): boolean {
-    // Networked: everyone pauses together, through the driver. Solo: a local flag.
-    if (driver.pause === undefined || driver.resume === undefined) {
-      return false;
-    }
-    (driver.status() === 'paused' ? driver.resume : driver.pause)(driven[0] ?? 0);
+    driver.setPaused(driver.status() !== 'paused', driven[0] ?? 0);
     hudDirty = true;
     return true;
   }
@@ -250,7 +292,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   function downloadDump(): void {
-    const text = driver.dump?.();
+    const text = driver.dump();
     if (text !== undefined) {
       (options?.download ?? defaultDownload)('bhd-desync.ndjson', text);
     }
@@ -313,29 +355,19 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
       : (p.heroes.find((h) => h.id === hero) ?? p.fallen.find((h) => h.id === hero))?.slot;
   }
 
-  function notify(kind: NetNotice['kind'], slot: number, realMs: number): void {
-    notices = [...notices, { kind, slot, untilMs: realMs + NOTICE_MS }].slice(-3);
-    hudDirty = true;
+  /** Callouts are for co-op; solo has nobody else to name. */
+  function notify(kind: NetNotice['kind'], slot: number): void {
+    if (coop) {
+      notices = [...notices, { kind, slot, untilMs: now() + NOTICE_MS }].slice(-3);
+    }
   }
 
-  /** Reads what the driver says (who paused, who dropped) and expires old callouts. */
+  /** Tracks the driver's status and expires old callouts. */
   function watchDriver(realMs: number): void {
-    const info = driver.info?.();
     const status = driver.status();
     if (status !== lastStatus) {
       lastStatus = status;
       hudDirty = true;
-    }
-    const by = status === 'paused' ? info?.pausedBy : undefined;
-    if (by !== undefined && by !== lastPausedBy) {
-      notify('pause', by, realMs);
-    }
-    lastPausedBy = by;
-    for (const slot of info?.dropped ?? []) {
-      if (!dropped.includes(slot)) {
-        dropped = [...dropped, slot];
-        notify('drop', slot, realMs);
-      }
     }
     if (notices.some((n) => n.untilMs <= realMs)) {
       notices = notices.filter((n) => n.untilMs > realMs);
@@ -348,7 +380,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     watchDriver(realMs);
     const plan = planFrame(clock, realMs, {
       ...DEFAULT_FRAME_OPTIONS,
-      paused: (controls?.paused ?? false) || driver.status() === 'paused',
+      paused: driver.status() === 'paused',
     });
     ({ clock } = plan);
     frameAlpha = plan.alpha;
@@ -364,15 +396,19 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   }
 
   /** The networked part of the HUD input; absent in solo. */
-  function netInput(): Pick<HudInput, 'coop' | 'others' | 'names' | 'net'> {
-    const net: HudNetInput | undefined =
-      coop || driver.info !== undefined
-        ? { status: driver.status(), info: driver.info?.() ?? {}, canDump: driver.dump !== undefined, notices }
-        : undefined;
+  function netInput(): Pick<HudInput, 'coop' | 'others' | 'names' | 'net' | 'paused'> {
+    const status = driver.status();
+    const net: HudNetInput = {
+      status,
+      info: { ...(pausedBy === undefined ? {} : { pausedBy }), ...(endedBy === undefined ? {} : { endedBy }) },
+      canDump: driver.dump() !== undefined,
+      notices,
+    };
     return {
+      paused: status === 'paused',
       ...(coop ? { coop, others: others() } : {}),
       ...(options?.names === undefined ? {} : { names: options.names }),
-      ...(net === undefined ? {} : { net }),
+      net,
     };
   }
 
@@ -389,8 +425,6 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
     for (const e of events) {
       if (e.kind === 'end') {
         end = { reason: e.reason, wave: e.wave };
-      } else if (coop && e.kind === 'cmd' && e.cmd.kind === 'callWave' && e.player >= 0 && e.player < HERO_SLOTS) {
-        notify('call', e.player, nowMs);
       }
     }
     if (end === undefined && match.tick >= spec.maxTicks) {

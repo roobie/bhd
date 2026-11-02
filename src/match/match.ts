@@ -71,6 +71,11 @@ export interface MatchOptions {
    * nobody here (the shell sends the commands); `off` nobody, offers just lapse.
    */
   readonly bargainPolicy?: BargainPolicy;
+  /**
+   * Networked play: driven slots and the bargain policy change only through control commands (so
+   * every peer changes at the same tick); `setDriven` and `setBargainPolicy` throw.
+   */
+  readonly networked?: boolean;
 }
 
 /** Who resolves bargain offers; see `MatchOptions.bargainPolicy` and `Match.setBargainPolicy`. */
@@ -249,6 +254,7 @@ export class Match {
   readonly #director: DirectorSeat | undefined;
   readonly #botPolicy: BargainBotPolicy;
   #bargainPolicy: BargainPolicy;
+  readonly #networked: boolean;
   #cached: Perception | undefined;
   #masterCached: { readonly tick: number; readonly view: MasterView | undefined } | undefined;
 
@@ -293,6 +299,7 @@ export class Match {
     this.#director = directorSeat(options.director, seed, game);
     this.#botPolicy = bots.bargain?.policy ?? 'evaluate';
     this.#bargainPolicy = options.bargainPolicy ?? 'bots';
+    this.#networked = options.networked === true;
   }
 
   get tick(): number {
@@ -311,7 +318,14 @@ export class Match {
    * game stays a pure function of seed, config and the commands issued.
    */
   setBargainPolicy(policy: BargainPolicy): void {
+    this.#refuseWhenNetworked('setBargainPolicy');
     this.#bargainPolicy = policy;
+  }
+
+  #refuseWhenNetworked(what: string): void {
+    if (this.#networked) {
+      throw new Error(`${what} is not allowed in networked play: send a control command`);
+    }
   }
 
   get ended(): boolean {
@@ -345,6 +359,11 @@ export class Match {
    * queued in the sim (at most the bot's reaction delay) still apply.
    */
   setDriven(slots: readonly number[]): void {
+    this.#refuseWhenNetworked('setDriven');
+    this.#driveSeats(slots);
+  }
+
+  #driveSeats(slots: readonly number[]): void {
     const wanted = new Set(checkSlots(slots));
     for (const seat of this.#seats) {
       const driven = wanted.has(seat.slot);
@@ -362,7 +381,7 @@ export class Match {
 
   #control(cmd: ControlCommand): void {
     if (cmd.op === 'bargainPolicy') {
-      this.setBargainPolicy(cmd.policy);
+      this.#bargainPolicy = cmd.policy;
       return;
     }
     const driven = new Set(this.driven);
@@ -371,7 +390,7 @@ export class Match {
     } else {
       driven.delete(cmd.slot);
     }
-    this.setDriven([...driven].sort((a, b) => a - b));
+    this.#driveSeats([...driven].sort((a, b) => a - b));
   }
 
   /** Seats a human plays from the start go quiet; every seat gets its hero put in its driver's state. */

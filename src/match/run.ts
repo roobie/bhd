@@ -51,6 +51,8 @@ export interface GameSpec {
    * offer) and `bots` otherwise; `bots` with a human lets the bot seats pick (the shell's opt-in toggle).
    */
   readonly bargainPolicy?: BargainPolicy;
+  /** Networked play (see `MatchOptions.networked`). */
+  readonly networked?: boolean;
   /** A patch on the shipped config; see content/overrides.ts. */
   readonly overrides?: ConfigOverrides;
 }
@@ -127,6 +129,7 @@ function matchOf(spec: GameSpec, resolved: RunConfig): Match {
     bots: resolved.bots,
     hashEvery: spec.hashEvery,
     ...(spec.humans === undefined ? {} : { driven: spec.humans }),
+    ...(spec.networked === true ? { networked: true } : {}),
     bargainPolicy: spec.bargainPolicy ?? ((spec.humans?.length ?? 0) > 0 ? 'human' : 'bots'),
     ...(resolved.director === undefined ? {} : { director: resolved.director }),
   });

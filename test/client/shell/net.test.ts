@@ -1,11 +1,16 @@
 // Networked-play invariants of the shell (wave 10 E2): step gating, ownership, panels. No gameplay numbers.
 
 import { describe, expect, it } from 'vitest';
+import { defaultShellConfig, shellSpec } from '../../../src/client/shell/config.ts';
 import { initialControls, reduce } from '../../../src/client/shell/controls.ts';
+import { localDriver } from '../../../src/client/shell/driver.ts';
 import { CATCH_UP_LAG, CATCH_UP_MAX_EXTRA, stepBudget } from '../../../src/client/shell/frame.ts';
 import { buildHudModel } from '../../../src/client/shell/hudmodel.ts';
 import type { ControlContext, DriverInfo, HudNetInput, NetNotice } from '../../../src/client/shell/types.ts';
+import { INPUT_DELAY_TICKS } from '../../../src/client/shell/types.ts';
 import { defaultPresentation } from '../../../src/content/presentation.ts';
+import { buildMatch } from '../../../src/match/run.ts';
+import { SYSTEM_PLAYER } from '../../../src/sim/commands.ts';
 import { cardsFor, hudInput, OFFER_ID, withOffer } from './bargain-fixture.ts';
 
 const p = withOffer();
@@ -116,7 +121,7 @@ describe('net panel', () => {
   });
 
   it('names who paused and flags the top bar paused', () => {
-    const m = buildHudModel(hudInput(p, { names: ['Ann', 'Bo'], net: net('paused', { pausedBy: 1 }) }));
+    const m = buildHudModel(hudInput(p, { coop: true, names: ['Ann', 'Bo'], net: net('paused', { pausedBy: 1 }) }));
     expect(m.net?.title).toContain('Bo');
     expect(m.top.paused).toBe(true);
   });
@@ -141,5 +146,39 @@ describe('net panel', () => {
   it('leaves the end overlay alone when the match itself ended', () => {
     const m = buildHudModel(hudInput(p, { end: { reason: 'victory', wave: 3 }, net: net('ended') }));
     expect(m.net).toBeUndefined();
+  });
+});
+
+describe('localDriver pause', () => {
+  it('holds steppable at the current tick while paused and tells listeners', () => {
+    const match = buildMatch(shellSpec(defaultShellConfig()));
+    const d = localDriver(match, INPUT_DELAY_TICKS);
+    const seen: string[] = [];
+    const off = d.onNotice((n) => seen.push(`${n.kind}`));
+    expect(d.steppable()).toBe(Number.POSITIVE_INFINITY);
+    d.setPaused(true, 2);
+    expect(d.status()).toBe('paused');
+    expect(d.steppable()).toBe(match.tick);
+    d.setPaused(true, 2);
+    d.setPaused(false, 2);
+    expect(d.status()).toBe('running');
+    expect(seen).toEqual(['paused', 'resumed']);
+    off();
+    d.setPaused(true, 0);
+    expect(seen).toHaveLength(2);
+    expect(d.dump()).toBeUndefined();
+  });
+});
+
+describe('networked match', () => {
+  it('refuses direct seat and policy changes but obeys control commands', () => {
+    const match = buildMatch({ ...shellSpec(defaultShellConfig()), networked: true });
+    expect(() => match.setDriven([1])).toThrow();
+    expect(() => match.setBargainPolicy('bots')).toThrow();
+    match.sim.command(SYSTEM_PLAYER, { kind: 'control', op: 'bargainPolicy', policy: 'bots' }, match.tick + 1);
+    match.sim.command(SYSTEM_PLAYER, { kind: 'control', op: 'drive', slot: 1, by: 'human' }, match.tick + 1);
+    match.step();
+    expect(match.bargainPolicy).toBe('bots');
+    expect(match.driven).toContain(1);
   });
 });

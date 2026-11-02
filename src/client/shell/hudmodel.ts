@@ -43,6 +43,7 @@ import type {
   HeroCardModel,
   HudInput,
   HudModel,
+  HudNetInput,
   Insets,
   IntentRowModel,
   NetPanelModel,
@@ -89,7 +90,7 @@ function topBar(input: HudInput): TopBarModel {
     preview,
     previewHidden: preview.length === 0 && pending,
     ancientFrac: clamp01(p.ancient.hpFrac),
-    paused: controls.paused || input.net?.status === 'paused',
+    paused: controls.paused || input.paused === true || input.net?.status === 'paused',
     help: controls.help,
   };
 }
@@ -478,57 +479,63 @@ function slotLabel(input: HudInput, slot: number): string {
   return who ?? heroLabel ?? `Player ${slot + 1}`;
 }
 
-function noticeText(input: HudInput, kind: 'pause' | 'call' | 'drop', slot: number): string {
+function noticeText(input: HudInput, kind: 'pause' | 'resume' | 'call' | 'drop', slot: number): string {
   const who = slotLabel(input, slot);
   switch (kind) {
     case 'pause':
       return `${who} paused`;
     case 'call':
       return `${who} called the next wave`;
+    case 'resume':
+      return `${who} resumed`;
     default:
       return `${who} dropped; a bot has the hero`;
   }
 }
 
-/** The networked-play panel; undefined in solo, or when there is nothing to say. */
+type Blocking = Pick<NetPanelModel, 'kind' | 'title' | 'detail'>;
+
+/** The state that stops the game, if any (the end overlay owns a match that ended on its own). */
+function blocking(input: HudInput, net: HudNetInput): Blocking | undefined {
+  if (input.end !== undefined) {
+    return undefined;
+  }
+  switch (net.status) {
+    case 'stalled':
+      return { kind: 'stalled', title: NET_TEXT.stalled[0], detail: NET_TEXT.stalled[1] };
+    case 'desynced':
+      return { kind: 'desynced', title: NET_TEXT.desynced[0], detail: NET_TEXT.desynced[1] };
+    case 'paused': {
+      const by = net.info.pausedBy;
+      return input.coop === true
+        ? { kind: 'paused', title: by === undefined ? 'Paused' : `Paused by ${slotLabel(input, by)}`, detail: '' }
+        : undefined;
+    }
+    case 'ended': {
+      const [title, detail] = net.info.endedBy === 'host-left' ? NET_TEXT.hostLeft : NET_TEXT.closed;
+      return { kind: 'ended', title, detail };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** The networked-play panel; undefined when there is nothing to say. */
 function netModel(input: HudInput): NetPanelModel | undefined {
   const { net } = input;
   if (net === undefined) {
     return undefined;
   }
   const notes = net.notices.map((n) => noticeText(input, n.kind, n.slot));
-  let kind: NetPanelModel['kind'];
-  let title = '';
-  let detail = '';
-  // A match that ended on its own has its own overlay.
-  if (input.end === undefined) {
-    switch (net.status) {
-      case 'stalled':
-        kind = 'stalled';
-        [title, detail] = NET_TEXT.stalled;
-        break;
-      case 'desynced':
-        kind = 'desynced';
-        [title, detail] = NET_TEXT.desynced;
-        break;
-      case 'paused': {
-        kind = 'paused';
-        const by = net.info.pausedBy;
-        title = by === undefined ? 'Paused' : `Paused by ${slotLabel(input, by)}`;
-        break;
-      }
-      case 'ended':
-        kind = 'ended';
-        [title, detail] = net.info.endedBy === 'host-left' ? NET_TEXT.hostLeft : NET_TEXT.closed;
-        break;
-      default:
-        break;
-    }
-  }
-  if (kind === undefined && notes.length === 0) {
+  const stop = blocking(input, net);
+  if (stop === undefined && notes.length === 0) {
     return undefined;
   }
-  return { ...(kind === undefined ? {} : { kind }), title, detail, dump: kind === 'desynced' && net.canDump, notes };
+  return {
+    ...(stop === undefined ? { title: '', detail: '' } : stop),
+    dump: stop?.kind === 'desynced' && net.canDump,
+    notes,
+  };
 }
 
 function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[]): BargainOfferModel {
