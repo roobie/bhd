@@ -1,0 +1,104 @@
+/* Lobby (wave 10, E1). Uses the play.html tokens (--bg, --fg, --panel, --border, --accent). */
+.lobby {
+  box-sizing: border-box;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(var(--safe-top, 0px) + 16px) 16px 16px;
+  max-height: 100%;
+  overflow-y: auto;
+  color: var(--fg, #e6e2d8);
+  font:
+    14px / 1.4 system-ui,
+    sans-serif;
+}
+.lobby h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.lobby button {
+  min-height: 36px;
+  padding: 4px 12px;
+  color: inherit;
+  background: var(--panel, #141418);
+  border: 1px solid var(--border, #3a3836);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.lobby button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.lroom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lcode {
+  color: var(--accent, #d9a441);
+  font:
+    700 22px / 1 ui-monospace,
+    monospace;
+  letter-spacing: 0.15em;
+}
+.lslots {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.lslot {
+  display: grid;
+  grid-template-columns: 6em 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel, #141418);
+  border: 1px solid var(--border, #3a3836);
+  border-radius: 6px;
+}
+.lslot.mine {
+  border-color: var(--accent, #d9a441);
+}
+.lslot.locked {
+  opacity: 0.45;
+}
+.lslot.taken .lwho {
+  font-weight: 600;
+}
+.lhint,
+.lwait {
+  opacity: 0.7;
+}
+.lsettings {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lsettings label {
+  display: grid;
+  gap: 2px;
+}
+.lobby select,
+.lobby input {
+  min-height: 32px;
+  color: inherit;
+  background: var(--panel, #141418);
+  border: 1px solid var(--border, #3a3836);
+  border-radius: 4px;
+  font: inherit;
+}
+.lwarn,
+.lerror h1 {
+  color: #e08060;
+}
+.lstart {
+  width: 100%;
+  margin-top: 12px;
+  border-color: var(--accent, #d9a441);
+}
+.lobby a {
+  color: var(--accent, #d9a441);
+}

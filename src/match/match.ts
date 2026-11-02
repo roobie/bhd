@@ -24,7 +24,7 @@
 // Brains receive the cached Perception and MasterView deep-frozen (always on: the objects are
 // small plain data built once per think tick, so freezing them costs next to nothing).
 
-import { bargainDecisions } from '../bots/bargain.ts';
+import { type BargainScope, bargainDecisions } from '../bots/bargain.ts';
 import { defaultBrains } from '../bots/brains.ts';
 import type { Bot, BotCtx, BrainTable, Decision, InFlight, SeatInfo } from '../bots/types.ts';
 import { decide } from '../bots/utility.ts';
@@ -480,7 +480,7 @@ export class Match {
     };
     const decisions = [
       ...seat.bot.think(ctx),
-      ...(this.#decidesBargains(seat, p) ? bargainDecisions(ctx, this.#botPolicy) : []),
+      ...(this.#decidesBargains(seat, p) ? bargainDecisions(ctx, this.#botPolicy, this.#bargainScope()) : []),
     ];
     const views: DecisionView[] = [];
     const seen = new Map<string, string>();
@@ -500,16 +500,27 @@ export class Match {
   }
 
   /**
-   * Whether `seat` decides the team's offers: policy `bots`, an offer open, and `seat` is the
-   * lowest-slot seat that a bot plays (not driven) with its hero up. A downed or human-driven seat
-   * never decides; the deciding seat may take any card whichever hero it benefits.
+   * Whether `seat` decides the bot-owned offers: policy not `off`, an offer open, and `seat` is the
+   * lowest-slot seat a bot plays (not driven) with its hero up. A downed or human-driven seat never
+   * decides. What it may resolve is `#bargainScope`.
    */
   #decidesBargains(seat: Seat, p: Perception): boolean {
-    if (this.#bargainPolicy !== 'bots' || p.bargains.open.length === 0) {
+    if (this.#bargainPolicy === 'off' || p.bargains.open.length === 0) {
       return false;
     }
     const first = this.#seats.find((s) => !s.driven && p.heroes.some((h) => h.id === s.hero));
     return first === seat;
+  }
+
+  /** Cards of bot-driven heroes; team cards and Decline only under policy `bots` (else a human decides them). */
+  #bargainScope(): BargainScope {
+    const bots = new Map<number, number>();
+    for (const s of this.#seats) {
+      if (!s.driven) {
+        bots.set(s.hero, s.slot);
+      }
+    }
+    return { bots, team: this.#bargainPolicy === 'bots' };
   }
 
   #resolve(seat: Seat, d: Decision, run: Round): DecisionView {
@@ -540,6 +551,7 @@ export class Match {
       seat,
       pick.option.commands.filter((c) => c.kind !== 'ability' || this.#maskAllows(seat, c.slot)),
       tick,
+      pick.option.player,
     );
     return { id: d.id, options, picked, since: old?.picked === picked ? old.since : tick };
   }
@@ -561,22 +573,14 @@ export class Match {
   }
 
   /**
-   * The player a command is submitted as: the seat's own, except that accepting a hero-bound card
-   * goes in as that hero's slot (the sim's bargain ownership rule; player = slot).
+   * Queues `cmds` for `who` at tick + its delay as `player` (default: its own). A bot never submits
+   * for a human-driven slot: such commands are dropped here, whatever asked for them.
    */
-  #playerOf(who: Pacing, cmd: Command): number {
-    if (cmd.kind !== 'bargain' || cmd.op !== 'accept') {
-      return who.player;
+  #submit(who: Pacing, cmds: readonly Command[], tick: number, as?: number): void {
+    const player = as ?? who.player;
+    if (this.#seats.some((s) => s.slot === player && s.driven)) {
+      return;
     }
-    const hero = this.perception.bargains.open
-      .find((o) => o.id === cmd.offer)
-      ?.cards.find((c) => c.bargain === cmd.card)?.hero;
-    const entity = hero === undefined || hero === 0 ? undefined : this.sim.entities.get(hero);
-    const slot = entity === undefined ? -1 : this.sim.game.heroes.findIndex((h) => h.id === entity.def);
-    return slot < 0 ? who.player : slot;
-  }
-
-  #submit(who: Pacing, cmds: readonly Command[], tick: number): void {
     who.pending = who.pending.filter((e) => e.at > tick);
     for (const cmd of cmds) {
       const canon = canonicalCommand(cmd);
@@ -587,7 +591,7 @@ export class Match {
         continue;
       }
       const at = tick + who.delay;
-      if (this.sim.command(this.#playerOf(who, canon), canon, at).ok) {
+      if (this.sim.command(player, canon, at).ok) {
         who.pending.push({ cmd: canon, at, channel, key });
       }
     }

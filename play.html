@@ -52,6 +52,16 @@
       #hud :is(button, a, input, [data-hit]) {
         pointer-events: auto;
       }
+      /* The lobby overlay (wave 10): hidden in solo; integration clears `hidden` while a room's lobby is up. */
+      #lobby {
+        position: absolute;
+        inset: 0;
+        overflow: auto;
+        background: var(--bg);
+      }
+      #lobby[hidden] {
+        display: none;
+      }
       .viewer-link {
         position: absolute;
         right: calc(var(--safe-right) + 8px);
@@ -67,6 +77,7 @@
     <div id="shell">
       <canvas id="stage"></canvas>
       <div id="hud"></div>
+      <div id="lobby" hidden></div>
     </div>
     <script type="module" src="./src/client/shell/main.ts"></script>
   </body>
