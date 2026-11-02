@@ -14,11 +14,11 @@ import type { GameConfig } from '../../content/index.ts';
 import type { Presentation, Targeting } from '../../content/presentation.ts';
 import type { MapDef } from '../../content/types.ts';
 import type { Match } from '../../match/match.ts';
-import type { Mode } from '../../match/run.ts';
+import type { GameSpec, Mode } from '../../match/run.ts';
 import type { Perception } from '../../perception/types.ts';
 import type { Command } from '../../sim/commands.ts';
 import type { EntityKind, Team } from '../../sim/entities.ts';
-import type { SimEvent } from '../../sim/events.ts';
+import type { DriverStatus, TickDriver } from '../../net/types.ts';
 import type { FeedbackSink } from './feedbackSink.ts';
 
 // ---------------------------------------------------------------------------------------------
@@ -233,55 +233,8 @@ export interface FramePlan {
 // Commands out: the tick driver and its delay
 // ---------------------------------------------------------------------------------------------
 
-/** Where a driver stands: it decides whether the step loop may advance. */
-export type DriverStatus =
-  /** Stepping is allowed up to `steppable()`. */
-  | 'running'
-  /** Waiting for a peer's inputs (the next tick is not sealed yet). */
-  | 'stalled'
-  /** Everyone is paused; `steppable()` does not advance. */
-  | 'paused'
-  /** Hash checkpoints disagreed; the match is halted. */
-  | 'desynced'
-  /** The session is over (host left, or the game ended). */
-  | 'ended';
-
-/**
- * How the shell feeds a match and decides when it may advance (D-ZWZVLE5U4MRETLI7: `player` is the
- * hero slot). `localDriver` is solo play; wave 10's lockstep driver (src/net) replaces it and nothing
- * upstream changes. Rule R1 (see `Sim.command`): in networked play only `beforeStep` calls
- * `sim.command` for human and system players, in seal order.
- *
- * Step loop contract, once per tick: `if (match.tick < driver.steppable())`, then
- * `driver.beforeStep(match.tick + 1)`, `match.step()`, `driver.afterStep(events)`.
- */
-export interface TickDriver {
-  /** A human (or system) input from the local shell; the driver decides when it applies. */
-  submit: (player: number, cmd: Command) => void;
-  /** The highest tick that is safe to step to (the loop steps while `match.tick < steppable()`). */
-  steppable: () => number;
-  /** Called right before tick `tick` runs; submits that tick's inputs to the sim (R1). */
-  beforeStep: (tick: number) => void;
-  /** Called with the events the step produced (hash checkpoints, control commands, the end). */
-  afterStep: (events: readonly SimEvent[]) => void;
-  status: () => DriverStatus;
-  /** Pause or resume for everyone (`by` is the asking player); while paused `steppable()` stays at the current tick. */
-  setPaused: (on: boolean, by: number) => void;
-  /** Releases timers and listeners; called when the match is replaced (restart) and on shell dispose. */
-  dispose: () => void;
-  /** The desync dump (NDJSON text) for the "download dump" button; undefined when there is none. */
-  dump: () => string | undefined;
-  /** Subscribes to callouts (who paused, who dropped, ...); returns the unsubscribe. */
-  onNotice: (cb: (n: DriverNotice) => void) => () => void;
-}
-
-/** Something the driver tells the shell to call out. Slots are hero slots (= players 0-3). */
-export type DriverNotice =
-  | { readonly kind: 'paused' | 'resumed'; readonly by: number }
-  | { readonly kind: 'dropped'; readonly slots: number[] }
-  | { readonly kind: 'hostLeft' }
-  | { readonly kind: 'desync'; readonly tick: number }
-  | { readonly kind: 'calledWave'; readonly by: number };
+// The driver contract lives in src/net/types.ts (the lockstep driver implements it); re-exported for the shell.
+export type { DriverNotice, DriverStatus, TickDriver } from '../../net/types.ts';
 
 /** What the shell derives from notices for the panels. */
 export interface DriverInfo {
@@ -859,6 +812,8 @@ export interface ShellElements {
 export interface ShellOptions {
   /** Replaces `localDriver(match, INPUT_DELAY_TICKS)`; called with the new match on start and on every restart. */
   readonly driver?: (match: Match) => TickDriver;
+  /** The game to play, instead of the one derived from the config: networked play passes the host's `start` spec. */
+  readonly spec?: GameSpec;
   /** Co-op: the hero slots this peer drives (commandable, selectable). With `humanSlots` it switches co-op on. */
   readonly localPlayers?: readonly number[];
   /** Co-op: every human-driven slot (local ones included); the rest are bots. */

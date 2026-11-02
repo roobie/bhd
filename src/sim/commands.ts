@@ -112,6 +112,9 @@ interface SendCommand {
   readonly kind: 'send';
 }
 
+/** Hero lineup slots (the players 0-3 of a game). */
+export const HERO_SLOTS = 4;
+
 /** The player number that issues control commands (the lockstep host, in networked play). */
 export const SYSTEM_PLAYER = 5;
 
@@ -157,6 +160,11 @@ function isId(n: unknown): boolean {
 
 function isSlot(n: unknown): boolean {
   return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < ABILITY_SLOTS;
+}
+
+/** A hero lineup slot (= player number of that hero's human), 0-3. Not the same thing as an ability slot. */
+function isHeroSlot(n: unknown): boolean {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < HERO_SLOTS;
 }
 
 function isCoord(n: unknown): boolean {
@@ -210,7 +218,7 @@ function isBargainShape(cmd: BargainCommand): boolean {
 function isControlShape(cmd: ControlCommand): boolean {
   switch (cmd.op) {
     case 'drive':
-      return isSlot(cmd.slot) && (cmd.by === 'human' || cmd.by === 'bot');
+      return isHeroSlot(cmd.slot) && (cmd.by === 'human' || cmd.by === 'bot');
     case 'bargainPolicy':
       return BARGAIN_POLICIES.includes(cmd.policy);
     default:

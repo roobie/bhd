@@ -15,22 +15,30 @@
 // Every `checkEvery` ticks each peer sends its state hash; the host compares and, on a mismatch,
 // broadcasts `desync`: everyone halts and can dump its log (`dump`, see inputlog.ts).
 
-import type { DriverStatus, TickDriver } from '../client/shell/types.ts';
 import type { Match } from '../match/match.ts';
 import type { GameSpec } from '../match/run.ts';
 import type { Command } from '../sim/commands.ts';
-import { SYSTEM_PLAYER } from '../sim/commands.ts';
+import { HERO_SLOTS, SYSTEM_PLAYER } from '../sim/commands.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { InputLog, InputRecorder } from './inputlog.ts';
 import { createRecorder, encodeInputLog } from './inputlog.ts';
-import type { PeerId, SealedInput, SeatAssignment, Transport, Unsubscribe, WireMsg } from './types.ts';
+import type {
+  DriverNotice,
+  DriverStatus,
+  PeerId,
+  SealedInput,
+  SeatAssignment,
+  TickDriver,
+  Transport,
+  Unsubscribe,
+  WireMsg,
+} from './types.ts';
 import { isPeerCommand } from './types.ts';
 
 /** Ticks between the hash checkpoints peers exchange. */
 export const CHECK_EVERY = 30;
 /** How far past the sealed tick a peer may ask an input to apply (bounds hostile `wantTick`s). */
 const MAX_AHEAD = 600;
-const HERO_SLOTS = 4;
 
 export interface LockstepOptions {
   readonly match: Match;
@@ -67,18 +75,8 @@ export interface ClientOptions extends LockstepOptions {
 /** Why a session ended. */
 export type EndReason = 'game' | 'host-left' | 'closed';
 
-/** What happened, for callouts and panels (the shape E2's `TickDriver.onNotice` uses). */
-export type DriverNotice =
-  | { readonly kind: 'paused' | 'resumed'; readonly by: number }
-  | { readonly kind: 'dropped'; readonly slots: number[] }
-  | { readonly kind: 'hostLeft' }
-  | { readonly kind: 'desync'; readonly tick: number }
-  | { readonly kind: 'calledWave'; readonly by: number };
-
 /** A `TickDriver` plus what the shell needs from a networked game. */
 export interface LockstepDriver extends TickDriver {
-  /** Asks everyone to pause or resume (`by`: the asking peer's player); takes effect when sealed into the stream. */
-  setPaused: (on: boolean, by: number) => void;
   /** Who paused, while paused. */
   pausedBy: () => number | undefined;
   /** Tick of the first mismatching checkpoint, once desynced. */
@@ -87,13 +85,8 @@ export interface LockstepDriver extends TickDriver {
   endReason: () => EndReason | undefined;
   /** How long the driver has been waiting for a seal, in injected-clock ms (0 when not stalled). */
   stalledMs: () => number;
-  onNotice: (cb: (n: DriverNotice) => void) => Unsubscribe;
   /** This peer's log so far. */
   log: () => InputLog;
-  /** The NDJSON dump of the log (what a desync leaves behind). */
-  dump: () => string | undefined;
-  /** Leaves the session: says goodbye and unsubscribes. */
-  dispose: () => void;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -109,6 +102,15 @@ interface Shared {
   apply: (match: Match, tick: number, inputs: readonly SealedInput[]) => void;
   /** Records the step's events; returns the checkpoints that are due for exchange. */
   observe: (events: readonly SimEvent[]) => { tick: number; hash: string }[];
+}
+
+/**
+ * The hash peers exchange at a checkpoint: the sim's state hash plus the Match state that the sim
+ * hash does not cover (who drives each hero and who resolves bargains), so a handover that applied
+ * on one peer only is caught too (L2). The log keeps the plain state hash, which replays compare.
+ */
+function checkpoint(match: Match, stateHash: string): string {
+  return `${stateHash}.${match.driven.join('')}.${match.bargainPolicy}`;
 }
 
 function shared(o: LockstepOptions): Shared {
@@ -147,7 +149,7 @@ function shared(o: LockstepOptions): Shared {
         if (e.kind === 'hash') {
           recorder.hash(e.tick, e.stateHash);
           if (e.tick % checkEvery === 0) {
-            due.push({ tick: e.tick, hash: e.stateHash });
+            due.push({ tick: e.tick, hash: checkpoint(o.match, e.stateHash) });
           }
         }
       }

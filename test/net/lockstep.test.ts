@@ -2,59 +2,10 @@
 // the host's seals, whatever the arrival order. Nothing asserts how a game plays (D-4E4QRJ7N6LIGZDSD).
 
 import { describe, expect, it } from 'vitest';
-import { replayInputs } from '../../src/net/inputlog.ts';
-import { checkpoints } from '../../src/replay/verify.ts';
 import { SYSTEM_PLAYER } from '../../src/sim/commands.ts';
-import { type PeerRig, Session } from './harness.ts';
+import { disagreements, type PeerRig, Session } from './harness.ts';
 
 const TICKS = 330;
-
-function hashesOf(p: PeerRig): string[] {
-  return p.driver.log().hashes.map((h) => `${h.tick}:${h.hash}`);
-}
-
-/**
- * What is wrong, if anything: every live peer should equal the host and the replay of the host's seals.
- * Returns problems rather than asserting, so the check can be shared (empty = agreement).
- */
-function disagreements(s: Session): string[] {
-  const out: string[] = [];
-  const hostLog = s.host.driver.log();
-  const replay = checkpoints(replayInputs(s.spec, hostLog.seals)).map((c) => `${c.tick}:${c.stateHash}`);
-  const want = hashesOf(s.host);
-  if (want.length <= 3) {
-    out.push(`only ${want.length} host checkpoints`);
-  }
-  if (JSON.stringify(want) !== JSON.stringify(replay.slice(0, want.length))) {
-    out.push('host hashes differ from the replay of its seals');
-  }
-  for (const p of s.peers) {
-    out.push(...peerProblems(s, p, want));
-  }
-  if (s.hub.refused() > 0) {
-    out.push(`${s.hub.refused()} messages refused`);
-  }
-  return out;
-}
-
-function peerProblems(s: Session, p: PeerRig, want: readonly string[]): string[] {
-  const out: string[] = [];
-  const got = hashesOf(p);
-  if (p.driver.status() === 'desynced') {
-    out.push(`${p.id} desynced`);
-  }
-  if (JSON.stringify(got) !== JSON.stringify(p.dropped ? want.slice(0, got.length) : want)) {
-    out.push(`${p.id} hashes differ from the host's`);
-  }
-  if (!p.dropped && p.match.tick !== s.host.match.tick) {
-    out.push(`${p.id} is at tick ${p.match.tick}, host at ${s.host.match.tick}`);
-  }
-  const { seals } = p.driver.log();
-  if (JSON.stringify(seals) !== JSON.stringify(s.host.driver.log().seals.slice(0, seals.length))) {
-    out.push(`${p.id} applied other seals than the host`);
-  }
-  return out;
-}
 
 function play(peers: number, seed: number, latency = { min: 15, max: 140 }): Session {
   const s = new Session({ peers, seed, latency });
@@ -212,6 +163,43 @@ describe('lockstep over the loopback hub', () => {
     s.runUntil(60);
     s.drain();
     expect(s.host.driver.log().seals.some((seal) => seal.inputs.some((i) => i.cmd.kind === 'bargain'))).toBe(false);
+  });
+
+  it('a human accepts a bot hero\'s bargain card: the host seals it as the slot player and every peer agrees', () => {
+    // An offer after wave 1 keeps the run short; slots 2 and 3 stay bots.
+    const s = new Session({
+      peers: 2,
+      seed: 5,
+      latency: { min: 10, max: 60 },
+      inputRate: 0.05,
+      overrides: { game: { bargains: { afterWaves: [1] } } },
+    });
+    const open = (): { id: number; cards: readonly { bargain: string; hero: number }[] } | undefined =>
+      s.host.match.sim.bargains?.offers[0];
+    for (let i = 0; i < 4000 && open() === undefined; i++) {
+      s.frame();
+    }
+    const offer = open();
+    expect(offer, 'the early offer opened').toBeDefined();
+    const heroes = s.host.match.perception.heroes;
+    const card = offer?.cards.find((c) => {
+      const slot = heroes.find((h) => h.id === c.hero)?.slot;
+      return slot !== undefined && !s.host.match.driven.includes(slot);
+    });
+    expect(card, 'the offer holds a card of a bot-driven hero').toBeDefined();
+    const botSlot = heroes.find((h) => h.id === card?.hero)?.slot as number;
+    // Peer 1 (a client seated at slot 1) resolves a card that belongs to the bot hero of `botSlot`.
+    s.peers[1]?.driver.submit(botSlot, { kind: 'bargain', op: 'accept', offer: offer?.id as number, card: card?.bargain as string });
+    s.runUntil(s.host.match.tick + 120);
+    s.drain();
+    const sealed = s.host.driver
+      .log()
+      .seals.flatMap((seal) => seal.inputs)
+      .filter((i) => i.cmd.kind === 'bargain');
+    expect(sealed).toHaveLength(1);
+    expect(sealed[0]?.player).toBe(botSlot);
+    expect(s.host.match.sim.bargains?.offers.some((o) => o.id === offer?.id)).toBe(false);
+    expect(disagreements(s)).toEqual([]);
   });
 
   it('a dropped peer hands its hero to a bot at a sealed tick, and the rest agree', () => {

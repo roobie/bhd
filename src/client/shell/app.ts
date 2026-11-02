@@ -118,7 +118,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const localPlayers = options?.localPlayers;
   const humanSlots = options?.humanSlots;
   const coop = localPlayers !== undefined && humanSlots !== undefined;
-  const spec = coop ? { ...shellSpec(config), networked: true } : shellSpec(config);
+  const spec = options?.spec ?? (coop ? { ...shellSpec(config), networked: true } : shellSpec(config));
   const solo = !coop && config.drive.length === 1;
   const startDriven = (): readonly number[] => localPlayers ?? config.drive;
   let driven: readonly number[] = startDriven();

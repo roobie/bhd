@@ -87,6 +87,28 @@ export function parseRoomConfig(hash: string, search = ''): RoomConfig {
   return { room: normaliseRoom(get('room')), name: name === '' ? 'Player' : name };
 }
 
+/**
+ * The signalling server origin from `#signal=https://host` (or the same in a `?query`): an http(s) or
+ * ws(s) URL without path, query or credentials, else undefined. The build default is the caller's.
+ */
+export function parseSignalOrigin(hash: string, search = ''): string | undefined {
+  const text = new URLSearchParams(hash.replace(HASH_PREFIX, '')).get('signal') ?? new URLSearchParams(search).get('signal');
+  if (text === null) {
+    return undefined;
+  }
+  return signalOrigin(text);
+}
+
+/** `text` as a signalling origin (scheme://host[:port]) when it is a valid http(s)/ws(s) URL, else undefined. */
+export function signalOrigin(text: string): string | undefined {
+  try {
+    const url = new URL(text.trim());
+    return /^(?:https?|wss?):$/u.test(url.protocol) && url.username === '' && url.host !== '' ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The GameSpec a shell config plays: the run defaults, every doctrine of the shipped bots, `humans` = `drive`. */
 export function shellSpec(c: ShellConfig): GameSpec {
   return {

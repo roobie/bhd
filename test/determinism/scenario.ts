@@ -17,7 +17,12 @@ import {
   PI,
   sin,
 } from '../../src/detmath/index.ts';
+import { shellSpec } from '../../src/client/shell/config.ts';
 import { Match } from '../../src/match/match.ts';
+import type { GameSpec } from '../../src/match/run.ts';
+import { buildMatch } from '../../src/match/run.ts';
+import { replayInputs } from '../../src/net/inputlog.ts';
+import type { Seal, SealedInput } from '../../src/net/types.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import { SYSTEM_PLAYER } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
@@ -308,6 +313,81 @@ function runControlMatch(): MatchResult {
   return summarise(events);
 }
 
+/** Ticks of the sealed-input run: past the first offer of the early-bargain spec. */
+const SEALED_TICKS = 1900;
+
+/** A networked-style spec: two humans, an offer after wave 1, so a bot hero's card is up inside the run. */
+export function sealedSpec(): GameSpec {
+  return {
+    ...shellSpec({ seed: SEED, mode: 'schedule', drive: [0, 1] }),
+    networked: true,
+    overrides: { game: { bargains: { afterWaves: [1] } } },
+  };
+}
+
+export interface SealedRun {
+  readonly spec: GameSpec;
+  readonly seals: readonly Seal[];
+  /** Every event of the live run that produced the seals. */
+  readonly events: readonly SimEvent[];
+}
+
+/**
+ * A host-style run: each tick it composes that tick's inputs (human moves, SYSTEM control handovers,
+ * a policy flip, and a bargain accept for a card of a BOT hero submitted as that hero's slot, then a
+ * decline), seals them sorted by player, submits them in seal order (rule R1) and steps. The seals
+ * are what `replayInputs` plays back; every runtime must reproduce the same events from them.
+ */
+export function runSealed(): SealedRun {
+  const spec = sealedSpec();
+  const match = buildMatch(spec);
+  const seals: Seal[] = [];
+  const events: SimEvent[] = [];
+  let answered = 0;
+  while (match.tick < SEALED_TICKS && !match.ended) {
+    const t = match.tick + 1;
+    const inputs: SealedInput[] = [];
+    const hero = (slot: number): number => match.perception.heroes.find((h) => h.slot === slot)?.id ?? 0;
+    if (t % 45 === 0) {
+      inputs.push({ player: 0, cmd: { kind: 'move', hero: hero(0), x: 8 + (t % 90), y: 14 } });
+    }
+    if (t % 70 === 0) {
+      inputs.push({ player: 1, cmd: { kind: 'move', hero: hero(1), x: 30 - (t % 60), y: 18 } });
+    }
+    if (t === 60) {
+      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'bot' } });
+    }
+    if (t === 400) {
+      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'drive', slot: 1, by: 'human' } });
+    }
+    if (t === 800) {
+      inputs.push({ player: SYSTEM_PLAYER, cmd: { kind: 'control', op: 'bargainPolicy', policy: 'human' } });
+    }
+    const offer = match.sim.bargains?.offers[0];
+    if (offer !== undefined && answered < 2) {
+      // The bot hero's card first (accepted by a human as the hero's slot), the leftovers declined.
+      const bot = offer.cards.find((c) => {
+        const slot = match.perception.heroes.find((h) => h.id === c.hero)?.slot;
+        return slot !== undefined && !match.driven.includes(slot);
+      });
+      const slot = match.perception.heroes.find((h) => h.id === bot?.hero)?.slot;
+      if (bot !== undefined && slot !== undefined) {
+        inputs.push({ player: slot, cmd: { kind: 'bargain', op: 'accept', offer: offer.id, card: bot.bargain } });
+      } else {
+        inputs.push({ player: 1, cmd: { kind: 'bargain', op: 'decline', offer: offer.id } });
+      }
+      answered += 1;
+    }
+    inputs.sort((a, b) => a.player - b.player);
+    seals.push({ tick: t, inputs });
+    for (const input of inputs) {
+      match.sim.command(input.player, input.cmd, t);
+    }
+    events.push(...match.step());
+  }
+  return { spec, seals, events };
+}
+
 interface MatchResult {
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];
@@ -322,6 +402,10 @@ export interface ScenarioResult {
   readonly bargains: MatchResult;
   /** A Match with control commands (drive handovers, bargain policy) and a human's commands submitted per tick. */
   readonly control: MatchResult;
+  /** `replayInputs` of the seals of a host-style run (control handovers, a bot hero's card accepted as its slot). */
+  readonly sealed: MatchResult;
+  /** Bargain accepts in those seals; the scenario must exercise the bot-hero accept path. */
+  readonly sealedAccepts: number;
   /** An all-bot Match with the default bots and Director: any bot or Director change moves it. */
   readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
@@ -512,7 +596,10 @@ function summarise(events: readonly SimEvent[]): MatchResult {
 
 export function runScenario(): ScenarioResult {
   const events = runSim(SEED, SCRIPT, TICKS);
+  const run = runSealed();
   return {
+    sealed: summarise(replayInputs(run.spec, run.seals)),
+    sealedAccepts: run.seals.flatMap((x) => x.inputs).filter((i) => i.cmd.kind === 'bargain' && i.cmd.op === 'accept').length,
     match: runMatch(),
     master: summarise(runMasterSim(SEED, MASTER_TICKS)),
     bargains: summarise(runBargainSim(SEED, TICKS)),

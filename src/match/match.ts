@@ -43,6 +43,7 @@ import { createMemory, foldEvents } from '../perception/memory.ts';
 import { perceive, perceiveMaster } from '../perception/perceive.ts';
 import type { MasterView, Perception } from '../perception/types.ts';
 import type { BargainPolicyName, Command, ControlCommand } from '../sim/commands.ts';
+import { HERO_SLOTS } from '../sim/commands.ts';
 import { canonicalCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
 import type { SimEvent } from '../sim/events.ts';
 import { Sim } from '../sim/sim.ts';
@@ -52,7 +53,6 @@ import { ticks } from '../sim/time.ts';
 const DIRECTOR_PLAYER = 4;
 /** Ability slots whose autocast bit a handover sets. */
 const ABILITY_SLOTS = 4;
-const HERO_SLOTS = 4;
 
 export interface MatchOptions {
   readonly seed: number;

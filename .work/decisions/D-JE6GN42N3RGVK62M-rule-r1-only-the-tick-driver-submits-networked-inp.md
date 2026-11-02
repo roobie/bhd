@@ -14,7 +14,7 @@ refs:
 Commands apply in (player, seq) order and seq is the order of submission on each peer (D-ZWZVLE5U4MRETLI7). Two peers that submit the same inputs in a different arrival order would assign different seqs and diverge silently until the next hash checkpoint.
 
 ## Decision
-In networked mode nobody calls sim.command for a human or system player except the driver's beforeStep(T), which submits tick T's sealed inputs in seal order (player, then send order). Match's own bot submissions happen during earlier steps, so they come first on every peer. The rule is documented on Sim.command.
+In networked mode, outside Match.step and beforeStep, nobody calls sim.command. The driver's beforeStep(T) submits tick T's sealed inputs in seal order (player, then send order); Match.step submits the bots' own commands. Those happen during earlier steps than T's, so they come first on every peer. The rule is documented on Sim.command.
 
 ## Why
 The alternative is to push inputs into the sim as they arrive and hope orders match; arrival order differs between peers. Submitting at a single point, from a list every peer holds identically, makes the seq assignment a function of the seal alone.

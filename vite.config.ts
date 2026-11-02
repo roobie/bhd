@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { fingerprint, NET_FINGERPRINT_FILES } from './src/reporter/fingerprint.ts';
 
 // Tests that run in browsers too: they must not import node:*.
 const BROWSER_TESTS = [
@@ -18,8 +19,12 @@ const BROWSER_TESTS = [
   'test/net/rtc.browser.test.ts',
 ];
 
+// The build identity peers compare in the lobby `hello`: the pure dirs plus the lockstep net files.
+const BUILD_FINGERPRINT = fingerprint(fileURLToPath(new URL('.', import.meta.url)), NET_FINGERPRINT_FILES);
+
 export default defineConfig({
   base: './',
+  define: { __BHD_FINGERPRINT__: JSON.stringify(BUILD_FINGERPRINT) },
   worker: { format: 'es' },
   build: {
     // Two pages: the debug viewer and the play shell.

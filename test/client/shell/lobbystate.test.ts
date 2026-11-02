@@ -87,7 +87,7 @@ describe('lobby state', () => {
     r.get('b').pick(1);
     expect(r.get('b').view().slots[1]).toBe('a');
     // A forged request for a taken slot: the host answers with the truth.
-    r.get('h').receive('b', { t: 'lobby', slots: [null, 'b', null, null], mode: 'schedule', seed: 9 });
+    r.get('h').receive('b', { t: 'lobby', slots: [null, 'b', null, null], names: [], mode: 'schedule', seed: 9 });
     expect(r.get('h').view().slots).toEqual([null, 'a', null, null]);
     expect(r.get('h').view().mode).toBe('director');
     expect(r.get('h').view().seed).toBe(1);

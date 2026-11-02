@@ -1,11 +1,9 @@
 // Sides: what `--base` / `--cand` mean. Parses the text, resolves refs to snapshots, reads the
 // overrides file and fingerprints the code.
 
-import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { ConfigOverrides } from '../content/overrides.ts';
-import { PURE_DIRS } from '../match/pureDirs.ts';
 import { ensureSnapshot, git, resolveSha } from './snapshot.ts';
 import type { ResolvedSide, SideSpec } from './types.ts';
 
@@ -34,33 +32,7 @@ export function parseSide(text: string): SideSpec {
   return text.endsWith('.json') ? { kind: 'overrides', path: text } : { kind: 'ref', ref: text };
 }
 
-function sourceFiles(dir: string, prefix: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const rel = `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) {
-      out.push(...sourceFiles(join(dir, entry.name), rel));
-    } else if (entry.isFile()) {
-      out.push(rel);
-    }
-  }
-  return out;
-}
-
-/**
- * SHA-256 over the sorted sources of the pure dirs under `root/src` (path, then bytes, per file):
- * equal fingerprints mean the same game code.
- */
-export function fingerprint(root: string): string {
-  const h = createHash('sha256');
-  const files = PURE_DIRS.flatMap((d) => sourceFiles(join(root, 'src', d), `src/${d}`)).sort();
-  for (const rel of files) {
-    h.update(`${rel}\0`);
-    h.update(readFileSync(join(root, rel)));
-    h.update('\0');
-  }
-  return h.digest('hex');
-}
+import { fingerprint } from './fingerprint.ts';
 
 function readOverrides(path: string, cwd: string): ConfigOverrides {
   const file = resolve(cwd, path);

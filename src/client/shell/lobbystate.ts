@@ -2,13 +2,15 @@
 // (`hello`, `lobby`, `start`) and local actions and emits WireMsgs through the injected `send` and
 // `broadcast`. The host is authoritative over the `lobby` message.
 //
-// The wire has no dedicated "pick a slot" message, so a joiner sends a `lobby` to the host as a
-// REQUEST: the host reads only the slots equal to the sender's id (the first one is the claim; none
-// is a release) and ignores everything else (mode, seed, other slots). It then broadcasts the
-// authoritative `lobby`, which also reverts a losing claim on the joiner. First come wins.
+// Slot picking reuses the `lobby` message (decided at integration, H2: no separate `pick`): a joiner
+// sends a `lobby` to the host as a REQUEST. The host reads only the slots equal to the sender's id
+// (the first one is the claim; none is a release) and ignores everything else (names, mode, seed,
+// other slots). It then broadcasts the authoritative `lobby`, which also reverts a losing claim on
+// the joiner. First come wins. A refused joiner (build, protocol, full room, game started) gets a
+// `refuse {reason}` and shows why. `names[i]` names the holder of slot i, so every peer sees them all.
 
 import type { GameSpec, Mode } from '../../match/run.ts';
-import type { PeerId, SeatAssignment, WireMsg } from '../../net/types.ts';
+import type { PeerId, RefuseReason, SeatAssignment, WireMsg } from '../../net/types.ts';
 import { PROTOCOL_VERSION } from '../../net/types.ts';
 import { shellSpec } from './config.ts';
 
@@ -21,7 +23,7 @@ type Start = Extract<WireMsg, { t: 'start' }>;
 type LobbyPhase = 'lobby' | 'error' | 'started';
 
 interface LobbyError {
-  readonly kind: 'mismatch' | 'host-lost';
+  readonly kind: 'mismatch' | 'refused' | 'host-lost';
   readonly message: string;
 }
 
@@ -77,6 +79,13 @@ export interface Lobby {
   onStart: (cb: (start: Start) => void) => () => void;
 }
 
+const REFUSAL_TEXT: Readonly<Record<RefuseReason, string>> = {
+  abi: 'The host runs another protocol version. Everyone must load the same build.',
+  fingerprint: 'The host runs a different build of the game. Everyone must reload to the same version.',
+  full: 'The room is full.',
+  started: 'The game has already started. Ask the host to restart to the lobby.',
+};
+
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /** A 4-letter room code from an injected uniform [0,1) source. */
@@ -102,7 +111,13 @@ export function createLobby(deps: LobbyDeps): Lobby {
   let error: LobbyError | undefined;
 
   const hello = (): WireMsg => ({ t: 'hello', abi: PROTOCOL_VERSION, fingerprint: deps.fingerprint, name: deps.name });
-  const lobbyMsg = (): WireMsg => ({ t: 'lobby', slots: [...slots], mode, seed });
+  const lobbyMsg = (): WireMsg => ({
+    t: 'lobby',
+    slots: [...slots],
+    names: slots.map((p) => (p === null ? null : (names.get(p) ?? null))),
+    mode,
+    seed,
+  });
   const changed = (): void => {
     for (const cb of [...changeCbs]) {
       cb();
@@ -132,12 +147,28 @@ export function createLobby(deps: LobbyDeps): Lobby {
     return undefined;
   }
 
+  function refusal(msg: Extract<WireMsg, { t: 'hello' }>): RefuseReason | undefined {
+    if (msg.abi !== PROTOCOL_VERSION) {
+      return 'abi';
+    }
+    if (msg.fingerprint !== deps.fingerprint) {
+      return 'fingerprint';
+    }
+    return undefined;
+  }
+
   function onHello(from: PeerId, msg: Extract<WireMsg, { t: 'hello' }>): void {
     const bad = mismatch(msg);
     if (isHost) {
-      if (bad !== undefined) {
+      const build = refusal(msg);
+      if (build !== undefined) {
         rejected.add(from);
+        deps.send(from, { t: 'refuse', reason: build });
         changed();
+        return;
+      }
+      if (!live() || (!accepted.has(from) && accepted.size >= HERO_SLOTS - 1)) {
+        deps.send(from, { t: 'refuse', reason: live() ? 'full' : 'started' });
         return;
       }
       accepted.add(from);
@@ -184,8 +215,26 @@ export function createLobby(deps: LobbyDeps): Lobby {
     } else if (from === deps.host) {
       slots = [...msg.slots];
       ({ mode, seed } = msg);
+      for (const peer of [...names.keys()]) {
+        if (peer !== deps.self && peer !== deps.host) {
+          names.delete(peer);
+        }
+      }
+      msg.slots.forEach((peer, i) => {
+        const name = msg.names[i];
+        if (peer !== null && name !== undefined && name !== null && peer !== deps.self && peer !== deps.host) {
+          names.set(peer, name);
+        }
+      });
       changed();
     }
+  }
+
+  function onRefuse(from: PeerId, reason: RefuseReason): void {
+    if (isHost || from !== deps.host) {
+      return;
+    }
+    fail('refused', REFUSAL_TEXT[reason]);
   }
 
   function onStartMsg(from: PeerId, msg: Start): void {
@@ -254,6 +303,8 @@ export function createLobby(deps: LobbyDeps): Lobby {
         onHello(from, msg);
       } else if (msg.t === 'lobby') {
         onLobby(from, msg);
+      } else if (msg.t === 'refuse') {
+        onRefuse(from, msg.reason);
       } else if (msg.t === 'start') {
         onStartMsg(from, msg);
       }
@@ -309,7 +360,7 @@ export function createLobby(deps: LobbyDeps): Lobby {
         return false;
       }
       const humans = slots.flatMap((p, i) => (p === null ? [] : [i]));
-      const spec: GameSpec = shellSpec({ seed, mode, drive: humans });
+      const spec: GameSpec = { ...shellSpec({ seed, mode, drive: humans }), networked: true };
       const msg: Start = { t: 'start', spec, seats: seats(), delay: START_DELAY };
       phase = 'started';
       for (const peer of accepted) {
