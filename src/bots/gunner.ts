@@ -209,6 +209,13 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
     g.pavise === undefined || dir === undefined
       ? undefined
       : barrierCrossing(g.pavise, me, { x: me.x + dir.ux * range, y: me.y + dir.uy * range });
+  // A line that spares allies has none in it, listed or estimated.
+  let lineAllies = listed;
+  if (g.overpenAllies === 0) {
+    lineAllies = 0;
+  } else if (listed === 0 && me.target === 0) {
+    lineAllies = estimateLine(ctx, g, w('gunner.geo.allyRadius'));
+  }
   const covered = crossing !== undefined;
   const clipped = crossing !== undefined && dir !== undefined && crossing * range < dir.len;
   return {
@@ -226,7 +233,7 @@ function frameOf(ctx: BotCtx, mem: Memory, g: GunnerView): Frame {
     inRange: p.enemies.filter((e) => dist(me, e) <= range),
     focus,
     aim: braced ? (mem.braceAim ?? focus) : focus,
-    lineAllies: listed > 0 || me.target !== 0 ? listed : estimateLine(ctx, g, w('gunner.geo.allyRadius')),
+    lineAllies,
     covered,
     clipped,
     w,
@@ -371,11 +378,8 @@ function fireDecision(f: Frame): Decision | undefined {
   const n = f.inRange.length;
   const extra = Math.min(Math.max(0, n - 1), w('gunner.fire.clumpCap'));
   const value = n === 0 ? 0 : w('gunner.fire.value') * (1 + w('gunner.fire.clump') * extra);
-  const overpen = f.g.overpenAbove;
-  const pierce = f.g.pierceAbove;
   // Pillar 1: the line only hits allies once rounds overpenetrate (heat above the band, or Furnace Heart).
-  const line =
-    f.furnace || f.heat > overpen ? 1 : w('gunner.fire.anticipation') * clamp01((f.heat - pierce) / (overpen - pierce));
+  const line = lineLive(f);
   const allyCost = f.covered ? 0 : w('gunner.redline.allyInLine') * f.lineAllies * line * (1 - risk);
   // Overpenetrating rounds stop dead at a barrier in front of the target: those shots are wasted and
   // clip her own line (the cause of the Pavise's self-blocks). Holding lets the heat fall back under it.
@@ -450,6 +454,10 @@ function lineLive(f: Frame): number {
     return 1;
   }
   const { pierceAbove, overpenAbove } = f.g;
+  // No ramp when the pierce band is not below the overpenetration band (a patched pierceAbove).
+  if (pierceAbove >= overpenAbove) {
+    return 0;
+  }
   return f.w('gunner.fire.anticipation') * clamp01((f.heat - pierceAbove) / (overpenAbove - pierceAbove));
 }
 

@@ -1,7 +1,6 @@
 // Pure: Perception + presentation + controls -> HudModel. Owner: w7-hud.
 // Kit-agnostic: nothing here switches on a hero, kit, ability, status or resource name.
 
-import { defNumberAt } from '../../content/bargains.ts';
 import {
   describeAbility,
   describeBargain,
@@ -25,15 +24,7 @@ import {
   statusPresentation,
   UI_TEXT,
 } from '../../content/presentation.ts';
-import type {
-  CardView,
-  EffectView,
-  HeroView,
-  IntentView,
-  OfferView,
-  Perception,
-  TakenView,
-} from '../../perception/types.ts';
+import type { CardView, HeroView, IntentView, OfferView, Perception, TakenView } from '../../perception/types.ts';
 import { TICK_HZ } from '../../sim/time.ts';
 import { ARM_MAX_HALF_SECONDS, ARM_MIN_HALF_SECONDS, maxOffsetHalfSeconds } from './arming.ts';
 import { BARGAIN_CARD_KEYS, KEY_BARGAIN_DECLINE } from './input.ts';
@@ -186,14 +177,6 @@ function benefitLabel(p: Perception, ui: Presentation, card: CardView): string {
 /** What card text reads besides the card: perception (who the heroes are), presentation and the game's hero defs. */
 type TextWorld = Pick<HudInput, 'p' | 'ui' | 'game'>;
 
-/** The unpatched hero-def number a `self` effect starts from: the benefiting hero's base def; unknown for other targets. */
-function baseOf(world: TextWorld, benefit: number): (e: EffectView) => number | undefined {
-  const { p, game } = world;
-  const defId = p.heroes.find((h) => h.id === benefit)?.def ?? p.fallen.find((f) => f.id === benefit)?.def;
-  const def = game?.heroes.find((d) => d.id === defId);
-  return (e) => (e.kind === 'def' && e.target === 'self' && def !== undefined ? defNumberAt(def, e.path) : undefined);
-}
-
 function bargainLines(
   world: TextWorld,
   card: {
@@ -206,7 +189,7 @@ function bargainLines(
   return describeBargain(card, {
     scope: card.scope,
     enemy: (id) => enemyPresentation(world.ui, id).label,
-    base: baseOf(world, card.hero),
+    base: (e) => e.base,
   });
 }
 
@@ -477,14 +460,16 @@ function offerModel(input: HudInput, o: OfferView, sent: readonly BargainSent[])
     declineKey: KEY_BARGAIN_DECLINE,
     inFlight: mine !== undefined,
     declined: mine !== undefined && mine.card === undefined,
-    enabled: driven.length > 0,
+    // Greyed out while bots pick, and once a command could no longer land before the offer lapses.
+    enabled: driven.length > 0 && input.botsPick !== true && ticksLeft > INPUT_DELAY_TICKS,
   };
 }
 
 /** Open offers with their cards, countdowns and in-flight state; undefined when none is open. */
 function bargainModel(input: HudInput): BargainHudModel | undefined {
   const { open } = input.p.bargains;
-  if (open.length === 0) {
+  // The offers die with the game.
+  if (open.length === 0 || input.end !== undefined) {
     return undefined;
   }
   const sent = input.controls.bargainSent ?? [];

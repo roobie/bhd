@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest';
 import type { BargainsDef } from '../../src/content/bargains.ts';
 import type { GameConfig } from '../../src/content/index.ts';
 import { defaultGame, defaultMasterGame } from '../../src/content/index.ts';
+import { defaultPerception } from '../../src/content/perception.ts';
 import { perceiveBargains } from '../../src/perception/bargains.ts';
+import { createMemory } from '../../src/perception/memory.ts';
+import { perceive } from '../../src/perception/perceive.ts';
 import { createMods, heroDef } from '../../src/sim/bargains.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
@@ -242,6 +245,72 @@ describe('effects', () => {
     expect(heroDef(sim, gunner)).toBe(sim.game.heroes[0]);
     expect(createMods(sim.game, sim.bargains).heal(penitent, 5)).toBe(0);
     expect(createMods(sim.game, sim.bargains).heal(gunner, 5)).toBe(1);
+  });
+
+  it('a Spent Penitent keeps his armour penalty through an unrelated accept', () => {
+    const sim = new Sim({ seed: 1, game: quickGame() });
+    const hero = sim.entities.get(3);
+    const def = hero === undefined ? undefined : heroDef(sim, hero);
+    if (hero?.kit?.kind !== 'penitent' || def?.kit !== 'penitent') {
+      throw new Error('not a penitent');
+    }
+    const penalty = def.martyrdom.spentArmourPenalty;
+    expect(penalty).toBeGreaterThan(0);
+    hero.kit.spentTicks = 100;
+    hero.armour = Math.max(0, def.armour - penalty);
+    const spent = hero.armour;
+    expect(spent).toBeLessThan(def.armour);
+    const offer = giveOffer(sim, ['test-tithe']);
+    sim.command(0, { kind: 'bargain', op: 'accept', offer, card: 'test-tithe' });
+    sim.step();
+    expect(hero.armour).toBe(spent);
+    hero.kit.spentTicks = 0;
+    hero.armour = def.armour;
+    const next = giveOffer(sim, ['test-fleeting']);
+    sim.command(0, { kind: 'bargain', op: 'accept', offer: next, card: 'test-fleeting' });
+    sim.step();
+    expect(hero.armour).toBe(def.armour);
+  });
+
+  it('perception drops the effect the mode does not use, and carries the base of a self def patch', () => {
+    const horde = (game: GameConfig): { gains: number; costs: string[] } => {
+      const sim = new Sim({ seed: 1, game });
+      const offer = giveOffer(sim, ['test-horde']);
+      const view = perceiveBargains(sim).open.find((o) => o.id === offer)?.cards[0];
+      return { gains: view?.gains.length ?? -1, costs: view?.costs.map((c) => c.kind) ?? [] };
+    };
+    expect(horde(quickGame()).costs).toEqual(['waveExtra']);
+    expect(horde(quickGame({}, defaultMasterGame())).costs).toEqual(['masterBudget']);
+    const sim = new Sim({ seed: 1, game: quickGame() });
+    const offer = giveOffer(sim, ['test-hair-shirt']);
+    const effect = perceiveBargains(sim).open.find((o) => o.id === offer)?.cards[0]?.gains[0];
+    const penitent = sim.game.heroes.find((h) => h.kit === 'penitent');
+    expect(effect?.base).toBe(penitent?.zeal.maxBonus);
+  });
+
+  it('a spared-allies line has no line allies and keeps the heat marks ascending when pierce is out of reach', () => {
+    const pool = [
+      {
+        id: 'test-spare',
+        scope: 'hero' as const,
+        kit: 'gunner' as const,
+        gains: [
+          { kind: 'def' as const, target: 'self' as const, path: 'heat.overpenAllies', op: 'mul' as const, value: 0 },
+        ],
+        costs: [
+          { kind: 'def' as const, target: 'self' as const, path: 'heat.pierceAbove', op: 'add' as const, value: 0.6 },
+        ],
+      },
+    ];
+    const sim = new Sim({ seed: 1, game: quickGame({ pool }) });
+    const offer = giveOffer(sim, ['test-spare']);
+    sim.command(0, { kind: 'bargain', op: 'accept', offer, card: 'test-spare' });
+    sim.step();
+    const view = perceive(sim, createMemory(defaultPerception())).heroes.find((h) => h.def === 'gunner');
+    expect(view?.lineAllies).toEqual([]);
+    expect(view?.gunner?.overpenAllies).toBe(0);
+    const marks = view?.resources.find((r) => r.name === 'heat')?.marks ?? [];
+    expect([...marks].sort((a, b) => a - b)).toEqual(marks);
   });
 
   it('a maxHp patch rewrites the entity, keeps missing hp, and a timed bargain restores the base on expiry', () => {

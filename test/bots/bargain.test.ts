@@ -17,7 +17,7 @@ import { testBargains } from '../bargains-fixture.ts';
 const SEED = 0x91_b4_c0_de;
 
 function eff(over: Partial<EffectView> & Pick<EffectView, 'kind'>): EffectView {
-  return { target: 'self', value: 1, path: '', op: '', def: '', ...over };
+  return { target: 'self', value: 1, path: '', op: '', def: '', base: undefined, ...over };
 }
 
 function card(bargain: string, hero: number, gains: EffectView[], costs: EffectView[]): CardView {
@@ -61,7 +61,7 @@ function offerOf(id: number, cs: CardView[]): OfferView {
 }
 
 function withOffers(p: Perception, offers: OfferView[]): Perception {
-  return { ...p, bargains: { open: offers, taken: [] } };
+  return { ...p, bargains: { open: offers, taken: [], declineAncientHeal: 0.04 } };
 }
 
 function ctxOf(p: Perception, meIndex = 0, over: Partial<BotCtx> = {}): BotCtx {
@@ -192,15 +192,28 @@ describe('bargainDecisions: evaluate', () => {
     expect(JSON.stringify(p)).toBe(before);
   });
 
-  it('sometimes declines and sometimes accepts over a range of situations', () => {
-    const picks = new Set<string>();
+  it('accepts a clearly positive card and declines a clearly negative one, in every situation', () => {
+    const good = card('good', 0, [eff({ kind: 'dealt', target: 'team', value: 3 })], []);
+    const bad = card('bad', 0, [], [eff({ kind: 'respawn', target: 'team', value: 3 })]);
     for (const p of situations()) {
-      for (const c of offerFor(p).cards) {
-        const solo = withOffers(p, [offerOf(1, [c])]);
-        picks.add(picked(only(bargainDecisions(ctxOf(solo), 'evaluate'))) === 'decline' ? 'decline' : 'accept');
-      }
+      const pick = (c: CardView): string =>
+        picked(only(bargainDecisions(ctxOf(withOffers(p, [offerOf(1, [c])])), 'evaluate')));
+      expect(pick(good)).toBe('accept:good');
+      expect(pick(bad)).toBe('decline');
     }
-    expect([...picks].sort()).toEqual(['accept', 'decline']);
+  });
+
+  it('counts an additive patch against the number it patches', () => {
+    const p = withOffers(base(), [offerOf(1, [])]);
+    const costOf = (e: Partial<EffectView>): number => {
+      const c = card('x', 0, [], [eff({ kind: 'def', path: 'attack.damage', op: 'add', value: -2, ...e })]);
+      const open = withOffers(p, [offerOf(1, [c])]);
+      return only(bargainDecisions(ctxOf(open), 'evaluate')).options[1]?.cost ?? Number.NaN;
+    };
+    // The same -2 hurts more on a small base than on a large one; an unknown base still counts something.
+    expect(costOf({ base: 4 })).toBeGreaterThan(costOf({ base: 40 }));
+    expect(costOf({ base: undefined })).toBeGreaterThan(0);
+    expect(costOf({ base: 0 })).toBe(costOf({ base: undefined }));
   });
 
   it('values what is missing: a hurt Ancient never makes a heal card worse, a full one gains nothing from it', () => {

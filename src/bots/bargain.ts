@@ -66,7 +66,13 @@ function magnitude(ctx: BotCtx, e: EffectView): number {
     case 'ancientHeal':
       return Math.abs(e.value);
     case 'def':
-      return e.op === 'add' ? Math.abs(e.value) * w(ctx, 'bargain.addScale') : Math.abs(e.value - 1);
+      if (e.op !== 'add') {
+        return Math.abs(e.value - 1);
+      }
+      // An additive patch counts as a relative change of the number it patches; `addScale` stands in when the base is unknown or 0.
+      return e.base !== undefined && e.base !== 0
+        ? Math.abs(e.value) / Math.abs(e.base)
+        : Math.abs(e.value) * w(ctx, 'bargain.addScale');
     default:
       return Math.abs(e.value - 1);
   }
@@ -177,7 +183,7 @@ function optionsFor(ctx: BotCtx, offer: OfferView, policy: BargainBotPolicy): Op
       ];
     default: {
       const s = situation(ctx.p);
-      const heal = Math.min(w(ctx, 'bargain.decline.heal'), s.missing) * w(ctx, 'bargain.unit.ancientHeal');
+      const heal = Math.min(ctx.p.bargains.declineAncientHeal, s.missing) * w(ctx, 'bargain.unit.ancientHeal');
       return [
         declineOption(offer, w(ctx, 'bargain.decline.base') + heal),
         ...offer.cards.map((c) => acceptOption(offer, c, scoreCard(ctx, s, c))),

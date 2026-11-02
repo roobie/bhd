@@ -7,7 +7,7 @@ export function bargainWeights(): Record<string, number> {
   return {
     // Utility per unit of effect magnitude, by kind. Multipliers count |value - 1|; `ancientHeal`
     // counts the Ancient hp fraction actually restored; `waveExtra` counts enemies; `masterBudget`
-    // counts the budget amount; an additive `def` patch counts |value| times `addScale`.
+    // counts the budget amount; an additive `def` patch counts |value| / |base| (its relative change), or |value| times `addScale` when the base is unknown or 0.
     'bargain.unit.def': 4,
     'bargain.unit.dealt': 5,
     'bargain.unit.taken': 5,
@@ -18,10 +18,9 @@ export function bargainWeights(): Record<string, number> {
     'bargain.unit.masterBudget': 0.3,
     'bargain.addScale': 0.05,
 
-    // Declining: a flat floor, plus the Ancient heal the game grants for it (mirrors the content's
-    // declineAncientHeal; perception does not carry it), worth `unit.ancientHeal` per fraction restored.
+    // Declining: a flat floor, plus the Ancient heal the game grants for it (perception carries
+    // declineAncientHeal), worth `unit.ancientHeal` per fraction restored.
     'bargain.decline.base': 0.35,
-    'bargain.decline.heal': 0.04,
 
     // Situation scaling: a cost grows by (1 + weight * situation).
     // Fallen or low heroes make respawn, taken, healTaken and maxHp costs heavier.

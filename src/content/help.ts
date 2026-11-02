@@ -535,6 +535,9 @@ function patchFrom(e: EffectView, text: PathText, from: number): string {
   if (Math.abs(to) < ZERO && text.zero !== undefined) {
     return text.zero;
   }
+  if (text.ceiling !== undefined && to >= text.ceiling.at) {
+    return text.ceiling.text;
+  }
   const [now, was] = [showUnit(text.unit, to), showUnit(text.unit, from)];
   return text.say === undefined ? `${text.label} ${now} (was ${was})` : text.say(now, was);
 }

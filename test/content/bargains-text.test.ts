@@ -60,6 +60,7 @@ describe('describeBargain with a known base', () => {
     path,
     op,
     def: '',
+    base: undefined,
   });
   const facts = {
     scope: 'hero' as const,

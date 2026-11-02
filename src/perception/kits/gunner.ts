@@ -82,15 +82,26 @@ export function gunnerParts(sim: Sim, e: Readonly<Entity>, def: GunnerDef, kit: 
     kit: 'gunner',
     role: 'gunner',
     resources: [
-      { name: 'heat', frac: heat, band: kit.heatBand, marks: [def.heat.pierceAbove, def.heat.overpenAbove, 1] },
+      {
+        name: 'heat',
+        frac: heat,
+        band: kit.heatBand,
+        marks: [def.heat.pierceAbove, def.heat.overpenAbove, 1]
+          .filter((m, i, all) => m < 1 || i === all.length - 1)
+          .sort((a, b) => a - b),
+      },
     ],
     abilities: gunnerAbilities(def, kit),
-    lineAllies: lineAlliesOf(
-      sim,
-      e,
-      def.attack.range * (kit.stance === STANCE.braced ? 1 + def.brace.rangeBonus : 1),
-      def.heat.lineHalfWidth,
-    ),
+    // A line that spares allies (overpenAllies 0) has none in it.
+    lineAllies:
+      def.heat.overpenAllies === 0
+        ? []
+        : lineAlliesOf(
+            sim,
+            e,
+            def.attack.range * (kit.stance === STANCE.braced ? 1 + def.brace.rangeBonus : 1),
+            def.heat.lineHalfWidth,
+          ),
     gunner: {
       heat,
       spin: kit.spin,
@@ -107,6 +118,7 @@ export function gunnerParts(sim: Sim, e: Readonly<Entity>, def: GunnerDef, kit: 
       pavise: paviseOf(sim, e.id),
       pierceAbove: def.heat.pierceAbove,
       overpenAbove: def.heat.overpenAbove,
+      overpenAllies: def.heat.overpenAllies,
     },
   };
 }

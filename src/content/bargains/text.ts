@@ -13,6 +13,8 @@ export interface PathText {
   readonly say?: (to: string, from: string) => string;
   /** What reads when the patched value is exactly 0 (a multiplier of 0, or a sum that cancels). */
   readonly zero?: string;
+  /** What reads when the patched value reaches `at` or more (a threshold that can no longer be crossed). */
+  readonly ceiling?: { readonly at: number; readonly text: string };
 }
 
 /** A number of at most one decimal, trailing zero dropped. */
@@ -51,6 +53,8 @@ export const BARGAIN_PATHS: Readonly<Record<string, PathText>> = {
     label: 'Armour-piercing heat',
     unit: 'percent',
     say: (to, from) => `Rounds pierce armour only above ${to} heat (was ${from})`,
+    // Heat tops out at 100%, so a threshold at or past it is never crossed; Furnace Heart still pierces.
+    ceiling: { at: 1, text: 'Rounds no longer pierce armour (except Furnace Heart)' },
   },
   'zeal.maxBonus': {
     label: 'Wound-Zeal max bonus',

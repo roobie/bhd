@@ -20,7 +20,7 @@ function effect(
   value: number,
   over: Partial<EffectView> = {},
 ): EffectView {
-  return { kind, target, value, path: '', op: '', def: '', ...over };
+  return { kind, target, value, path: '', op: '', def: '', base: undefined, ...over };
 }
 
 const bargainsDef: BargainsDef = {
@@ -84,6 +84,7 @@ export function withOffer(secondsLeft = WINDOW_SECONDS): Perception {
           costs: [effect('healTaken', 'self', 0)],
         },
       ],
+      declineAncientHeal: 0.04,
     },
   };
 }

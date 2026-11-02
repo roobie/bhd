@@ -368,7 +368,10 @@ export function refreshHeroes(ctx: TickContext): void {
       }
       e.maxHp = maxHp;
     }
-    e.armour = def.armour;
+    // A Spent Penitent keeps his armour penalty (penitent.ts sets it on Martyrdom's end and clears it with Spent).
+    const spent = def.kit === 'penitent' && e.kit?.kind === 'penitent' && e.kit.spentTicks > 0;
+    e.armour =
+      def.kit === 'penitent' && spent ? Math.max(0, def.armour - def.martyrdom.spentArmourPenalty) : def.armour;
     e.speed = perTick(Math.max(0, def.speed));
   }
 }
