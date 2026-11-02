@@ -3,6 +3,18 @@
 
 import type { GameLog, MetricDef, MetricValues } from '../types.ts';
 import { seriesName } from '../types.ts';
+import {
+  bargainAccept,
+  bargainAncientHealed,
+  bargainAncientViolations,
+  bargainAny,
+  bargainDecline,
+  bargainExpire,
+  bargainExtras,
+  bargainFf,
+  bargainOutcome,
+  bargainRespawn,
+} from './bargain.ts';
 import { choiceSpread } from './choice.ts';
 import { gunnerHeatBand, gunnerPavise } from './gunner.ts';
 import {
@@ -45,6 +57,16 @@ export const METRICS: readonly MetricDef[] = [
   penitentNova,
   psykerWarpHigh,
   psykerBacklash,
+  bargainAccept,
+  bargainDecline,
+  bargainExpire,
+  bargainAncientHealed,
+  bargainExtras,
+  bargainFf,
+  bargainRespawn,
+  bargainAny,
+  bargainOutcome,
+  bargainAncientViolations,
 ];
 
 /** Every series value of one game, keyed by `seriesName(metric.id, key)`. */
