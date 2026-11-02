@@ -1,0 +1,14 @@
+name = "bhd-signal"
+main = "index.ts"
+compatibility_date = "2026-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Rooms"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Rooms"]
+
+# Secrets (set by the owner with `wrangler secret put`, never committed):
+#   TURN_KEY_ID, TURN_KEY_TOKEN   Cloudflare TURN key; without them /turn returns STUN only.
