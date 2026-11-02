@@ -31,6 +31,8 @@ export interface Option {
  */
 export interface Decision {
   readonly id: string;
+  /** Hero entity the `choice` event names; absent = the seat's own hero (bargain offers name the benefiting hero). */
+  readonly hero?: number;
   readonly options: readonly Option[];
 }
 
