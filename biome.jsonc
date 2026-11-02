@@ -113,6 +113,8 @@
         "rules": {
           "suspicious": { "noConsole": "off" },
           "style": { "noProcessEnv": "off" },
+          // Biome cannot see playwright's CJS re-exported names.
+          "correctness": { "noUnresolvedImports": "off" },
           "performance": { "noAwaitInLoops": "off" }
         }
       }
