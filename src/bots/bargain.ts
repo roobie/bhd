@@ -3,8 +3,11 @@
 // the lowest-slot bot seat (not human-driven) whose hero is up, so a downed or human-driven seat never
 // decides and a card whose benefiting hero is down can still be taken. One `bargain.offer` decision for the lowest open offer id, options
 // `decline` and `accept:<card>` (label: the bargain id, so choice spread shows accept rates per
-// bargain). `Match` calls this for that seat when its bargain policy is `bots`, and dedupes the
-// commands on the channel `bargain:<offer>`.
+// bargain). `Match` calls this for that seat unless the bargain policy is `off`, with a `BargainScope`:
+// only cards of heroes a bot plays are options (each accept is submitted as that hero's slot), team
+// cards and Decline only when no human decides them (policy `bots`; under `human` Decline stays as a
+// no-op option). Cards of a human-driven hero are never options. Match dedupes the commands on the
+// channel `bargain:<offer>`.
 //
 // The scorer is generic over `EffectView`s: gains minus costs, each effect worth its magnitude times
 // a per-kind unit, costs scaled by the situation (weak heroes, armoured preview, leaks, friendly-fire
@@ -135,26 +138,51 @@ function scoreCard(ctx: BotCtx, s: Situation, card: CardView): Score {
   return { value, cost: cost * riskScale };
 }
 
-function declineOption(offer: OfferView, value: number): Option {
-  const commands: Command[] = [{ kind: 'bargain', op: 'decline', offer: offer.id }];
+/** What the deciding seat may resolve: bot-driven heroes' cards by slot, and whether team cards and Decline are its to take. */
+export interface BargainScope {
+  /** Hero entity id -> lineup slot, for heroes a bot plays. */
+  readonly bots: ReadonlyMap<number, number>;
+  /** Team cards and Decline: only when no human decides them. */
+  readonly team: boolean;
+}
+
+function declineOption(offer: OfferView, value: number, scope: BargainScope): Option {
+  // Without the right to decline, the option stays as a no-op so the bot can still prefer "leave it".
+  const commands: Command[] = scope.team ? [{ kind: 'bargain', op: 'decline', offer: offer.id }] : [];
   return { id: 'decline', value, cost: 0, commands };
 }
 
-function acceptOption(offer: OfferView, card: CardView, score: Score): Option {
-  const commands: Command[] = [{ kind: 'bargain', op: 'accept', offer: offer.id, card: card.bargain }];
-  return { id: `accept:${card.bargain}`, label: card.bargain, value: score.value, cost: score.cost, commands };
+/** Cards that are not the bot's to take are no option at all (a human's hero card, a team card a human decides). */
+function acceptOptions(offer: OfferView, scope: BargainScope, score: (c: CardView, i: number) => Score): Option[] {
+  const out: Option[] = [];
+  offer.cards.forEach((card, i) => {
+    const slot = card.hero === 0 ? undefined : scope.bots.get(card.hero);
+    if (card.hero === 0 ? !scope.team : slot === undefined) {
+      return;
+    }
+    const s = score(card, i);
+    const commands: Command[] = [{ kind: 'bargain', op: 'accept', offer: offer.id, card: card.bargain }];
+    out.push({
+      id: `accept:${card.bargain}`,
+      label: card.bargain,
+      value: s.value,
+      cost: s.cost,
+      commands,
+      ...(slot === undefined ? {} : { player: slot }),
+    });
+  });
+  return out;
 }
 
 /** The hero a `choice` names: the best-scored option's card hero, else `owner`. Option 0 is decline. */
 function benefiting(offer: OfferView, options: readonly Option[], owner: number): number {
-  let at = 0;
-  options.forEach((o, i) => {
-    const best = options[at];
+  let [best] = options;
+  for (const o of options) {
     if (best !== undefined && o.value - o.cost > best.value - best.cost) {
-      at = i;
+      best = o;
     }
-  });
-  const card = at === 0 ? undefined : offer.cards[at - 1];
+  }
+  const card = offer.cards.find((c) => `accept:${c.bargain}` === best?.id);
   return card === undefined || card.hero === 0 ? owner : card.hero;
 }
 
@@ -169,35 +197,45 @@ function firstOffer(p: Perception): OfferView | undefined {
   return offer;
 }
 
-function optionsFor(ctx: BotCtx, offer: OfferView, policy: BargainBotPolicy): Option[] {
+function optionsFor(ctx: BotCtx, offer: OfferView, policy: BargainBotPolicy, scope: BargainScope): Option[] {
   const gap = w(ctx, 'bargain.policy.gap');
   const none: Score = { value: 0, cost: 0 };
   switch (policy) {
     case 'declineAll':
-      return [declineOption(offer, gap), ...offer.cards.map((c) => acceptOption(offer, c, none))];
-    case 'acceptAll':
+      return [declineOption(offer, gap, scope), ...acceptOptions(offer, scope, () => none)];
+    case 'acceptAll': {
       // The first card wins by a gap; the rest and decline sit below it.
+      const first = offer.cards[0]?.bargain;
       return [
-        declineOption(offer, 0),
-        ...offer.cards.map((c, i) => acceptOption(offer, c, i === 0 ? { value: gap, cost: 0 } : none)),
+        declineOption(offer, 0, scope),
+        ...acceptOptions(offer, scope, (c) => (c.bargain === first ? { value: gap, cost: 0 } : none)),
       ];
+    }
     default: {
       const s = situation(ctx.p);
       const heal = Math.min(ctx.p.bargains.declineAncientHeal, s.missing) * w(ctx, 'bargain.unit.ancientHeal');
       return [
-        declineOption(offer, w(ctx, 'bargain.decline.base') + heal),
-        ...offer.cards.map((c) => acceptOption(offer, c, scoreCard(ctx, s, c))),
+        declineOption(offer, w(ctx, 'bargain.decline.base') + heal, scope),
+        ...acceptOptions(offer, scope, (c) => scoreCard(ctx, s, c)),
       ];
     }
   }
 }
 
-/** The deciding seat's bargain decisions under `policy` (`evaluate` scores cards, `declineAll`, `acceptAll`). */
-export function bargainDecisions(ctx: BotCtx, policy: BargainBotPolicy): Decision[] {
+/** The deciding seat's bargain decisions under `policy` (`evaluate` scores cards, `declineAll`, `acceptAll`); `scope` defaults to every living hero a bot's and team cards open. */
+export function bargainDecisions(
+  ctx: BotCtx,
+  policy: BargainBotPolicy,
+  scope: BargainScope = { bots: new Map(ctx.p.heroes.map((h) => [h.id, h.slot])), team: true },
+): Decision[] {
   const offer = firstOffer(ctx.p);
   if (offer === undefined) {
     return [];
   }
-  const options = optionsFor(ctx, offer, policy);
+  const options = optionsFor(ctx, offer, policy, scope);
+  if (options.length < 2 && !scope.team) {
+    // Nothing of this offer is the bots' to take.
+    return [];
+  }
   return [{ id: 'bargain.offer', hero: benefiting(offer, options, ctx.me.id), options }];
 }
