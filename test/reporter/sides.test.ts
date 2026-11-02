@@ -4,10 +4,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { DEEP, gamesOf, loadScenario, parseScenario, QUICK, specOf, withGames } from '../../src/reporter/scenarios.ts';
-import { fingerprint, parseSide, resolveSide } from '../../src/reporter/sides.ts';
+import { parseSide, resolveSide } from '../../src/reporter/sides.ts';
 import { checkRunAbi, git, repoRoot } from '../../src/reporter/snapshot.ts';
 import { batchKey, runKey, stableStringify } from '../../src/reporter/store.ts';
 import type { ResolvedSide } from '../../src/reporter/types.ts';
+import { fingerprint } from '../../tools/fingerprint.ts';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TMP = mkdtempSync(join(tmpdir(), 'bhd-sides-'));

@@ -7,7 +7,7 @@ import { createClientDriver, createHostDriver } from './lockstep.ts';
 import type { PeerId, Transport, WireMsg } from './types.ts';
 
 /** The payload of the `start` message. */
-export type StartInfo = Extract<WireMsg, { t: 'start' }>;
+type StartInfo = Extract<WireMsg, { t: 'start' }>;
 
 export interface NetDriverOptions {
   readonly transport: Transport;

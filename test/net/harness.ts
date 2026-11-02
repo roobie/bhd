@@ -6,12 +6,15 @@
 
 import { defaultConfig } from '../../src/client/config.ts';
 import { specFromConfig } from '../../src/client/setup.ts';
+import type { ConfigOverrides } from '../../src/content/overrides.ts';
 import type { Match } from '../../src/match/match.ts';
 import type { GameSpec } from '../../src/match/run.ts';
 import { buildMatch } from '../../src/match/run.ts';
 import { netDriver } from '../../src/net/driver.ts';
+import { replayInputs } from '../../src/net/inputlog.ts';
 import type { LockstepDriver } from '../../src/net/lockstep.ts';
 import type { PeerId } from '../../src/net/types.ts';
+import { checkpoints } from '../../src/replay/verify.ts';
 import type { Command } from '../../src/sim/commands.ts';
 import { Hub, type Latency, type Port, rng } from './hub.ts';
 
@@ -35,6 +38,8 @@ export interface SessionOptions {
   readonly delay?: number;
   /** Chance per frame that a peer sends a scripted input. */
   readonly inputRate?: number;
+  /** A config patch for the spec (e.g. an early bargain offer). */
+  readonly overrides?: ConfigOverrides;
 }
 
 const CATCH_UP_CAP = 8;
@@ -74,6 +79,7 @@ export class Session {
       maxTicks: 100_000,
       hashEvery: 30,
       humans,
+      ...(o.overrides === undefined ? {} : { overrides: o.overrides }),
     };
     const ids = humans.map((i) => `p${i}`);
     for (const id of ids.slice(1)) {
@@ -151,4 +157,51 @@ export class Session {
   get frames(): number {
     return this.#frame;
   }
+}
+
+function hashesOf(p: PeerRig): string[] {
+  return p.driver.log().hashes.map((h) => `${h.tick}:${h.hash}`);
+}
+
+/**
+ * What is wrong, if anything: every live peer should equal the host and the replay of the host's seals.
+ * Returns problems rather than asserting, so the check can be shared (empty = agreement).
+ */
+export function disagreements(s: Session): string[] {
+  const out: string[] = [];
+  const hostLog = s.host.driver.log();
+  const replay = checkpoints(replayInputs(s.spec, hostLog.seals)).map((c) => `${c.tick}:${c.stateHash}`);
+  const want = hashesOf(s.host);
+  if (want.length <= 3) {
+    out.push(`only ${want.length} host checkpoints`);
+  }
+  if (JSON.stringify(want) !== JSON.stringify(replay.slice(0, want.length))) {
+    out.push('host hashes differ from the replay of its seals');
+  }
+  for (const p of s.peers) {
+    out.push(...peerProblems(s, p, want));
+  }
+  if (s.hub.refused() > 0) {
+    out.push(`${s.hub.refused()} messages refused`);
+  }
+  return out;
+}
+
+function peerProblems(s: Session, p: PeerRig, want: readonly string[]): string[] {
+  const out: string[] = [];
+  const got = hashesOf(p);
+  if (p.driver.status() === 'desynced') {
+    out.push(`${p.id} desynced`);
+  }
+  if (JSON.stringify(got) !== JSON.stringify(p.dropped ? want.slice(0, got.length) : want)) {
+    out.push(`${p.id} hashes differ from the host's`);
+  }
+  if (!p.dropped && p.match.tick !== s.host.match.tick) {
+    out.push(`${p.id} is at tick ${p.match.tick}, host at ${s.host.match.tick}`);
+  }
+  const { seals } = p.driver.log();
+  if (JSON.stringify(seals) !== JSON.stringify(s.host.driver.log().seals.slice(0, seals.length))) {
+    out.push(`${p.id} applied other seals than the host`);
+  }
+  return out;
 }

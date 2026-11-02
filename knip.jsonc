@@ -4,26 +4,14 @@
     "index.html!",
     "play.html!",
     "src/reporter/worker.ts!",
-    // Wave 10 stubs until their slices land and something imports them.
-    "src/net/{rtc,lockstep,inputlog,driver,desync}.ts!",
-    "src/net/signal/{memory,ws,broadcast}.ts!",
+    // The deployed signalling Worker (wrangler), and the by-hand two-tab test.
     "worker/index.ts!",
-    // Wave 10 E1 until step-3 integration imports the lobby.
-    "src/client/shell/lobby.ts!"
+    "test/net/two-tabs.e2e.ts"
   ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
   "ignoreIssues": {
     "src/reporter/types.ts": ["exports", "types"],
     "src/reporter/store.ts": ["exports"],
-    "src/net/types.ts": ["exports", "types"],
-    "src/net/rtc.ts": ["exports", "types"],
-    "src/net/lockstep.ts": ["exports", "types"],
-    "src/net/inputlog.ts": ["exports", "types"],
-    "src/net/driver.ts": ["exports", "types"],
-    "src/net/desync.ts": ["exports", "types"],
-    "src/net/signal/memory.ts": ["exports", "types"],
-    "src/net/signal/ws.ts": ["exports", "types"],
-    "src/net/signal/broadcast.ts": ["exports", "types"],
     "worker/room.ts": ["exports", "types"],
     "worker/turn.ts": ["exports", "types"]
   }

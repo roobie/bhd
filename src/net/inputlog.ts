@@ -40,7 +40,7 @@ export function replayInputs(spec: GameSpec, seals: readonly Seal[], options: Re
 }
 
 /** A state hash this peer computed after `tick`. */
-export interface LoggedHash {
+interface LoggedHash {
   readonly tick: number;
   readonly hash: string;
 }

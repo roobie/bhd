@@ -548,6 +548,9 @@ function accept(ctx: TickContext, state: BargainState, offer: Offer, card: Offer
 
 /** Lineup slot of hero entity `id` (its def's index in `game.heroes`), -1 if it is no hero. */
 function slotOfHero(ctx: TickContext, id: number): number {
+  // Duplicate heroes (two lineup slots with the same def) are out of scope for wave 10: findIndex
+  // returns the first slot, so only that slot's player could accept such a hero's cards. Revisit
+  // with duplicate heroes (a slot id on the entity would then replace this lookup).
   const e = ctx.entities.get(id);
   return e?.kind === 'hero' ? ctx.game.heroes.findIndex((h) => h.id === e.def) : -1;
 }

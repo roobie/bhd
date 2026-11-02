@@ -1,12 +1,14 @@
 // Node only: the browser project runs determinism.browser.test.ts. Replay and seed checks are engine-independent.
 
 import { describe, expect, it } from 'vitest';
+import { replayInputs } from '../../src/net/inputlog.ts';
 import type { Scripted } from './scenario.ts';
 import {
   hashesOf,
   MASTER_TICKS,
   runMasterSim,
   runScenario,
+  runSealed,
   runSim,
   runSimInterleaved,
   SCRIPT,
@@ -28,6 +30,15 @@ describe('determinism (node)', () => {
     );
     expect(replay).toHaveLength(SCRIPT.length);
     expect(runSim(SEED, replay, TICKS)).toEqual(events);
+  });
+
+  it("replaying the seals of a host-style run reproduces its events, with a bot hero's card accepted as the slot", () => {
+    const run = runSealed();
+    const replay = replayInputs(run.spec, run.seals);
+    expect(replay).toEqual(run.events);
+    const accepts = run.seals.flatMap((s) => s.inputs).filter((i) => i.cmd.kind === 'bargain' && i.cmd.op === 'accept');
+    expect(accepts.length).toBeGreaterThan(0);
+    expect(run.events.some((e) => e.kind === 'bargain' && e.op === 'accept')).toBe(true);
   });
 
   it('logs no negative zero', () => {

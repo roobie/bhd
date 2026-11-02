@@ -30,7 +30,7 @@ export interface RtcOptions {
   readonly debug?: (line: string) => void;
 }
 
-export const DEFAULT_ICE_SERVERS: readonly IceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+const DEFAULT_ICE_SERVERS: readonly IceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 
 const CHANNEL_LABEL = 'bhd';
 

@@ -118,7 +118,7 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
   const localPlayers = options?.localPlayers;
   const humanSlots = options?.humanSlots;
   const coop = localPlayers !== undefined && humanSlots !== undefined;
-  const spec = coop ? { ...shellSpec(config), networked: true } : shellSpec(config);
+  const spec = options?.spec ?? (coop ? { ...shellSpec(config), networked: true } : shellSpec(config));
   const solo = !coop && config.drive.length === 1;
   const startDriven = (): readonly number[] => localPlayers ?? config.drive;
   let driven: readonly number[] = startDriven();
@@ -135,7 +135,11 @@ export function mountShell(els: ShellElements, config: ShellConfig, options?: Sh
 
   let match: Match = buildMatch(spec);
   const makeDriver = (m: Match): TickDriver => options?.driver?.(m) ?? localDriver(m, INPUT_DELAY_TICKS);
-  let driver: TickDriver = bindDriver(makeDriver(match));
+  // An injected driver (networked play) is built once, by the setup's `restart()`: building it here too
+  // would make a second sequencer whose disposal tells the other peers `bye`. Until then a local one idles.
+  let driver: TickDriver = bindDriver(
+    options?.driver === undefined ? makeDriver(match) : localDriver(match, INPUT_DELAY_TICKS),
+  );
   let controls: ControlState | undefined;
   let clock: FrameClock = newFrameClock();
   let prev: Snapshot | undefined;

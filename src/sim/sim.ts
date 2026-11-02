@@ -188,10 +188,11 @@ export class Sim implements SimView {
    * commands apply in (player, seq) order, where seq counts that player's accepted submissions; so
    * only each player's own submission order matters, not how players interleave.
    *
-   * Rule R1 (D-JE6GN42N3RGVK62M; networked play): nobody calls this for a human or system player except the tick
-   * driver's `beforeStep(T)`, which submits tick T's sealed inputs in seal order (player, then send
-   * order). Match's own submissions for T happen during earlier steps, so every peer assigns the
-   * same seqs. Any other call desyncs peers silently until the next hash checkpoint.
+   * Rule R1 (D-JE6GN42N3RGVK62M; networked play): outside `Match.step` and `beforeStep`, nobody calls
+   * `sim.command`. The tick driver's `beforeStep(T)` submits tick T's sealed inputs in seal order
+   * (player, then send order); `Match.step` submits the bots' own commands. Those happen during
+   * earlier steps than T's, so every peer assigns the same seqs. Any other call desyncs peers
+   * silently until the next hash checkpoint.
    */
   command(player: number, cmd: Command, tick: number = this.#tick + 1): CommandResult {
     if (!(Number.isSafeInteger(player) && player >= 0 && Number.isSafeInteger(tick) && isValidCommand(cmd))) {

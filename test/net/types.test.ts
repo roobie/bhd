@@ -25,9 +25,16 @@ const SPEC = {
   humans: [0, 2],
 } as const;
 
+const SEATS = [
+  { peer: 'p1', players: [0] },
+  { peer: 'p2', players: [2] },
+];
+
 const SAMPLES: readonly WireMsg[] = [
   { t: 'hello', abi: PROTOCOL_VERSION, fingerprint: 'abc123', name: 'ann' },
-  { t: 'lobby', slots: ['p1', null, 'p2', null], mode: 'schedule', seed: 42 },
+  { t: 'lobby', slots: ['p1', null, 'p2', null], names: ['ann', null, 'bob', null], mode: 'schedule', seed: 42 },
+  { t: 'refuse', reason: 'fingerprint' },
+  { t: 'end' },
   {
     t: 'start',
     spec: SPEC,
@@ -60,6 +67,8 @@ const SAMPLES: readonly WireMsg[] = [
 const KINDS: readonly WireKind[] = [
   'hello',
   'lobby',
+  'refuse',
+  'end',
   'start',
   'input',
   'seal',
@@ -123,9 +132,35 @@ describe('wire protocol', () => {
     const bad: readonly unknown[] = [
       { t: 'hello', abi: '1', fingerprint: 'x', name: 'n' },
       { t: 'hello', abi: 1, fingerprint: 'x', name: 'n'.repeat(500) },
-      { t: 'lobby', slots: ['p1', null, 'p2'], mode: 'schedule', seed: 1 },
-      { t: 'lobby', slots: [1, null, null, null], mode: 'schedule', seed: 1 },
-      { t: 'lobby', slots: [null, null, null, null], mode: 'chaos', seed: 1 },
+      { t: 'lobby', slots: ['p1', null, 'p2'], names: [], mode: 'schedule', seed: 1 },
+      { t: 'lobby', slots: [1, null, null, null], names: [], mode: 'schedule', seed: 1 },
+      { t: 'lobby', slots: [null, null, null, null], names: [], mode: 'chaos', seed: 1 },
+      { t: 'lobby', slots: [null, null, null, null], mode: 'schedule', seed: 1 },
+      { t: 'lobby', slots: [null, null, null, null], names: [5], mode: 'schedule', seed: 1 },
+      { t: 'refuse', reason: 'because' },
+      { t: 'start', spec: { ...SPEC, bargainPolicy: 'sometimes' }, seats: SEATS, delay: 3 },
+      { t: 'start', spec: { ...SPEC, humans: [0, 0] }, seats: SEATS, delay: 3 },
+      { t: 'start', spec: { ...SPEC, humans: [0, 5] }, seats: SEATS, delay: 3 },
+      { t: 'start', spec: SPEC, seats: [{ peer: 'p1', players: [0] }], delay: 3 },
+      {
+        t: 'start',
+        spec: SPEC,
+        seats: [
+          { peer: 'p1', players: [0, 2] },
+          { peer: 'p1', players: [] },
+        ],
+        delay: 3,
+      },
+      {
+        t: 'start',
+        spec: SPEC,
+        seats: [
+          { peer: 'p1', players: [0] },
+          { peer: 'p2', players: [0, 2] },
+        ],
+        delay: 3,
+      },
+      { t: 'start', spec: SPEC, seats: SEATS, delay: 61 },
       { t: 'start', spec: { ...SPEC, mode: 'x' }, seats: [], delay: 3 },
       { t: 'start', spec: SPEC, seats: [], delay: 0 },
       { t: 'start', spec: SPEC, seats: [{ peer: 'p', players: [9] }], delay: 3 },

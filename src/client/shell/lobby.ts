@@ -65,6 +65,13 @@ function holder(v: LobbyView, peer: PeerId | null): string {
   return v.names.get(peer) ?? `Player ${peer.slice(0, 4)}`;
 }
 
+function errorTitle(kind: 'mismatch' | 'refused' | 'host-lost' | undefined): string {
+  if (kind === 'mismatch') {
+    return 'Version mismatch';
+  }
+  return kind === 'refused' ? 'Cannot join' : 'Disconnected';
+}
+
 export function mountLobby(root: HTMLElement, deps: LobbyMountDeps): LobbyHandle {
   const lobby = createLobby(deps);
   const link = (deps.linkFor ?? defaultLink)(deps.room);
@@ -119,7 +126,7 @@ export function mountLobby(root: HTMLElement, deps: LobbyMountDeps): LobbyHandle
       : html`<p class="lsettings">Mode: ${MODE_LABELS[v.mode]}. Seed: ${v.seed}. The host chooses these.</p>`;
 
   const errorView = (v: LobbyView): TemplateResult => html`<section class="lobby lerror" role="alert">
-    <h1>${v.error?.kind === 'mismatch' ? 'Version mismatch' : 'Disconnected'}</h1>
+    <h1>${errorTitle(v.error?.kind)}</h1>
     <p>${v.error?.message}</p>
     <p><a href="index.html">Back to the menu</a></p>
   </section>`;

@@ -8,10 +8,11 @@
 
 import type { GameSpec, Mode } from '../match/run.ts';
 import type { Command } from '../sim/commands.ts';
-import { canonicalCommand, isValidCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
+import { canonicalCommand, HERO_SLOTS, isValidCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
+import type { SimEvent } from '../sim/events.ts';
 
 /** Wire protocol version; a `hello` with another value is refused. Bump on any change to `WireMsg`. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Opaque peer id handed out by signalling. */
 export type PeerId = string;
@@ -75,6 +76,60 @@ export interface Signalling {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Tick driver: how a match is fed and when it may advance (solo, and the lockstep drivers)
+// ---------------------------------------------------------------------------------------------
+
+/** Where a driver stands: it decides whether the step loop may advance. */
+export type DriverStatus =
+  /** Stepping is allowed up to `steppable()`. */
+  | 'running'
+  /** Waiting for a peer's inputs (the next tick is not sealed yet). */
+  | 'stalled'
+  /** Everyone is paused; `steppable()` does not advance. */
+  | 'paused'
+  /** Hash checkpoints disagreed; the match is halted. */
+  | 'desynced'
+  /** The session is over (host left, or the game ended). */
+  | 'ended';
+
+/**
+ * How the shell feeds a match and decides when it may advance (D-ZWZVLE5U4MRETLI7: `player` is the
+ * hero slot). `localDriver` is solo play; wave 10's lockstep driver (src/net) replaces it and nothing
+ * upstream changes. Rule R1 (see `Sim.command`): in networked play only `beforeStep` calls
+ * `sim.command` for human and system players, in seal order.
+ *
+ * Step loop contract, once per tick: `if (match.tick < driver.steppable())`, then
+ * `driver.beforeStep(match.tick + 1)`, `match.step()`, `driver.afterStep(events)`.
+ */
+export interface TickDriver {
+  /** A human (or system) input from the local shell; the driver decides when it applies. */
+  submit: (player: number, cmd: Command) => void;
+  /** The highest tick that is safe to step to (the loop steps while `match.tick < steppable()`). */
+  steppable: () => number;
+  /** Called right before tick `tick` runs; submits that tick's inputs to the sim (R1). */
+  beforeStep: (tick: number) => void;
+  /** Called with the events the step produced (hash checkpoints, control commands, the end). */
+  afterStep: (events: readonly SimEvent[]) => void;
+  status: () => DriverStatus;
+  /** Pause or resume for everyone (`by` is the asking player); while paused `steppable()` stays at the current tick. */
+  setPaused: (on: boolean, by: number) => void;
+  /** Releases timers and listeners; called when the match is replaced (restart) and on shell dispose. */
+  dispose: () => void;
+  /** The desync dump (NDJSON text) for the "download dump" button; undefined when there is none. */
+  dump: () => string | undefined;
+  /** Subscribes to callouts (who paused, who dropped, ...); returns the unsubscribe. */
+  onNotice: (cb: (n: DriverNotice) => void) => () => void;
+}
+
+/** Something the driver tells the shell to call out. Slots are hero slots (= players 0-3). */
+export type DriverNotice =
+  | { readonly kind: 'paused' | 'resumed'; readonly by: number }
+  | { readonly kind: 'dropped'; readonly slots: number[] }
+  | { readonly kind: 'hostLeft' }
+  | { readonly kind: 'desync'; readonly tick: number }
+  | { readonly kind: 'calledWave'; readonly by: number };
+
+// ---------------------------------------------------------------------------------------------
 // Wire protocol
 // ---------------------------------------------------------------------------------------------
 
@@ -102,8 +157,22 @@ export interface SeatAssignment {
 export type WireMsg =
   /** First message on a link. `abi` is `PROTOCOL_VERSION`; `fingerprint` identifies the build. */
   | { readonly t: 'hello'; readonly abi: number; readonly fingerprint: string; readonly name: string }
-  /** Host to all: the lobby. `slots[i]` is the peer that holds hero slot i, null when free. */
-  | { readonly t: 'lobby'; readonly slots: readonly (PeerId | null)[]; readonly mode: Mode; readonly seed: number }
+  /**
+   * Host to all: the lobby. `slots[i]` is the peer that holds hero slot i, null when free; `names[i]`
+   * is that peer's name (null when free). A joiner also sends one to the host as a pick request: the
+   * host reads only the entries equal to the sender and ignores the rest, names included (see lobbystate.ts).
+   */
+  | {
+      readonly t: 'lobby';
+      readonly slots: readonly (PeerId | null)[];
+      readonly names: readonly (string | null)[];
+      readonly mode: Mode;
+      readonly seed: number;
+    }
+  /** Host to a joiner whose `hello` it turned away; the joiner shows why. */
+  | { readonly t: 'refuse'; readonly reason: RefuseReason }
+  /** Anyone to host, host to all: leave the game and return to a fresh lobby (restart). */
+  | { readonly t: 'end' }
   /** Host to all: the game starts. `delay` is the input delay in ticks. */
   | {
       readonly t: 'start';
@@ -128,6 +197,9 @@ export type WireMsg =
   | { readonly t: 'ping'; readonly n: number }
   | { readonly t: 'pong'; readonly n: number };
 
+/** Why the host refused a joiner: protocol version, build, no seat left in the room, or the game is under way. */
+export type RefuseReason = 'abi' | 'fingerprint' | 'full' | 'started';
+
 export type WireKind = WireMsg['t'];
 
 /** Longest accepted encoded message, in UTF-16 units (a seal of four players is far smaller). */
@@ -139,8 +211,10 @@ const MAX_FINGERPRINT = 128;
 const MAX_INPUTS = 256;
 const MAX_PEERS = 16;
 const LAST_PLAYER = SYSTEM_PLAYER;
-const HERO_SLOTS = 4;
 const MODES: readonly string[] = ['director', 'schedule'];
+const REFUSALS: readonly string[] = ['abi', 'fingerprint', 'full', 'started'];
+const POLICIES: readonly string[] = ['human', 'bots', 'off'];
+const MAX_DELAY = 60;
 
 export type DecodeResult =
   | { readonly ok: true; readonly msg: WireMsg }
@@ -273,6 +347,9 @@ function gameSpec(v: unknown): GameSpec | undefined {
   ) {
     return undefined;
   }
+  if (v.bargainPolicy !== undefined && !(typeof v.bargainPolicy === 'string' && POLICIES.includes(v.bargainPolicy))) {
+    return undefined;
+  }
   if (v.humans !== undefined && !(Array.isArray(v.humans) && (v.humans as unknown[]).every(isPlayer))) {
     return undefined;
   }
@@ -287,17 +364,54 @@ function buildHello(r: Raw): WireMsg | undefined {
     : undefined;
 }
 
+function names(v: unknown): (string | null)[] | undefined {
+  if (!Array.isArray(v) || v.length > HERO_SLOTS) {
+    return undefined;
+  }
+  return (v as unknown[]).every((n) => n === null || isStr(n, MAX_NAME)) ? [...(v as (string | null)[])] : undefined;
+}
+
 function buildLobby(r: Raw): WireMsg | undefined {
   const s = slots(r.slots);
-  return s !== undefined && typeof r.mode === 'string' && MODES.includes(r.mode) && isTick(r.seed)
-    ? { t: 'lobby', slots: s, mode: r.mode as Mode, seed: r.seed }
+  const n = names(r.names);
+  return s !== undefined && n !== undefined && typeof r.mode === 'string' && MODES.includes(r.mode) && isTick(r.seed)
+    ? { t: 'lobby', slots: s, names: n, mode: r.mode as Mode, seed: r.seed }
     : undefined;
+}
+
+function buildRefuse(r: Raw): WireMsg | undefined {
+  return typeof r.reason === 'string' && REFUSALS.includes(r.reason)
+    ? { t: 'refuse', reason: r.reason as RefuseReason }
+    : undefined;
+}
+
+/**
+ * Seats and spec must tell one story (L3/L4): every seat holds hero slots 0-3, no peer or slot appears
+ * twice, and the seated slots are exactly `spec.humans` (an absent `humans` is none).
+ */
+function consistent(spec: GameSpec, s: readonly SeatAssignment[]): boolean {
+  const humans = spec.humans ?? [];
+  const seated = s.flatMap((a) => a.players);
+  return (
+    new Set(s.map((a) => a.peer)).size === s.length &&
+    seated.every((p) => p < HERO_SLOTS) &&
+    new Set(seated).size === seated.length &&
+    new Set(humans).size === humans.length &&
+    humans.every((p) => p < HERO_SLOTS) &&
+    seated.length === humans.length &&
+    seated.every((p) => humans.includes(p))
+  );
 }
 
 function buildStart(r: Raw): WireMsg | undefined {
   const spec = gameSpec(r.spec);
   const s = seats(r.seats);
-  return spec !== undefined && s !== undefined && isTick(r.delay) && r.delay >= 1
+  return spec !== undefined &&
+    s !== undefined &&
+    consistent(spec, s) &&
+    isTick(r.delay) &&
+    r.delay >= 1 &&
+    r.delay <= MAX_DELAY
     ? { t: 'start', spec, seats: s, delay: r.delay }
     : undefined;
 }
@@ -354,6 +468,8 @@ function buildPing(r: Raw): WireMsg | undefined {
 const BUILDERS: Readonly<Record<WireKind, (r: Raw) => WireMsg | undefined>> = {
   hello: buildHello,
   lobby: buildLobby,
+  refuse: buildRefuse,
+  end: () => ({ t: 'end' }),
   start: buildStart,
   input: buildInput,
   seal: buildSeal,
