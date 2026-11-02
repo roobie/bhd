@@ -1,31 +1,33 @@
 ---
-phase: initialize
+phase: execute
 parent: U-GLFZ7OIE2B53ZZCA
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - bot bargain decider takes only bot-hero cards, plus team cards and Decline under policy bots; accepts submitted as the card hero's slot
+  - control commands (drive, bargainPolicy) take effect at the same tick on two Matches and replay
+  - a bot never submits for a human-driven slot; test/match/control.test.ts and npm run ci pass
 ---
 
 # slice/w10-match-seats
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+Make Match seats safe for co-op: bots resolve only what is theirs (D-VXJDVX4RFRWSLUQB).
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/match/match.ts, src/bots/bargain.ts, bots/types.ts Option.player, test/match/control.test.ts
+Out: shell, src/net
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Control commands from SYSTEM_PLAYER already applied in Match.step (step 1). Bot state is not hashed.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Built; CI gate.
 
 ## Next
-- TODO
+- Lead merge.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->

@@ -22,6 +22,8 @@ export interface Option {
   /** Price, subtracted from value. */
   readonly cost: number;
   readonly commands: readonly Command[];
+  /** Submit the commands as this player instead of the seat's own (bargain accepts: the card hero's slot). */
+  readonly player?: number;
 }
 
 /**
