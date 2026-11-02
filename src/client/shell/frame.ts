@@ -35,3 +35,22 @@ export function planFrame(clock: FrameClock, nowMs: number, opts: FrameOptions):
   const accMs = Math.max(acc - due * tickMs, 0);
   return { steps, alpha: Math.min(accMs / tickMs, 1 - Number.EPSILON), clock: { lastMs: nowMs, accMs } };
 }
+
+/** Catch-up: more than this many sealed-but-unrun ticks and the loop runs extra steps. */
+export const CATCH_UP_LAG = 4;
+/** At most this many extra steps per frame while catching up. */
+export const CATCH_UP_MAX_EXTRA = 25;
+
+/**
+ * Steps to run this frame: the planned steps, plus up to CATCH_UP_MAX_EXTRA more while the driver
+ * has sealed more than CATCH_UP_LAG ticks the match has not run. Never above the ticks available.
+ * A driver with no limit (solo, steppable infinite) never catches up. Pure.
+ */
+export function stepBudget(planned: number, tick: number, steppable: number): number {
+  if (!Number.isFinite(steppable)) {
+    return planned;
+  }
+  const room = Math.max(0, steppable - tick);
+  const extra = room > CATCH_UP_LAG ? Math.min(CATCH_UP_MAX_EXTRA, room - CATCH_UP_LAG) : 0;
+  return Math.min(room, planned + extra);
+}

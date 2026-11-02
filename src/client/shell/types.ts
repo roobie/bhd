@@ -265,6 +265,31 @@ export interface TickDriver {
   /** Called with the events the step produced (hash checkpoints, control commands, the end). */
   afterStep: (events: readonly SimEvent[]) => void;
   status: () => DriverStatus;
+  /** Networked: ask everyone to pause; `by` is the asking player. Absent (solo): the shell pauses locally. */
+  pause?: (by: number) => void;
+  /** Networked: ask everyone to resume. */
+  resume?: (by: number) => void;
+  /** The desync dump (NDJSON text) for the "download dump" button; absent = no button. */
+  dump?: () => string;
+  /** What the panels name: who paused, which peers dropped, why the session ended. Absent = nothing to say. */
+  info?: () => DriverInfo;
+}
+
+/** Facts a networked driver tells the shell for its panels. Slots are hero slots (= players 0-3). */
+export interface DriverInfo {
+  /** The player that paused, while `status()` is 'paused'. */
+  readonly pausedBy?: number;
+  /** Slots whose human dropped; a bot has their hero. Only grows. */
+  readonly dropped?: readonly number[];
+  /** Why the session ended, when `status()` is 'ended' without the match ending. */
+  readonly endedBy?: 'host-left' | 'closed';
+}
+
+/** A short-lived callout about something another human did. */
+export interface NetNotice {
+  readonly kind: 'pause' | 'call' | 'drop';
+  /** The slot that did it (or dropped). */
+  readonly slot: number;
 }
 
 /** Ticks a local command waits before it applies (100 ms at 30 Hz), the delay lockstep will add. */
@@ -331,7 +356,9 @@ export type UiAction =
   /** A bargain key: resolves the oldest open offer; `card` is the 0-based card index, absent = Decline. */
   | { readonly kind: 'bargainKey'; readonly card?: number }
   /** The "Bots pick bargains" toggle (handled by the app, ignored by the reducer): on = the bot seats resolve offers. */
-  | { readonly kind: 'bargainBots'; readonly on: boolean };
+  | { readonly kind: 'bargainBots'; readonly on: boolean }
+  /** The desync panel's "download dump" button (handled by the app). */
+  | { readonly kind: 'dumpDesync' };
 
 /** An ability being aimed. */
 interface AimState {
@@ -400,6 +427,8 @@ export interface ControlContext {
   readonly ui: Presentation;
   /** `game.intents.maxOffsetSeconds`: the longest reserve offset the board accepts. */
   readonly maxOffsetSeconds: number;
+  /** Co-op: hero entity ids another human drives; accepting a card bound to one of them does nothing. */
+  readonly lockedHeroes?: readonly number[];
 }
 
 export interface ReduceResult {
@@ -518,8 +547,10 @@ export interface HeroCardModel {
   readonly maxHp: number;
   readonly resources: readonly ResourceBarModel[];
   readonly statuses: readonly StatusPipModel[];
-  /** A human drives it ('you') or a bot ('bot'). */
-  readonly badge: 'you' | 'bot';
+  /** The local human drives it ('you'), another human does ('other': not selectable), or a bot ('bot'). */
+  readonly badge: 'you' | 'bot' | 'other';
+  /** Text of the badge when it is not the badge word (the other human's name). */
+  readonly badgeLabel?: string;
   readonly selected: boolean;
   /** No hero in perception for this slot (dead). */
   readonly dead: boolean;
@@ -683,6 +714,8 @@ export interface BargainCardModel {
   readonly hotkey: string;
   /** The human's choice for this offer was sent and this is the card chosen. */
   readonly chosen: boolean;
+  /** Bound to a hero another human drives: shown, not clickable (co-op). */
+  readonly theirs?: boolean;
 }
 
 /** One open bargain offer as the HUD shows it. */
@@ -712,6 +745,20 @@ export interface BargainHudModel {
   readonly botsPick: boolean;
   /** Label of the toggle. */
   readonly botsPickLabel: string;
+  /** Co-op: the toggle is not shown. */
+  readonly botsPickHidden?: boolean;
+}
+
+/** The networked-play panel: a driver state that stops the game, and the callouts. */
+export interface NetPanelModel {
+  /** The blocking state, if any; the callouts below show regardless. */
+  readonly kind?: 'stalled' | 'paused' | 'desynced' | 'ended';
+  readonly title: string;
+  readonly detail: string;
+  /** Show the "download dump" button. */
+  readonly dump: boolean;
+  /** Who paused, called a wave or dropped. */
+  readonly notes: readonly string[];
 }
 
 export interface HudModel {
@@ -729,6 +776,16 @@ export interface HudModel {
   readonly end: EndModel | undefined;
   /** Open bargain offers; undefined when there are none . */
   readonly bargain: BargainHudModel | undefined;
+  /** Networked play only. */
+  readonly net?: NetPanelModel;
+}
+
+/** What the HUD reads of a networked session. */
+export interface HudNetInput {
+  readonly status: DriverStatus;
+  readonly info: DriverInfo;
+  readonly canDump: boolean;
+  readonly notices: readonly NetNotice[];
 }
 
 /** Everything `buildHudModel` reads. */
@@ -743,6 +800,14 @@ export interface HudInput {
   readonly game?: GameConfig;
   /** The shell's "Bots pick bargains" toggle (default off). */
   readonly botsPick?: boolean;
+  /** Co-op: hides the bots-pick toggle. */
+  readonly coop?: boolean;
+  /** Co-op: slots another human drives (badged, not selectable; their bargain cards are not clickable). */
+  readonly others?: readonly number[];
+  /** Co-op: player names by slot. */
+  readonly names?: readonly string[];
+  /** Networked session state; absent in solo. */
+  readonly net?: HudNetInput;
   /** Set once the match has ended. */
   readonly end:
     | { readonly reason: 'ancient-destroyed' | 'victory' | 'maxTicks' | 'team-wiped'; readonly wave: number }
@@ -786,6 +851,16 @@ export interface ShellElements {
 export interface ShellOptions {
   /** Replaces `localDriver(match, INPUT_DELAY_TICKS)`; called with the new match on start and on every restart. */
   readonly driver?: (match: Match) => TickDriver;
+  /** Co-op: the hero slots this peer drives (commandable, selectable). With `humanSlots` it switches co-op on. */
+  readonly localPlayers?: readonly number[];
+  /** Co-op: every human-driven slot (local ones included); the rest are bots. */
+  readonly humanSlots?: readonly number[];
+  /** Co-op: player names by slot, for badges and callouts. */
+  readonly names?: readonly string[];
+  /** Restart in networked play (back to the lobby): return true when handled, else the shell rebuilds the match itself. */
+  readonly onRestart?: () => boolean;
+  /** Saves the desync dump; default downloads it as a file. */
+  readonly download?: (name: string, text: string) => void;
   /** Milliseconds clock; default `performance.now`. The only wall-clock read of the shell. */
   readonly now?: () => number;
   /** Frame scheduler; default `requestAnimationFrame`. Returns a cancel function. */

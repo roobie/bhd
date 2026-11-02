@@ -220,7 +220,9 @@ function reduceBargain(state: ControlState, action: UiAction, ctx: ControlContex
     offer === undefined ||
     ctx.driven.length === 0 ||
     sent.some((x) => x.offer === offer.id) ||
-    (card !== undefined && !offer.cards.some((c) => c.bargain === card))
+    (card !== undefined && !offer.cards.some((c) => c.bargain === card)) ||
+    (card !== undefined &&
+      offer.cards.some((c) => c.bargain === card && c.scope === 'hero' && ctx.lockedHeroes?.includes(c.hero) === true))
   ) {
     return { state: next, commands: [] };
   }

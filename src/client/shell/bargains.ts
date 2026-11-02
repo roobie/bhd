@@ -22,8 +22,8 @@ function lineList(lines: readonly string[], cls: string, mark: string): Template
 }
 
 function cardView(o: BargainOfferModel, c: BargainCardModel, dispatch: Dispatch): TemplateResult {
-  const locked = o.inFlight || !o.enabled;
-  const cls = `bcard${c.chosen ? ' chosen' : ''}${o.inFlight && !c.chosen ? ' passed' : ''}`;
+  const locked = o.inFlight || !o.enabled || c.theirs === true;
+  const cls = `bcard${c.theirs === true ? ' theirs' : ''}${c.chosen ? ' chosen' : ''}${o.inFlight && !c.chosen ? ' passed' : ''}`;
   return html`<button
     class=${cls}
     type="button"
@@ -34,7 +34,7 @@ function cardView(o: BargainOfferModel, c: BargainCardModel, dispatch: Dispatch)
     @click=${() => dispatch({ kind: 'bargain', offer: o.offer, card: c.id })}
   >
     <span class="bhead"><span class="bname">${c.label}</span><small class="key">${c.hotkey}</small></span>
-    <small class="bwho">For: ${c.who}</small>
+    <small class="bwho">For: ${c.who}${c.theirs === true ? ' (their pick)' : ''}</small>
     ${lineList(c.gains, 'gain', '+')}
     ${lineList(c.costs, 'cost', '-')}
   </button>`;
@@ -80,14 +80,18 @@ function offerView(o: BargainOfferModel, dispatch: Dispatch, expanded: boolean):
 export function bargainPanelView(model: BargainHudModel, dispatch: Dispatch, expanded: boolean): TemplateResult {
   return html`<div class="bargains" data-hit role="region" aria-label="Bargain offers">
     ${model.offers.map((o) => offerView(o, dispatch, expanded))}
-    <label class="bpick">
-      <input
-        type="checkbox"
-        .checked=${model.botsPick}
-        @change=${(e: Event) => dispatch({ kind: 'bargainBots', on: (e.target as HTMLInputElement).checked })}
-      />
-      ${model.botsPickLabel}
-    </label>
+    ${
+      model.botsPickHidden === true
+        ? nothing
+        : html`<label class="bpick">
+            <input
+              type="checkbox"
+              .checked=${model.botsPick}
+              @change=${(e: Event) => dispatch({ kind: 'bargainBots', on: (e.target as HTMLInputElement).checked })}
+            />
+            ${model.botsPickLabel}
+          </label>`
+    }
   </div>`;
 }
 
