@@ -37,6 +37,7 @@ Step 1 engine-prep contract in progress.
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
 - Step 3 integration: npm run ci exit 0. 100-pair batches (quick vs 6a9b06d; evaluate vs declineAll; evaluate vs acceptAll). bargain.ancientViolations 0 in all three and over 240 full logs. outcome.wave: base 14.58, evaluate 14.21, declineAll 14.60, acceptAll 14.31. ancientHp[end]: base 0.283, evaluate 0.205, declineAll 0.267, acceptAll 0.323. evaluate accept rate by card (of games offering it): iron-discipline 1.00, hair-shirt 0.47, open-the-eye 0.34, blood-tithe 0.006, unvented-barrel 0, call-the-horde 0. Evaluate declines 0.33 of offers (0.18 at w3, 0.60 at w9, 0.84 at w12); expiry 0.
+- Fix pass after Opus review (H1 Gunner bot after Iron Discipline, H2 additive units via EffectView.base, M1 Spent armour, M2 mode-bound effects, L1-L5, L7): npm run ci exit 0. 100-pair batches, base 6a9b06d, candidate WORKTREE with each policy; reports in the session scratchpad w9-fix/. bargain.ancientViolations 0 in all three. outcome.wave: base 14.58, evaluate 14.49, declineAll 14.60, acceptAll 14.44. ancientHp[end]: base 0.283, evaluate 0.207, declineAll 0.267, acceptAll 0.365. evaluate accept rate by card (of games offering it): iron-discipline 1.00, hair-shirt 0.53, open-the-eye 0.40, call-the-horde 0.31 (director mode: its waveExtra cost no longer reaches the bot), blood-tithe 0, unvented-barrel 0. Evaluate declines 95 of 296 offers (0.32), expiry 0. acceptAll takes each card in 0.48-0.68 of the games offering it. team.ff gunner>penitent -38% vs base under evaluate (the bot now fires freely once Iron Discipline spares allies).
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -45,7 +46,7 @@ Step 1 engine-prep contract in progress.
      - [ ] backlog: …    → record backlog
      - [ ] process: …    → retrospective (change the process, or drop it)
 -->
-- [ ] backlog: evaluate scorer never takes unvented-barrel or call-the-horde and almost never blood-tithe (removed knob or extra runners outweigh the gain; Ancient is near full) and always takes iron-discipline: pool/weight tuning, not a scorer bug
+- [ ] backlog: evaluate never takes unvented-barrel or blood-tithe and always takes iron-discipline. The first batch also hid real bugs (Gunner bot ignored overpenAllies 0, additive patches in the wrong unit, a cost from the other wave mode counted); those are fixed, what remains is pool and weight tuning to bring accept rates into the PLAN 15-85% band
 - [ ] decision: B (2026-11-02) chose all recommendations: offers after waves 3/6/9/12, 3 cards + Decline, 20 s window, clock keeps running (B1); team offer, hero-bound cards, benefiting hero's player accepts, solo picks all with opt-in bots-pick, wave master gets budget (B2); wide costs (self, teammates, enemy side), permanent (B3/B4); the six-bargain pool in PLAN §B5 (B5); decline heals the Ancient 4% (B6)
 
 ## Log
