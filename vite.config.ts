@@ -14,6 +14,8 @@ const BROWSER_TESTS = [
   'test/client/shell.browser.test.ts',
   'test/client/shell/hud.browser.test.ts',
   'test/client/shell/bargains.browser.test.ts',
+  // Wave 10: real WebRTC in one page (skips itself on webkit).
+  'test/net/rtc.browser.test.ts',
 ];
 
 export default defineConfig({
@@ -44,6 +46,8 @@ export default defineConfig({
       },
       {
         extends: true,
+        // Firefox fails ICE on http://localhost pages (it works on 127.0.0.1), which the WebRTC test needs.
+        server: { host: '127.0.0.1' },
         test: {
           name: 'browser',
           include: BROWSER_TESTS,

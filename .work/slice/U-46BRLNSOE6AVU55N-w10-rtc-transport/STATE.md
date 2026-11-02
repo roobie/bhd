@@ -1,34 +1,36 @@
 ---
-phase: initialize
+phase: execute
 parent: U-GLFZ7OIE2B53ZZCA
 owner:
-  - 'TODO: person and/or agent'
+  - claude
 created: 2026-11-02
 success_criteria:
-  - 'TODO: observable outcome that proves this unit is done'
+  - createRtcTransport implements Transport over WebRTC data channels in a host/client star
+  - in-page browser test (host + 2 clients) passes on chromium and firefox, skips webkit
+  - npm run ci exits 0
 ---
 
 # slice/w10-rtc-transport
 
 ## Purpose
-TODO: why this unit exists, in one or two sentences.
+The WebRTC Transport for wave 10 multiplayer.
 
 ## Scope
-In: TODO
-Out: TODO
+In: src/net/rtc.ts, test/net/rtc.browser.test.ts, vite.config.ts (test registration, localhost fix)
+Out: signalling (slice A), lockstep (C)
 
 ## Context & constraints
-TODO: what is already true, what must stay true, resources available.
+Clients offer, host answers (no setup message can precede a listener). Sends before open are buffered. Firefox fails ICE on http://localhost pages, so the browser project serves on 127.0.0.1.
 
 
 ## Now
-TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
+Done; awaiting merge.
 
 ## Next
-- TODO
+- Lead merges.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+npm run ci: 0 (chromium + firefox pass, webkit skipped).
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
