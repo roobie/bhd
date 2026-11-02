@@ -241,7 +241,9 @@ export interface DriverInfo {
   /** The player that paused, while `status()` is 'paused'. */
   readonly pausedBy?: number;
   /** Why the session ended, when `status()` is 'ended' without the match ending. */
-  readonly endedBy?: 'host-left' | 'closed';
+  readonly endedBy?: 'host-left' | 'closed' | 'broken';
+  /** With `endedBy` 'broken': why the host's message was refused. */
+  readonly endReason?: string;
 }
 
 /** A short-lived callout about something another human did. */

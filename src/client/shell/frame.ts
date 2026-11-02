@@ -36,6 +36,15 @@ export function planFrame(clock: FrameClock, nowMs: number, opts: FrameOptions):
   return { steps, alpha: Math.min(accMs / tickMs, 1 - Number.EPSILON), clock: { lastMs: nowMs, accMs } };
 }
 
+/**
+ * May the loop run one more step? Only the driver's `steppable()` limit decides, never its status
+ * label: a client that is told to pause keeps stepping to the pause tick (M2). Shared by the shell
+ * and the lockstep test harness, so both follow one rule.
+ */
+export function canStep(tick: number, steppable: number): boolean {
+  return tick < steppable;
+}
+
 /** Catch-up: more than this many sealed-but-unrun ticks and the loop runs extra steps. */
 export const CATCH_UP_LAG = 4;
 /** At most this many extra steps per frame while catching up. */

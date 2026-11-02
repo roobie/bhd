@@ -34,8 +34,15 @@ export interface Transport {
   send: (peer: PeerId, msg: WireMsg) => void;
   /** Sends to every connected peer. */
   broadcast: (msg: WireMsg) => void;
-  /** Delivered messages, per sender in send order. Messages that fail `decodeMsg` never arrive. */
+  /** Delivered messages, per sender in send order. Messages that fail `decodeMsg` never arrive (see `onBad`). */
   onMessage: (cb: (from: PeerId, msg: WireMsg) => void) => Unsubscribe;
+  /**
+   * A message from `from` failed `decodeMsg` and was dropped; `reason` says why. A client treats this
+   * from the host as fatal (never a silent stall). Optional: a transport that cannot report it omits it.
+   */
+  onBad?: (cb: (from: PeerId, reason: string) => void) => Unsubscribe;
+  /** Closes the link to `peer` (a refused or unaccepted peer); `onPeer` reports 'down' if it was up. Optional. */
+  disconnect?: (peer: PeerId) => void;
   /** A link came up or went down. */
   onPeer: (cb: (peer: PeerId, state: PeerState) => void) => Unsubscribe;
   /** Closes every link; no callbacks fire afterwards. */
@@ -54,12 +61,27 @@ export interface SignalPayload {
   readonly data: string;
 }
 
+/** One WebRTC ICE server (STUN or TURN with credentials). */
+export interface IceServer {
+  readonly urls: string | readonly string[];
+  readonly username?: string;
+  readonly credential?: string;
+}
+
 export interface RoomInfo {
   readonly self: PeerId;
   /** The host: the first peer to have joined the room. */
   readonly host: PeerId;
   /** Peers present when joining, excluding `self`. */
   readonly peers: readonly PeerId[];
+  /** ICE servers (with TURN credentials) the room server handed to this member; absent for local rooms. */
+  readonly iceServers?: readonly IceServer[];
+}
+
+/** What the room server or channel reports after joining. */
+export interface SignalEvent {
+  readonly kind: 'host-left' | 'error' | 'closed';
+  readonly detail?: string;
 }
 
 export interface Signalling {
@@ -70,6 +92,8 @@ export interface Signalling {
   onSignal: (cb: (from: PeerId, payload: SignalPayload) => void) => Unsubscribe;
   /** A peer joined or left the room. */
   onPresence: (cb: (peer: PeerId, state: 'join' | 'leave') => void) => Unsubscribe;
+  /** The room ended or broke after joining (host left, server error, socket closed). Optional. */
+  onEvent?: (cb: (e: SignalEvent) => void) => Unsubscribe;
   /** Peers currently in the room, excluding self. */
   readonly peers: readonly PeerId[];
   close: () => void;
@@ -126,6 +150,8 @@ export type DriverNotice =
   | { readonly kind: 'paused' | 'resumed'; readonly by: number }
   | { readonly kind: 'dropped'; readonly slots: number[] }
   | { readonly kind: 'hostLeft' }
+  /** The host sent something this build cannot read: the session is over. */
+  | { readonly kind: 'broken'; readonly reason: string }
   | { readonly kind: 'desync'; readonly tick: number }
   | { readonly kind: 'calledWave'; readonly by: number };
 
@@ -208,7 +234,7 @@ const MAX_ID = 64;
 const MAX_NAME = 32;
 const MAX_HASH = 128;
 const MAX_FINGERPRINT = 128;
-const MAX_INPUTS = 256;
+export const MAX_INPUTS = 256;
 const MAX_PEERS = 16;
 const LAST_PLAYER = SYSTEM_PLAYER;
 const MODES: readonly string[] = ['director', 'schedule'];

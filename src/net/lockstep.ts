@@ -18,7 +18,7 @@
 import type { Match } from '../match/match.ts';
 import type { GameSpec } from '../match/run.ts';
 import type { Command } from '../sim/commands.ts';
-import { HERO_SLOTS, SYSTEM_PLAYER } from '../sim/commands.ts';
+import { canonicalCommand, HERO_SLOTS, isValidCommand, SYSTEM_PLAYER } from '../sim/commands.ts';
 import type { SimEvent } from '../sim/events.ts';
 import type { InputLog, InputRecorder } from './inputlog.ts';
 import { createRecorder, encodeInputLog } from './inputlog.ts';
@@ -33,12 +33,20 @@ import type {
   Unsubscribe,
   WireMsg,
 } from './types.ts';
-import { isPeerCommand } from './types.ts';
+import { encodeMsg, isPeerCommand, MAX_INPUTS, MAX_MSG_LENGTH } from './types.ts';
 
 /** Ticks between the hash checkpoints peers exchange. */
 const CHECK_EVERY = 30;
 /** How far past the sealed tick a peer may ask an input to apply (bounds hostile `wantTick`s). */
 const MAX_AHEAD = 600;
+/** Most inputs one player may have queued for one tick; a flood beyond it is dropped (H2). */
+const MAX_PER_PLAYER_PER_TICK = 8;
+/** Longest encoded command the host queues: 5 senders x the per-tick cap x this stays well under the wire limit. */
+const MAX_COMMAND_LENGTH = 1024;
+/** Pending hash checkpoints the host remembers (bounds a silent peer's cost). */
+const MAX_PENDING_CHECKS = 64;
+/** Minimum ms between one peer's pause / resume toggles (L5). */
+const TOGGLE_GAP_MS = 1000;
 
 interface LockstepOptions {
   readonly match: Match;
@@ -73,7 +81,7 @@ export interface ClientOptions extends LockstepOptions {
 }
 
 /** Why a session ended. */
-type EndReason = 'game' | 'host-left' | 'closed';
+type EndReason = 'game' | 'host-left' | 'closed' | 'bad-message';
 
 /** A `TickDriver` plus what the shell needs from a networked game. */
 export interface LockstepDriver extends TickDriver {
@@ -197,13 +205,30 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
     if (down.has(peer)) {
       return false;
     }
-    if (peer === transport.self) {
+    // The host's own control commands (SYSTEM_PLAYER) are the one thing no seat is needed for.
+    if (peer === transport.self && player === SYSTEM_PLAYER) {
       return true;
     }
     if (!(player < HERO_SLOTS && isPeerCommand(cmd))) {
       return false;
     }
-    return seats.get(peer)?.includes(player) === true || isAccept(cmd);
+    const held = seats.get(peer);
+    // Seated peers only; a bot hero's card accept is the one command allowed on another slot (checked again at seal time).
+    return held?.includes(player) === true || (isAccept(cmd) && held !== undefined && held.length > 0);
+  }
+
+  const acceptKey = (player: number, cmd: Command): string =>
+    cmd.kind === 'bargain' && cmd.op === 'accept' ? `${player}|${cmd.offer}|${cmd.card}` : '';
+
+  /** Is an identical accept already waiting in any bucket? */
+  function acceptQueued(player: number, cmd: Command): boolean {
+    const key = acceptKey(player, cmd);
+    for (const list of buckets.values()) {
+      if (list.some((q) => isAccept(q.cmd) && acceptKey(q.player, q.cmd) === key)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** At seal time: is this accept, sent by a peer not seated at `player`, for a card of the bot-driven hero of slot `player`? */
@@ -216,19 +241,62 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
     return hero !== undefined && offer?.cards.some((c) => c.bargain === cmd.card && c.hero === hero.id) === true;
   }
 
+  /** Queues one input; a player past its per-tick cap, or an accept already queued, is dropped (H2). */
   function enqueue(tick: number, player: number, cmd: Command, foreign = false): void {
     const list = buckets.get(tick) ?? [];
+    if (list.filter((q) => q.player === player).length >= MAX_PER_PLAYER_PER_TICK) {
+      return;
+    }
+    if (isAccept(cmd) && acceptQueued(player, cmd)) {
+      return;
+    }
     list.push({ player, cmd, n: arrival, foreign });
     arrival += 1;
     buckets.set(tick, list);
   }
 
+  /** Every input, the host's own included, is validated and canonicalised here: what is sealed must decode on the clients. */
   function accept(peer: PeerId, player: number, cmd: Command, wantTick: number): void {
-    if (!mayCommand(peer, player, cmd)) {
+    if (!(mayCommand(peer, player, cmd) && isValidCommand(cmd) && Number.isFinite(wantTick))) {
+      return;
+    }
+    // Real commands are tiny; a huge one (a long summon def, say) could push a seal past the wire limit.
+    if (JSON.stringify(cmd).length > MAX_COMMAND_LENGTH) {
       return;
     }
     const tick = Math.min(Math.max(wantTick, sealed + 1), sealed + MAX_AHEAD);
-    enqueue(tick, player, cmd, isAccept(cmd) && player < HERO_SLOTS && seats.get(peer)?.includes(player) !== true);
+    enqueue(
+      tick,
+      player,
+      canonicalCommand(cmd),
+      isAccept(cmd) && player < HERO_SLOTS && seats.get(peer)?.includes(player) !== true,
+    );
+  }
+
+  /** The seal as it will be sent, trimmed so it always decodes on a client (the last non-system inputs go first). */
+  function fitSeal(tick: number, inputs: SealedInput[]): SealedInput[] {
+    const fits = (): boolean =>
+      inputs.length <= MAX_INPUTS && encodeMsg({ t: 'seal', tick, inputs }).length <= MAX_MSG_LENGTH;
+    while (!fits()) {
+      const at = inputs.findLastIndex((i) => i.player !== SYSTEM_PLAYER);
+      if (at < 0) {
+        throw new RangeError(`the seal for tick ${tick} cannot be made to fit`);
+      }
+      inputs.splice(at, 1);
+    }
+    return inputs;
+  }
+
+  const lastToggle = new Map<PeerId, number>();
+  /** At most one pause or resume per peer per second (L5). */
+  function toggleAllowed(peer: PeerId): boolean {
+    const at = o.now();
+    const last = lastToggle.get(peer);
+    if (last !== undefined && at - last < TOGGLE_GAP_MS) {
+      return false;
+    }
+    lastToggle.set(peer, at);
+    return true;
   }
 
   function declareDesync(tick: number): void {
@@ -297,20 +365,24 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
         accept(from, msg.player, msg.cmd, msg.wantTick);
         break;
       case 'pause':
-        if (seats.get(from)?.includes(msg.by) === true && !down.has(from)) {
+        if (seats.get(from)?.includes(msg.by) === true && !down.has(from) && toggleAllowed(from)) {
           setPause(msg.by, msg.by);
         }
         break;
       case 'resume':
-        if (seats.get(from)?.includes(msg.by) === true && !down.has(from)) {
+        if (seats.get(from)?.includes(msg.by) === true && !down.has(from) && toggleAllowed(from)) {
           setPause(undefined, msg.by);
         }
         break;
       case 'hash': {
-        if (down.has(from) || !seats.has(from)) {
+        // Only checkpoints the host has itself reached and not yet settled, once per peer (M7).
+        if (down.has(from) || !seats.has(from) || msg.tick > match.tick || !mine.has(msg.tick)) {
           break;
         }
         const got = theirs.get(msg.tick) ?? new Map<PeerId, string>();
+        if (got.has(from)) {
+          break;
+        }
         got.set(from, msg.hash);
         theirs.set(msg.tick, got);
         compare(msg.tick);
@@ -338,7 +410,8 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
     submit(player, cmd): void {
       accept(transport.self, player, cmd, match.tick + o.delay);
     },
-    steppable: () => (halted() ? match.tick : match.tick + 1),
+    // The host seals as it steps, so nothing limits it but a halt: it can run any number of ticks per frame.
+    steppable: () => (halted() ? match.tick : Number.POSITIVE_INFINITY),
     beforeStep(tick): void {
       if (tick !== sealed + 1) {
         throw new RangeError(`host seals tick ${sealed + 1}, asked for ${tick}`);
@@ -350,9 +423,26 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
           buckets.delete(t);
         }
       }
-      due.splice(0, due.length, ...due.filter((q) => !q.foreign || botHeroAccept(q.player, q.cmd)));
-      due.sort((a, b) => a.player - b.player || a.n - b.n);
-      const inputs: SealedInput[] = due.map(({ player, cmd }) => ({ player, cmd }));
+      const taken = new Set<string>();
+      const ok = due.filter((q) => {
+        if (q.foreign && !botHeroAccept(q.player, q.cmd)) {
+          return false;
+        }
+        if (isAccept(q.cmd)) {
+          // Two identical accepts in one seal would both pass the check above: only the first counts.
+          const key = acceptKey(q.player, q.cmd);
+          if (taken.has(key)) {
+            return false;
+          }
+          taken.add(key);
+        }
+        return true;
+      });
+      ok.sort((a, b) => a.player - b.player || a.n - b.n);
+      const inputs = fitSeal(
+        tick,
+        ok.map(({ player, cmd }) => ({ player, cmd })),
+      );
       sealed = tick;
       transport.broadcast({ t: 'seal', tick, inputs });
       s.apply(match, tick, inputs);
@@ -360,6 +450,10 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
     afterStep(events): void {
       for (const { tick, hash } of s.observe(events)) {
         mine.set(tick, hash);
+        for (const old of [...mine.keys()].slice(0, Math.max(0, mine.size - MAX_PENDING_CHECKS))) {
+          mine.delete(old);
+          theirs.delete(old);
+        }
         compare(tick);
       }
       if (match.ended && ended === undefined) {
@@ -379,7 +473,7 @@ export function createHostDriver(o: HostOptions): LockstepDriver {
       return match.ended || ended !== undefined ? 'ended' : 'running';
     },
     setPaused: (on, by) => {
-      if (seats.get(transport.self)?.includes(by) === true) {
+      if (seats.get(transport.self)?.includes(by) === true && toggleAllowed(transport.self)) {
         setPause(on ? by : undefined, by);
       }
     },
@@ -479,6 +573,14 @@ export function createClientDriver(o: ClientOptions): LockstepDriver {
       end('host-left');
     }
   });
+  // A message from the host that does not decode would otherwise be a silent stall: end loudly (H2).
+  const offBad =
+    transport.onBad?.((from, reason) => {
+      if (from === host && ended === undefined) {
+        ended = 'bad-message';
+        s.notice({ kind: 'broken', reason });
+      }
+    }) ?? (() => undefined);
 
   const limit = (): number => {
     if (desynced !== undefined || ended !== undefined || match.ended) {
@@ -523,13 +625,14 @@ export function createClientDriver(o: ClientOptions): LockstepDriver {
       }
     },
     status: (): DriverStatus => {
-      if (ended === 'host-left' || ended === 'closed') {
+      if (ended === 'host-left' || ended === 'closed' || ended === 'bad-message') {
         return 'ended';
       }
       if (desynced !== undefined) {
         return 'desynced';
       }
-      if (pauseAt !== undefined) {
+      // Paused only once this peer has reached the boundary: until then it keeps stepping to it (M2).
+      if (pauseAt !== undefined && match.tick >= pauseAt.tick) {
         return 'paused';
       }
       if (match.ended || ended !== undefined) {
@@ -554,6 +657,7 @@ export function createClientDriver(o: ClientOptions): LockstepDriver {
         transport.send(host, { t: 'bye' });
         offMessage();
         offPeer();
+        offBad();
         ended = 'closed';
       }
     },
