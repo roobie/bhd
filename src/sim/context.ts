@@ -1,6 +1,7 @@
 import type { GameConfig } from '../content/index.ts';
 import type { Rng } from '../detmath/index.ts';
 import type { IntentBoard } from '../intents/board.ts';
+import type { BargainState } from './bargains.ts';
 import type { DamageSpec } from './combat.ts';
 import type { Entity, EntityStore } from './entities.ts';
 import type { EndReason, SimEvent } from './events.ts';
@@ -37,6 +38,21 @@ export interface Hooks {
   readonly healTaken: (ctx: TickContext, target: Entity, amount: number) => number;
 }
 
+/**
+ * Bargain modifier multipliers (sim/bargains.ts `createMods`); 1 = no change. A derived layer
+ * rebuilt from the hashed accepted list, never hashed itself. Without bargains every one returns 1.
+ */
+export interface Mods {
+  /** Damage dealt by `src` (undefined = unknown source); applied by `dealDamage` after the team check, before Marked. Not applied to `leak`. */
+  readonly dealt: (src: Entity | undefined, spec: DamageSpec) => number;
+  /** Damage taken by `victim`; applied by `dealDamage` after armour, before the kit hook. Not applied to `leak`. */
+  readonly taken: (victim: Entity, spec: DamageSpec) => number;
+  /** Heals received by `target`; applied by `heal()` after the kit's `healTaken`, before the maxHp cap. Never reaches the Ancient. */
+  readonly heal: (target: Entity, amount: number) => number;
+  /** Respawn timer of the downed `hero`; applied by `respawnTicks` (rounded, at least 1 tick). */
+  readonly respawn: (hero: Entity) => number;
+}
+
 /** What a system or command handler may touch during one tick. */
 export interface TickContext {
   readonly tick: number;
@@ -54,6 +70,10 @@ export interface TickContext {
   readonly intents: IntentBoard;
   /** Wave master state; undefined in schedule mode (owned by master.ts; hashed through `hashMaster`). */
   readonly master: MasterState | undefined;
+  /** Bargain state; undefined when `game.bargains` is unset (owned by bargains.ts; hashed through `hashBargains`). */
+  readonly bargains: BargainState | undefined;
+  /** Bargain modifier multipliers (identity without bargains). */
+  readonly mods: Mods;
   /**
    * Casts `hero`'s ability `slot` (at (x, y) when given) exactly as an `ability` command would,
    * without a `cmd` event. True if the cast went through (the kit emitted an `ability` event for that

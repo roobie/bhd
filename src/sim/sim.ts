@@ -8,6 +8,8 @@ import type { Rng } from '../detmath/index.ts';
 import { deriveRng } from '../detmath/index.ts';
 import type { IntentBoard } from '../intents/board.ts';
 import { createIntentBoard, intentSystem } from '../intents/board.ts';
+import type { BargainState } from './bargains.ts';
+import { bargainSystem, createBargainState, createMods } from './bargains.ts';
 import type { Command } from './commands.ts';
 import { applyCommand, canonicalCommand, isValidCommand } from './commands.ts';
 import type { TickContext } from './context.ts';
@@ -74,6 +76,8 @@ export class Sim implements SimView {
   readonly intents: IntentBoard = createIntentBoard();
   /** Wave master state; undefined in schedule mode. */
   readonly master: MasterState | undefined;
+  /** Bargain state; undefined when `game.bargains` is unset. */
+  readonly bargains: BargainState | undefined;
   #tick = 0;
   #ended = false;
   /** Commands keyed by the tick they apply at. */
@@ -95,6 +99,7 @@ export class Sim implements SimView {
     this.rng = deriveRng(this.seed, 'sim');
     this.waves = createWaveState(ticks(this.game.waves.firstDelay));
     this.master = this.game.master === undefined ? undefined : createMasterState(this.game.master);
+    this.bargains = this.game.bargains === undefined ? undefined : createBargainState(this.seed);
     const { ancient } = this.game.map;
     const emit = (event: SimEvent): void => {
       this.#out.push(event);
@@ -127,6 +132,8 @@ export class Sim implements SimView {
       waves: this.waves,
       intents: this.intents,
       master: this.master,
+      bargains: this.bargains,
+      mods: createMods(this.game, this.bargains),
       cast: (hero, slot, at) => sim.#cast(hero, slot, at),
       ancientId: ancientEntity.id,
       killers: new Map(),
@@ -207,7 +214,7 @@ export class Sim implements SimView {
 
   /**
    * Runs one tick and returns its events in emission order. Tick order: respawns, commands, intents, waves (spawn),
-   * statuses (expire), props (expire), movement, hero kits, enemies, deaths (+ end), hash. After the game has
+   * bargains (offers, expiry), statuses (expire), props (expire), movement, hero kits, enemies, deaths (+ end), hash. After the game has
    * ended, a tick only advances the clock and emits `hash` events: commands already queued are dropped unlogged and new ones are rejected (`ended`)
    * and no system runs.
    */
@@ -240,6 +247,7 @@ export class Sim implements SimView {
     }
     intentSystem(ctx);
     waveSystem(ctx);
+    bargainSystem(ctx);
     statusSystem(ctx);
     propSystem(ctx);
     moveSystem(ctx);
@@ -258,6 +266,7 @@ export class Sim implements SimView {
       rng: this.rng,
       intents: this.intents,
       master: this.master,
+      bargains: this.bargains,
     });
   }
 }

@@ -298,7 +298,9 @@ export type UiAction =
   /** Toggle the help overlay (H, the top bar "?"). Never emits a command and never pauses. */
   | { readonly kind: 'help' }
   /** Restart the match (handled by the app, ignored by the reducer). */
-  | { readonly kind: 'restart' };
+  | { readonly kind: 'restart' }
+  /** Resolve a bargain offer: take card `card` (a bargain id), or decline when `card` is absent. STUB: the reducer emits nothing yet (slice D). */
+  | { readonly kind: 'bargain'; readonly offer: number; readonly card?: string };
 
 /** An ability being aimed. */
 interface AimState {
@@ -600,6 +602,16 @@ interface EndModel {
   readonly wave: number;
 }
 
+/** One open bargain offer as the HUD shows it. STUB (slice D): grows the cards, effect lines and countdown. */
+export interface BargainOfferModel {
+  readonly offer: number;
+}
+
+/** The bargain part of the HUD. STUB (slice D). */
+export interface BargainHudModel {
+  readonly offers: readonly BargainOfferModel[];
+}
+
 export interface HudModel {
   readonly top: TopBarModel;
   /** One per slot 0-3. */
@@ -613,6 +625,8 @@ export interface HudModel {
   /** Undefined while help is closed. */
   readonly help: HelpModel | undefined;
   readonly end: EndModel | undefined;
+  /** Open bargain offers; undefined when there are none (always, until slice D). */
+  readonly bargain: BargainHudModel | undefined;
 }
 
 /** Everything `buildHudModel` reads. */

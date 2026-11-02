@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGame, validateGame } from '../../src/content/index.ts';
+import { createMods } from '../../src/sim/bargains.ts';
 import { heal } from '../../src/sim/combat.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { heroHooks } from '../../src/sim/heroes/index.ts';
@@ -31,6 +32,8 @@ function rig(): { sim: Sim; events: SimEvent[]; ctx: Ctx } {
     waves: sim.waves,
     intents: sim.intents,
     master: sim.master,
+    bargains: sim.bargains,
+    mods: createMods(sim.game, sim.bargains),
     cast: () => false,
     ancientId: 1,
     killers: new Map(),

@@ -2,6 +2,8 @@
 // the reporter can compare two configs without a code change. `defaultGame()` is the shipping
 // config. Content is authored in seconds / per-second units (see types.ts).
 
+import type { BargainsDef } from './bargains.ts';
+import { validateBargains } from './bargains.ts';
 import type { MasterDef } from './director.ts';
 import { defaultMaster } from './director.ts';
 import { defaultEnemies } from './enemies.ts';
@@ -42,6 +44,8 @@ export interface GameConfig {
    * schedule mode (the waves' own compositions spawn).
    */
   readonly master?: MasterDef;
+  /** Set = bargains on (sim/bargains.ts). Unset = off. Absent from `defaultGame()` until wave 9 step 3. */
+  readonly bargains?: BargainsDef;
 }
 
 /** The support stand-in without the pull (Gravitic Lash is the Psyker's now): the fourth seat of the w8 lineup. */
@@ -122,5 +126,8 @@ export function validateGame(game: GameConfig): void {
     if (master.budgetPerWave.length === 0) {
       throw new Error('game config: master.budgetPerWave must not be empty');
     }
+  }
+  if (game.bargains !== undefined) {
+    validateBargains(game, game.bargains);
   }
 }

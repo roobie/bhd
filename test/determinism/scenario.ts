@@ -22,6 +22,7 @@ import type { Command } from '../../src/sim/commands.ts';
 import type { SimEvent } from '../../src/sim/events.ts';
 import { StateHasher } from '../../src/sim/hash.ts';
 import { Sim } from '../../src/sim/sim.ts';
+import { testBargains } from '../bargains-fixture.ts';
 
 export const SEED = 0x5e_ed_12_34;
 export const TICKS = 1800;
@@ -210,6 +211,34 @@ export function runMasterSim(seed: number, ticks: number): SimEvent[] {
   );
 }
 
+/** The scenario game with the test-only bargain pool (the shipped one is slice B's). */
+function bargainsScenarioGame(): GameConfig {
+  return { ...defaultGame(), bargains: testBargains() };
+}
+
+/** Bargain commands at fixed ticks: accept, decline, and ones that resolve nothing (unknown offer, unknown card, repeats). */
+const BARGAIN_SCRIPT: readonly Scripted[] = [
+  { tick: 30, player: 2, cmd: { kind: 'bargain', op: 'accept', offer: 1, card: 'test-barrel' } },
+  { tick: 40, player: 3, cmd: { kind: 'bargain', op: 'decline', offer: 1 } },
+  { tick: 50, player: 3, cmd: { kind: 'bargain', op: 'accept', offer: 99, card: 'nonesuch' } },
+  { tick: 60, player: 4, cmd: { kind: 'bargain', op: 'decline', offer: 2 } },
+  { tick: 60, player: 5, cmd: { kind: 'bargain', op: 'decline', offer: 2 } },
+];
+
+/** Runs `BARGAIN_SCRIPT` on a fresh sim whose game has bargains configured. */
+function runBargainSim(seed: number, ticks: number): SimEvent[] {
+  return drive(
+    { seed, game: bargainsScenarioGame() },
+    ticks,
+    (sim) => {
+      for (const s of BARGAIN_SCRIPT) {
+        submit(sim, s, s.tick);
+      }
+    },
+    () => undefined,
+  );
+}
+
 interface MatchResult {
   /** `stateHash` of every hash event, in order. */
   readonly hashes: readonly string[];
@@ -220,6 +249,8 @@ interface MatchResult {
 export interface ScenarioResult {
   /** Master-mode script (intents board, `ctx.cast`, summon, send): cross-checks board and master hashing. */
   readonly master: MatchResult;
+  /** Bargains configured with a test-only pool, bargain commands scripted: cross-checks the bargain state hash and command path. */
+  readonly bargains: MatchResult;
   /** An all-bot Match with the default bots and Director: any bot or Director change moves it. */
   readonly match: MatchResult;
   /** `stateHash` of every hash event, in order. */
@@ -413,6 +444,7 @@ export function runScenario(): ScenarioResult {
   return {
     match: runMatch(),
     master: summarise(runMasterSim(SEED, MASTER_TICKS)),
+    bargains: summarise(runBargainSim(SEED, TICKS)),
     hashes: hashesOf(events),
     eventDigest: digestOf(events),
     detmath: detmathValues(),

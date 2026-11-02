@@ -12,10 +12,10 @@ import { downKit, respawnKit } from './heroes/index.ts';
 import { removeStatus } from './statuses.ts';
 import { ticks } from './time.ts';
 
-/** Ticks a hero downed now stays down. At least 1. */
-function respawnTicks(ctx: TickContext): number {
+/** Ticks a hero downed now stays down (bargain `respawn` multiplier applied, rounded). At least 1. */
+function respawnTicks(ctx: TickContext, hero: Entity): number {
   const { base, perWave, max } = ctx.game.rules.respawn;
-  return Math.max(1, ticks(Math.min(max, base + perWave * ctx.waves.n)));
+  return Math.max(1, Math.round(ticks(Math.min(max, base + perWave * ctx.waves.n)) * ctx.mods.respawn(hero)));
 }
 
 /** True for a downed hero (hp 0, waiting to respawn). */
@@ -34,7 +34,7 @@ export function downHero(ctx: TickContext, hero: Entity): void {
     return;
   }
   hero.hp = 0;
-  hero.kit.respawnAt = ctx.tick + respawnTicks(ctx);
+  hero.kit.respawnAt = ctx.tick + respawnTicks(ctx, hero);
   for (const status of new Set(hero.statuses.map((s) => s.status))) {
     removeStatus(ctx, hero.id, status);
   }
