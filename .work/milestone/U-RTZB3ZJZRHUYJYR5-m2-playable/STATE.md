@@ -24,16 +24,16 @@ Out: anything not signed off by B at the wave 6 checkpoint.
 Starts after M1 closes. Wave 6 is a design checkpoint with B before any code.
 
 ## Now
-Wave 8 (solo playable) is closed: Penitent, Psyker, Pavise, respawn, call-early, leash and payoff feedback are live, and solo play works on play.html. B reviewed the 8d batch (D-NCHYTWPAOI4MF747, D-NONSS5MFZKJCXC46). Wave 9 (bargains) is next.
+Wave 9 (bargains) is closed: six-card pool on by default, offers after waves 3/6/9/12, decline heals the Ancient 4%, bots evaluate offers, HUD cards, reporter metrics. B accepted balance for M2 and buffed Unvented Barrel (D-6CSAS5UCJCBGMJEM, D-N3CQVH6E2PRMVWBR). Wave 10 (multiplayer) is next.
 
 ## Next
-- Wave 9 (bargains: heal the Ancient, never hurt it; D-2PNKLSQWVJEBSWPI).
-- Wave 10 (multiplayer, last; never deploy the CF worker).
+- Wave 10 (multiplayer, last; never deploy the CF worker). Includes bargain seat ownership and lockstep bot commands for bargain policy.
 
 ## Evidence
 - w8 closed at 728bb5e+: solo four-hero play on desktop and mobile (criterion 1).
 ## Harvest
 ## Log
+- 2026-11-02 wave 9 (bargains) closed
 - 2026-11-01 initialized (parked)
 - 2026-11-01 phase initialize → execute
 - 2026-11-01 wave w7b-quality-pass closed

@@ -6,16 +6,16 @@
 import type { BargainDef, BargainsDef } from '../bargains.ts';
 
 /**
- * Unvented Barrel (Gunner). Gain: basic damage x1.4. Cost: heat never decays.
+ * Unvented Barrel (Gunner). Gain: basic damage x1.6. Cost: heat decays at 30% speed.
  * Decline when she fights in bursts with gaps she relies on to cool off, or has no room to vent:
- * heat then only climbs, so she overheats and reaches the ff overpen band every fight.
+ * heat then barely falls, so she overheats and reaches the ff overpen band every fight.
  */
 const unventedBarrel: BargainDef = {
   id: 'unvented-barrel',
   scope: 'hero',
   kit: 'gunner',
-  gains: [{ kind: 'def', target: 'self', path: 'attack.damage', op: 'mul', value: 1.4 }],
-  costs: [{ kind: 'def', target: 'self', path: 'heat.decayPerSecond', op: 'mul', value: 0 }],
+  gains: [{ kind: 'def', target: 'self', path: 'attack.damage', op: 'mul', value: 1.6 }],
+  costs: [{ kind: 'def', target: 'self', path: 'heat.decayPerSecond', op: 'mul', value: 0.3 }],
 };
 
 /**
