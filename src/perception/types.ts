@@ -195,6 +195,11 @@ interface WaveGroupView {
   readonly count: number;
 }
 
+/** A group in the next wave's preview, with its enemy def's armour (0 for none) so bots can weigh armour-piercing. */
+interface PreviewGroupView extends WaveGroupView {
+  readonly armour: number;
+}
+
 interface WaveView {
   /** Waves started so far. */
   readonly n: number;
@@ -205,7 +210,7 @@ interface WaveView {
   /** Whether a `callWave` command would start a wave now (the sim's own predicate: spawning, throttle, master `send` rules). */
   readonly canCall: boolean;
   /** Next wave's composition as the schedule lists it; empty in wave master mode (nobody sees the queue). */
-  readonly preview: readonly WaveGroupView[];
+  readonly preview: readonly PreviewGroupView[];
 }
 
 export interface IntentView {

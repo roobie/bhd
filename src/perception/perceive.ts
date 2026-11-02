@@ -232,6 +232,7 @@ export function perceive(sim: Sim, memory: PerceptionMemory): Perception {
           ? [...(next?.spawns ?? []), ...(next === undefined ? [] : bargainExtras(sim))].map((g) => ({
               def: g.def,
               count: g.count,
+              armour: findById(sim.game.enemies, g.def)?.armour ?? 0,
             }))
           : [],
     },

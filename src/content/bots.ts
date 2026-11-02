@@ -2,6 +2,7 @@
 // can compare two setups. Owner: contracts (shapes), gunner-bot / standin-bots (their weights live
 // in content/bots/*.ts). Authored in seconds and world units.
 
+import { bargainWeights } from './bots/bargain.ts';
 import { gunnerWeights } from './bots/gunner.ts';
 import { penitentWeights } from './bots/penitent.ts';
 import { psykerWeights } from './bots/psyker.ts';
@@ -78,6 +79,12 @@ export function defaultBotSetup(): BotSetup {
     thinkSeconds: 0.5,
     seats: [0, 1, 2, 3].map((slot) => ({ slot, doctrine: 'hold-the-line', reactionSeconds: 0.4 })),
     doctrines: [holdTheLine(), greedy()],
-    kitWeights: { ...gunnerWeights(), ...penitentWeights(), ...psykerWeights(), ...standinWeights() },
+    kitWeights: {
+      ...bargainWeights(),
+      ...gunnerWeights(),
+      ...penitentWeights(),
+      ...psykerWeights(),
+      ...standinWeights(),
+    },
   };
 }

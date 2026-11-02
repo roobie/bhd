@@ -479,7 +479,7 @@ export class Match {
       out.push({
         tick,
         kind: 'choice',
-        hero: seat.hero,
+        hero: d.hero ?? seat.hero,
         decision: d.id,
         options: labelled,
         picked: pickedLabel(d, picked),
