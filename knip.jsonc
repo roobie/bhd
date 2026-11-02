@@ -5,7 +5,7 @@
     "play.html!",
     "src/reporter/worker.ts!",
     // Wave 10 stubs until their slices land and something imports them.
-    "src/net/{rtc,lockstep,inputlog}.ts!",
+    "src/net/{rtc,lockstep,inputlog,driver,desync}.ts!",
     "src/net/signal/memory.ts!"
   ],
   "project": ["src/**/*.ts!", "worker/**/*.ts!", "test/**/*.ts"],
@@ -16,6 +16,8 @@
     "src/net/rtc.ts": ["exports", "types"],
     "src/net/lockstep.ts": ["exports", "types"],
     "src/net/inputlog.ts": ["exports", "types"],
+    "src/net/driver.ts": ["exports", "types"],
+    "src/net/desync.ts": ["exports", "types"],
     "src/net/signal/memory.ts": ["exports", "types"]
   }
 }

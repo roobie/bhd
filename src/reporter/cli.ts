@@ -6,6 +6,7 @@ import process from 'node:process';
 import { parseCli, USAGE } from './args.ts';
 import type { Deps } from './commands.ts';
 import { runCommand } from './commands.ts';
+import { runDesync } from './desynccmd.ts';
 import { DEEP, loadScenario, QUICK } from './scenarios.ts';
 import { resolveSide } from './sides.ts';
 import { repoRoot } from './snapshot.ts';
@@ -37,6 +38,14 @@ const DEPS: Deps = {
 };
 
 async function main(argv: readonly string[]): Promise<number> {
+  if (argv[0] === 'desync') {
+    try {
+      return runDesync(argv.slice(1), (text) => console.log(text));
+    } catch (error) {
+      console.error(`bhd: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
   const parsed = parseCli(argv);
   if (!parsed.ok) {
     console.error(parsed.message);

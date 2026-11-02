@@ -18,6 +18,8 @@ commands:
       Play one side and print its outcome distribution, waves reached, ms/game and distinct games.
   view <log.ndjson.gz> [--tick <t>]
       Open a logged game in the viewer, paused at tick t.
+  desync <a.ndjson> <b.ndjson>
+      Replay two peers' desync dumps and print the first divergent tick.
   clean
       Remove .bhd/runs and .bhd/snap (reports are kept).
   help
