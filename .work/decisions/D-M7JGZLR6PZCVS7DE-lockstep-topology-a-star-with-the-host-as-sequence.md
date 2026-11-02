@@ -4,7 +4,7 @@ date: 2026-11-02
 read_if:
   - changing who orders inputs, adding peers, or moving the host role to a Durable Object
 refs:
-  - .work/wave/U-GLFZ7OIE2B53ZZCA-w10-multiplayer/PLAN.md
+  - src/net/lockstep.ts
 ---
 
 # D-M7JGZLR6PZCVS7DE Lockstep topology: a star with the host as sequencer

@@ -24,15 +24,17 @@ Out: anything not signed off by B at the wave 6 checkpoint.
 Starts after M1 closes. Wave 6 is a design checkpoint with B before any code.
 
 ## Now
-Wave 9 (bargains) is closed: six-card pool on by default, offers after waves 3/6/9/12, decline heals the Ancient 4%, bots evaluate offers, HUD cards, reporter metrics. B accepted balance for M2 and buffed Unvented Barrel (D-6CSAS5UCJCBGMJEM, D-N3CQVH6E2PRMVWBR). Wave 10 (multiplayer) is next.
+All waves are done. Wave 10 (multiplayer) is closed: star-topology lockstep over WebRTC, lobby, signalling Worker (built and unit tested, never deployed). M2 waits on B to deploy the Worker (secrets, allowed origins) and play a 2-4 player internet session.
 
 ## Next
-- Wave 10 (multiplayer, last; never deploy the CF worker). Includes bargain seat ownership and lockstep bot commands for bargain policy.
+- B deploys the Worker and plays a 2-4 player internet session; record it as Evidence, then close M2.
 
 ## Evidence
 - w8 closed at 728bb5e+: solo four-hero play on desktop and mobile (criterion 1).
-## Harvest
+- w10 closed at 153dea9: CI green locally and on GitHub; 2-4 peer harness hashes equal; injected desync localised by `bhd desync`; two Chromium tabs played co-op over real WebRTC with BroadcastChannel signalling (criterion 2, local only).
+- Open: internet play is unproven until B deploys the Worker (criterion 2).## Harvest
 ## Log
+- 2026-11-02 wave 10 (multiplayer) closed; awaiting B's Worker deploy and internet session
 - 2026-11-02 wave 9 (bargains) closed
 - 2026-11-01 initialized (parked)
 - 2026-11-01 phase initialize → execute
